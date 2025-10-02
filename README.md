@@ -1,6 +1,6 @@
-# Untold Engine Editor
+# Untold Editor
 
-The **Untold Engine Editor** is a companion tool for the [Untold Engine](https://github.com/untoldengine/UntoldEngine).  
+The **Untold Editor** is a companion tool for the [Untold Engine](https://github.com/untoldengine/UntoldEngine).  
 It provides a visual environment for managing assets, scenes, and entities in projects built with the engine.  
 
 The editor is not required to use the engine, but it makes iteration faster by giving developers and designers a user-friendly interface.
@@ -31,24 +31,24 @@ The editor is not required to use the engine, but it makes iteration faster by g
 Clone this repository:
 
 ```bash
-git clone https://github.com/untoldengine/UntoldEngineEditor.git
-cd UntoldEngineEditor
+git clone https://github.com/untoldengine/UntoldEditor.git
+cd UntoldEditor
 ```
 
-The Editor is a Swift Package with an executable target named UntoldEngineEditor.
+The Editor is a Swift Package with an executable target named UntoldEditor.
 It declares a dependency on the Untold Engine package; Xcode/SwiftPM will resolve it automatically.
 
 ### Open in Xcode (recommended)
 
 1. Open Xcode → File ▸ Open → select the Package.swift in this repo
 2. Xcode will create a workspace view for the package
-3. Choose the UntoldEngineEditor scheme → Run
+3. Choose the UntoldEditor scheme → Run
 
 ### Build & run via CLI
 
 ```bash
 swift build
-swift run UntoldEngineEditor
+swift run UntoldEditor
 ```
 
 ### Pinning the Engine Dependency
@@ -93,7 +93,7 @@ xcodebuild -resolvePackageDependencies
 
 - **Editor scheme not visible**  
   - Make sure you opened the **package** (its `Package.swift`) or the generated workspace, not a single source file  
-  - **Product ▸ Scheme ▸ Manage Schemes…** → ensure *Shared* is checked for `UntoldEngineEditor`  
+  - **Product ▸ Scheme ▸ Manage Schemes…** → ensure *Shared* is checked for `UntoldEditor`  
   - **File ▸ Packages ▸ Reset Package Caches** if dependencies look stale  
 
 - **Can’t switch to `develop`**  
