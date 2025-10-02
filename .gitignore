@@ -1,0 +1,65 @@
+# ---------------------------------------
+# Swift / SwiftPM
+# ---------------------------------------
+.build/
+.swiftpm/
+Package.resolved
+
+# Swift generated Xcode project
+xcuserdata/
+*.xcworkspace
+DerivedData/
+
+# ---------------------------------------
+# Xcode
+# ---------------------------------------
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+
+# ---------------------------------------
+# macOS System
+# ---------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# ---------------------------------------
+# Build Artifacts
+# ---------------------------------------
+*.o
+*.so
+*.dylib
+*.dll
+*.a
+*.la
+*.lib
+*.exe
+*.out
+*.app
+*.ipa
+
+# ---------------------------------------
+# Logs & Misc
+# ---------------------------------------
+*.log
+*.swp
+*.tmp
+
+# ---------------------------------------
+# Editor Specific
+# ---------------------------------------
+# Ignore screenshots, recordings, previews, etc.
+docs/images/*
+!docs/images/.gitkeep
+
