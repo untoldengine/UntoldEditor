@@ -1,0 +1,25 @@
+
+name: Formatting Validation
+
+on:
+  pull_request:
+    branches: develop
+
+jobs:
+  lint:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftFormat
+        run: |
+          brew update
+          brew install swiftformat
+
+      - name: Show versions
+        run: |
+          swiftformat --version
+          swift --version
+
+      - name: Run SwiftFormat (lint mode)
+        run: swiftformat --lint . --swiftversion 5.7 --reporter github-actions-log
