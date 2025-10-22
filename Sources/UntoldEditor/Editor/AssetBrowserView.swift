@@ -234,7 +234,7 @@ struct AssetBrowserView: View {
     private func importAsset() {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [
-            UTType(filenameExtension: "usdc")!,
+            UTType(filenameExtension: "usdz")!,
             .png, .jpeg, .tiff,
             UTType(filenameExtension: "hdr")!,
         ]
@@ -380,7 +380,7 @@ struct AssetBrowserView: View {
                     if isDir.boolValue {
                         return Asset(name: item.lastPathComponent, category: selectedCategory ?? "", path: item, isFolder: true)
                     } else {
-                        let allowedExtensions: Set<String> = ["usdc", "png", "jpg", "hdr", "tif"]
+                        let allowedExtensions: Set<String> = ["usdz", "png", "jpg", "hdr", "tif"]
                         guard allowedExtensions.contains(item.pathExtension) else { return nil }
 
                         return Asset(name: item.lastPathComponent,

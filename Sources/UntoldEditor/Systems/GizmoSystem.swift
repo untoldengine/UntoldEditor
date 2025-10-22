@@ -31,7 +31,7 @@ func createGizmo(name: String) {
     registerSceneGraphComponent(entityId: parentEntityIdGizmo)
     registerComponent(entityId: parentEntityIdGizmo, componentType: GizmoComponent.self)
 
-    setEntityMesh(entityId: parentEntityIdGizmo, filename: gizmoName, withExtension: "usdc")
+    setEntityMesh(entityId: parentEntityIdGizmo, filename: gizmoName, withExtension: "usdz")
 
     translateTo(entityId: parentEntityIdGizmo, position: getPosition(entityId: activeEntity))
     for child in getEntityChildren(parentId: parentEntityIdGizmo) {
