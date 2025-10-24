@@ -4,14 +4,14 @@ import PackageDescription
 let package = Package(
     name: "UntoldEditor",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .executable(name: "UntoldEditor", targets: ["UntoldEditor"]),
     ],
     dependencies: [
         // Use a branch during active development:
-        .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop")
+        .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
         // Or pin to a release:
         // .package(url: "https://github.com/untoldengine/UntoldEngine.git", from: "0.3.0")
     ],
@@ -19,7 +19,7 @@ let package = Package(
         .executableTarget(
             name: "UntoldEditor",
             dependencies: [
-                .product(name: "UntoldEngine", package: "UntoldEngine")
+                .product(name: "UntoldEngine", package: "UntoldEngine"),
             ],
             path: "Sources/UntoldEditor",
             resources: [
@@ -31,7 +31,6 @@ let package = Package(
                 .linkedFramework("MetalKit"),
                 .linkedFramework("QuartzCore"),
             ]
-        )
+        ),
     ]
 )
-

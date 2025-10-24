@@ -391,7 +391,6 @@
             case kVK_ANSI_P:
                 gameMode = !gameMode
             case kVK_ANSI_R:
-
                 if keyState.shiftPressed {
                     hotReload = !hotReload
                 }

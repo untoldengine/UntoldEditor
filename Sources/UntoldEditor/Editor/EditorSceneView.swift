@@ -18,7 +18,7 @@ struct EditorSceneView: View, UntoldRendererDelegate {
         self.renderer.delegate = self
     }
 
-    public var body: some View {
+    var body: some View {
         SceneView(renderer: renderer)
             .onInit {
                 let sceneCamera = createEntity()

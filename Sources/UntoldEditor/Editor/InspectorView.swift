@@ -382,7 +382,6 @@ struct RenderingEditorView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 24) {
                     ForEach(TextureType.allCases) { type in
-
                         let image: NSImage? = {
                             if let url = getMaterialTextureURL(entityId: entityId, type: type),
                                let img = NSImage(contentsOf: url)
@@ -562,21 +561,24 @@ struct TransformationEditorView: View {
             set: { newPosition in
                 translateTo(entityId: entityId, position: newPosition)
                 refreshView()
-            }))
+            }
+        ))
 
         TextInputVectorView(label: "Orientation", value: Binding(
             get: { orientation },
             set: { newOrientation in
                 applyAxisRotations(entityId: entityId, axis: newOrientation)
                 refreshView()
-            }))
+            }
+        ))
 
         TextInputVectorView(label: "Scale", value: Binding(
             get: { scale },
             set: { newScale in
                 scaleTo(entityId: entityId, scale: newScale)
                 refreshView()
-            }))
+            }
+        ))
     }
 }
 
@@ -592,7 +594,6 @@ struct AnimationEditorView: View {
 
         List {
             ForEach(animationClips, id: \.self) { animation in
-
                 HStack {
                     Text(animation) // Display animation name
                     Spacer()
@@ -651,7 +652,8 @@ struct KineticEditorView: View {
                 set: { newMass in
                     setMass(entityId: entityId, mass: newMass)
                     refreshView()
-                }))
+                }
+            ))
         }
     }
 }
@@ -673,17 +675,18 @@ struct DirLightEditorView: View {
                     set: { newColor in
                         updateLightColor(entityId: entityId, color: newColor)
                         refreshView()
-
-                    }))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 TextInputNumberView(label: "Intensity", value: Binding(
                     get: { intensity },
                     set: { newIntensity in
                         updateLightIntensity(entityId: entityId, intensity: newIntensity)
                         refreshView()
-                    }))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -708,9 +711,9 @@ struct PointLightEditorView: View {
                     set: { newColor in
                         updateLightColor(entityId: entityId, color: newColor)
                         refreshView()
-
-                    }))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack {
                     TextInputNumberView(label: "Brighness", value: Binding(
@@ -718,24 +721,27 @@ struct PointLightEditorView: View {
                         set: { newIntensity in
                             updateLightIntensity(entityId: entityId, intensity: newIntensity)
                             refreshView()
-                        }))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     TextInputNumberView(label: "Falloff", value: Binding(
                         get: { falloff },
                         set: { newFalloff in
                             updateLightFalloff(entityId: entityId, falloff: newFalloff)
                             refreshView()
-                        }))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     TextInputNumberView(label: "Radius", value: Binding(
                         get: { radius },
                         set: { newRadius in
                             updateLightRadius(entityId: entityId, radius: newRadius)
                             refreshView()
-                        }))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -760,32 +766,35 @@ struct SpotLightEditorView: View {
                     set: { newColor in
                         updateLightColor(entityId: entityId, color: newColor)
                         refreshView()
-
-                    }))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
                 HStack {
                     TextInputNumberView(label: "Brightness", value: Binding(
                         get: { intensity },
                         set: { newIntensity in
                             updateLightIntensity(entityId: entityId, intensity: newIntensity)
                             refreshView()
-                        }))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     TextInputNumberView(label: "Falloff", value: Binding(
                         get: { falloff },
                         set: { newFalloff in
                             updateLightFalloff(entityId: entityId, falloff: newFalloff)
                             refreshView()
-                        }))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     TextInputNumberView(label: "Cone Angle", value: Binding(
                         get: { coneAngle },
                         set: { newConeAngle in
                             updateLightConeAngle(entityId: entityId, coneAngle: newConeAngle)
                             refreshView()
-                        }))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -809,17 +818,18 @@ struct AreaLightEditorView: View {
                     set: { newColor in
                         updateLightColor(entityId: entityId, color: newColor)
                         refreshView()
-
-                    }))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 TextInputNumberView(label: "Brightness", value: Binding(
                     get: { intensity },
                     set: { newIntensity in
                         updateLightIntensity(entityId: entityId, intensity: newIntensity)
                         refreshView()
-                    }))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -842,21 +852,24 @@ struct CameraEditorView: View {
                 set: { newEye in
                     cameraLookAt(entityId: findGameCamera(), eye: newEye, target: target, up: up)
                     refreshView()
-                }))
+                }
+            ))
 
             TextInputVectorView(label: "Up", value: Binding(
                 get: { up },
                 set: { newUp in
                     cameraLookAt(entityId: findGameCamera(), eye: eye, target: target, up: newUp)
                     refreshView()
-                }))
+                }
+            ))
 
             TextInputVectorView(label: "Target", value: Binding(
                 get: { target },
                 set: { newTarget in
                     cameraLookAt(entityId: findGameCamera(), eye: eye, target: newTarget, up: up)
                     refreshView()
-                }))
+                }
+            ))
         }
     }
 }

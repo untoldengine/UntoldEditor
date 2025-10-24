@@ -22,4 +22,4 @@ jobs:
           swift --version
 
       - name: Run SwiftFormat (lint mode)
-        run: swiftformat --lint . --swiftversion 5.7 --reporter github-actions-log
+        run: swiftformat --lint . --swiftversion 5.8 --reporter github-actions-log

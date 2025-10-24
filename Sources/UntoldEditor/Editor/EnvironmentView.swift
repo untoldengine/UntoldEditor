@@ -122,7 +122,7 @@ struct EnvironmentView: View {
 }
 
 struct ColorGradingEditorView: View {
-    @ObservedObject public var settings = ColorGradingParams.shared
+    @ObservedObject var settings = ColorGradingParams.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

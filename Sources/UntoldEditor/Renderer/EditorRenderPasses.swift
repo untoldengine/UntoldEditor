@@ -14,7 +14,6 @@ import UntoldEngine
 
 extension RenderPasses {
     static let gizmoExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
-
         if activeEntity == .invalid {
             return
         }
@@ -178,7 +177,6 @@ extension RenderPasses {
     }
 
     static let outlineExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
-
         if activeEntity == .invalid {
             return
         }
@@ -315,7 +313,6 @@ extension RenderPasses {
     }
 
     static let debuggerExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
-
         guard let debuggerPipeline = PipelineManager.shared.renderPipelinesByType[.debug] else {
             handleError(.pipelineStateNulled, "debuggerPipeline is nil")
             return
@@ -392,7 +389,6 @@ extension RenderPasses {
     }
 
     static let lightVisualPass: (MTLCommandBuffer) -> Void = { commandBuffer in
-
         guard let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera()) else {
             handleError(.noActiveCamera)
             return
@@ -496,7 +492,6 @@ extension RenderPasses {
     }
 
     static let highlightExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
-
         if activeEntity == .invalid {
             renderInfo.gizmoRenderPassDescriptor.colorAttachments[Int(colorTarget.rawValue)]
                 .loadAction = .clear
