@@ -228,7 +228,8 @@ public struct EditorView: View {
     private func editor_handlePlayToggle(_ isPlaying: Bool) {
         self.isPlaying = isPlaying
         gameMode = !gameMode
-        CameraSystem.shared.activeCamera = gameMode ? findGameCamera() : findSceneCamera()
+        // For now, during "play" mode, the camera will keep being the scene camera
+        // CameraSystem.shared.activeCamera = gameMode ? findGameCamera() : findSceneCamera()
         AnimationSystem.shared.isEnabled = isPlaying
     }
 
