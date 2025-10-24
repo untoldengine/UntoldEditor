@@ -24,14 +24,6 @@ struct EditorSceneView: View, UntoldRendererDelegate {
                 let sceneCamera = createEntity()
                 createSceneCamera(entityId: sceneCamera)
 
-                let gameCamera = createEntity()
-                setEntityName(entityId: gameCamera, name: "Main Camera")
-                createGameCamera(entityId: gameCamera)
-
-                let light = createEntity()
-                setEntityName(entityId: light, name: "Directional Light")
-                createDirLight(entityId: light)
-
                 CameraSystem.shared.activeCamera = sceneCamera
 
                 // Initialize ray vs model pipeline
