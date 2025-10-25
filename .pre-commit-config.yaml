@@ -2,6 +2,23 @@ repos:
   - repo: local
     hooks:
       # Add unit test run here       
+      - id: run-editor-tests
+        name: Run Engine Editor Tests Before Commit
+        entry: |
+          bash -c '
+            if ! make test; then
+              echo ""
+              echo "❌ Engine tests failed during pre-commit."
+              echo "🧪 Run them manually with: make test"
+              echo "👉 Or bypass tests with: git commit --no-verify"
+              echo ""
+              exit 1
+            fi
+          '
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
 
       - id: enforce-commit-prefix
         name: Enforcing Commit Message Prefix

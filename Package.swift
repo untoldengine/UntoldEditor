@@ -32,5 +32,15 @@ let package = Package(
                 .linkedFramework("QuartzCore"),
             ]
         ),
+
+        // ✅ Add this new test target
+        .testTarget(
+            name: "UntoldEditorTests",
+            dependencies: ["UntoldEditor"],
+            path: "Tests/UntoldEditorTests",
+            resources: [
+                .process("Resources"), // optional: for test files like .json or .usdc
+            ]
+        ),
     ]
 )
