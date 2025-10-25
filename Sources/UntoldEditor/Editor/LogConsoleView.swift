@@ -29,6 +29,13 @@ public final class LogStore: ObservableObject, LoggerSink {
             }
         }
     }
+
+    // Provide a safe way to clear entries without exposing a public setter
+    public func clear() {
+        DispatchQueue.main.async { [weak self] in
+            self?.entries.removeAll()
+        }
+    }
 }
 
 struct LogConsoleView: View {

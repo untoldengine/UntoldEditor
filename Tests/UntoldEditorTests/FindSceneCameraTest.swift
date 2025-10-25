@@ -7,6 +7,8 @@
 //  See the LICENSE file or <https://www.gnu.org/licenses/> for details.
 //
 
+// These unit tests were jump-started with AI assistance — then refined by humans. If you spot an issue, please submit an issue.
+
 import UntoldEditor
 @testable import UntoldEngine
 import XCTest

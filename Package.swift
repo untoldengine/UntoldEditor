@@ -39,7 +39,6 @@ let package = Package(
             dependencies: ["UntoldEditor"],
             path: "Tests/UntoldEditorTests",
             resources: [
-                .process("Resources"), // optional: for test files like .json or .usdc
             ]
         ),
     ]
