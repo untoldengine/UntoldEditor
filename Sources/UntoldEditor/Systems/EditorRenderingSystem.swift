@@ -11,7 +11,7 @@ import UntoldEngine
 
 func EditorUpdateRenderingSystem(in view: MTKView) {
     if let commandBuffer = renderInfo.commandQueue.makeCommandBuffer() {
-        executeFrustumCulling(commandBuffer)
+        performFrustumCulling(commandBuffer: commandBuffer)
 
         if let renderPassDescriptor = view.currentRenderPassDescriptor {
             renderInfo.renderPassDescriptor = renderPassDescriptor
