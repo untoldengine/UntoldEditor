@@ -21,19 +21,19 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             // build a render graph
             var (graph, preCompID) = gameMode ? buildGameModeGraph() : buildEditModeGraph()
 
-            if visualDebug == false {
-                let compositePass = RenderPass(
-                    id: "composite", dependencies: [preCompID], execute: RenderPasses.compositeExecution
-                )
-
-                graph[compositePass.id] = compositePass
-            } else {
-                let debugPass = RenderPass(
-                    id: "debug", dependencies: [preCompID], execute: RenderPasses.debuggerExecution
-                )
-
-                graph[debugPass.id] = debugPass
-            }
+//            if visualDebug == false {
+//                let compositePass = RenderPass(
+//                    id: "composite", dependencies: [preCompID], execute: RenderPasses.compositeExecution
+//                )
+//
+//                graph[compositePass.id] = compositePass
+//            } else {
+//                let debugPass = RenderPass(
+//                    id: "debug", dependencies: [preCompID], execute: RenderPasses.debuggerExecution
+//                )
+//
+//                graph[debugPass.id] = debugPass
+//            }
 
             // sorted it
             let sortedPasses = try! topologicalSortGraph(graph: graph)
