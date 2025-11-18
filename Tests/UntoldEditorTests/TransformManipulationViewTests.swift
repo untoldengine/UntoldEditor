@@ -179,7 +179,7 @@ final class TransformManipulationViewTests: XCTestCase {
         // Arrange
         let controller = TestEditorController()
         var show = false
-        let sut = TransformManipulationToolbar(controller: controller, showAssetBrowser: .init(get: { show }, set: { show = $0 }))
+        let sut = TransformManipulationToolbar(controller: controller)
 
         // Act: simulate the same effect as tapping by toggling binding
         XCTAssertFalse(show)
@@ -194,7 +194,7 @@ final class TransformManipulationViewTests: XCTestCase {
         // Arrange
         let controller = TestEditorController()
         var show = false
-        let sut = TransformManipulationToolbar(controller: controller, showAssetBrowser: .init(get: { show }, set: { show = $0 }))
+        let sut = TransformManipulationToolbar(controller: controller)
 
         // Precondition
         XCTAssertEqual(controller.activeMode, .none)

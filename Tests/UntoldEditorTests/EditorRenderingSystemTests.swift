@@ -265,10 +265,11 @@ final class EditorRenderingSystemTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(precompPass.dependencies.count, 3, "Precomp should have exactly 3 dependencies")
+        XCTAssertEqual(precompPass.dependencies.count, 4, "Precomp should have exactly 4 dependencies")
         XCTAssertTrue(precompPass.dependencies.contains("model"), "Precomp should depend on model")
         XCTAssertTrue(precompPass.dependencies.contains("gizmo"), "Precomp should depend on gizmo")
         XCTAssertTrue(precompPass.dependencies.contains("lightPass"), "Precomp should depend on lightPass")
+        XCTAssertTrue(precompPass.dependencies.contains("gaussian"), "Precomp should depend on gaussian")
     }
 
     func test_buildEditModeGraph_lightPass_dependsOnModelAndShadow() {
