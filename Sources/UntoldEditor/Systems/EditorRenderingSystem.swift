@@ -13,13 +13,15 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
     if let commandBuffer = renderInfo.commandQueue.makeCommandBuffer() {
         performFrustumCulling(commandBuffer: commandBuffer)
 
+        executeGaussianDepth(commandBuffer)
+        executeBitonicSort(commandBuffer)
         if let renderPassDescriptor = view.currentRenderPassDescriptor {
             renderInfo.renderPassDescriptor = renderPassDescriptor
 
             commandBuffer.label = "Rendering Command Buffer"
 
             // build a render graph
-            var (graph, preCompID) = gameMode ? buildGameModeGraph() : buildEditModeGraph()
+            var (graph, _) = gameMode ? buildGameModeGraph() : buildEditModeGraph()
 
 //            if visualDebug == false {
 //                let compositePass = RenderPass(
@@ -101,8 +103,12 @@ func buildEditModeGraph() -> RenderGraphResult {
 
     graph[gizmoPass.id] = gizmoPass
 
+    // Gaussian pass depends on model pass - needs depth buffer from 3D models
+    let gaussianPass = RenderPass(id: "gaussian", dependencies: [modelPass.id], execute: RenderPasses.gaussianExecution)
+    graph[gaussianPass.id] = gaussianPass
+
     let preCompPass = RenderPass(
-        id: "precomp", dependencies: [modelPass.id, gizmoPass.id, lightPass.id], execute: RenderPasses.preCompositeExecution
+        id: "precomp", dependencies: [modelPass.id, gizmoPass.id, lightPass.id, gaussianPass.id], execute: RenderPasses.preCompositeExecution
     )
     graph[preCompPass.id] = preCompPass
 

@@ -143,6 +143,15 @@ var availableComponents_Editor: [ComponentOption_Editor] = [
             }
         )
     }),
+    ComponentOption_Editor(id: getComponentId(for: GaussianComponent.self), name: "Gaussian Component", type: GaussianComponent.self, view: { selectedId, asset, refreshView in
+        AnyView(
+            Group {
+                if let entityId = selectedId {
+                    GaussianEditorView(entityId: entityId, asset: asset, refreshView: refreshView)
+                }
+            }
+        )
+    }),
 ]
 
 func mergeEntityComponents(
@@ -871,5 +880,45 @@ struct CameraEditorView: View {
                 }
             ))
         }
+    }
+}
+
+struct GaussianEditorView: View {
+    let entityId: EntityID
+    let asset: Asset?
+    let refreshView: () -> Void
+
+    var body: some View {
+        Text("Gaussian Splats")
+
+        HStack(spacing: 12) {
+            Text(getAssetURLString(entityId: entityId) ?? " ")
+            Button(action: {
+                let selectedCategory: AssetCategory = .gaussians
+                if let assetPath = asset?.path, selectedCategory.rawValue == asset?.category {
+                    let filename = assetPath.deletingPathExtension().lastPathComponent
+                    let withExtension = assetPath.pathExtension
+                    setEntityGaussian(entityId: entityId, filename: filename, withExtension: withExtension)
+                }
+                refreshView()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.white)
+                    Text("Assign")
+                        .fontWeight(.regular)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(8)
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(8)
     }
 }

@@ -15,6 +15,7 @@ enum AssetCategory: String, CaseIterable {
     case materials = "Materials"
     case hdr = "HDR"
     case animations = "Animations"
+    case gaussians = "Gaussians"
 
     var iconName: String {
         switch self {
@@ -26,6 +27,8 @@ enum AssetCategory: String, CaseIterable {
             return "film"
         case .materials:
             return "film"
+        case .gaussians:
+            return "sparkles"
         }
     }
 }
@@ -243,7 +246,7 @@ struct AssetBrowserView: View {
 
         guard let basePath = assetBasePath else { return }
         // Supported categories must match your enum/string values
-        guard ["Models", "Animations", "HDR", "Materials"].contains(selectedCategory) else { return }
+        guard ["Models", "Animations", "HDR", "Materials", "Gaussians"].contains(selectedCategory) else { return }
 
         let fm = FileManager.default
         let categoryRoot = basePath.appendingPathComponent(selectedCategory!, isDirectory: true)
@@ -256,6 +259,12 @@ struct AssetBrowserView: View {
                     switch selectedCategory {
                     case "HDR":
                         // Copy .hdr directly into HDR folder
+                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
+                        if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
+                        try fm.copyItem(at: sourceURL, to: destURL)
+
+                    case "Gaussians":
+                        // Copy Gaussian files directly into Gaussians folder
                         let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
                         if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
                         try fm.copyItem(at: sourceURL, to: destURL)
@@ -343,6 +352,12 @@ struct AssetBrowserView: View {
                                                             path: item,
                                                             isFolder: false))
                             }
+                        } else if category == .gaussians {
+                            // For Gaussians, allow gaussian files directly in the Gaussians folder
+                            categoryAssets.append(Asset(name: item.lastPathComponent,
+                                                        category: category.rawValue,
+                                                        path: item,
+                                                        isFolder: false))
                         }
                     }
                 }
