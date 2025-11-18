@@ -17,7 +17,6 @@ public struct EditorView: View {
     @State private var assets: [String: [Asset]] = [:]
     @State private var selectedAsset: Asset? = nil
     @State private var isPlaying = false
-    @State private var showAssetBrowser = false
 
     var renderer: UntoldRenderer?
 
@@ -55,25 +54,25 @@ public struct EditorView: View {
                     SceneHierarchyView(selectionManager: selectionManager, sceneGraphModel: sceneGraphModel, entityList: editor_entities, onAddEntity_Editor: editor_addNewEntity, onRemoveEntity_Editor: editor_removeEntity)
                 }
 
-                VStack {
+                VStack(spacing: 0) {
                     EditorSceneView(renderer: renderer!)
-                    TransformManipulationToolbar(controller: editorController!, showAssetBrowser: $showAssetBrowser)
-                    if showAssetBrowser {
-                        TabView {
-                            AssetBrowserView(
-                                assets: $assets,
-                                selectedAsset: $selectedAsset,
-                                selectionManager: selectionManager,
-                                editor_addEntityWithAsset: editor_addEntityWithAsset
-                            )
-                            .tabItem { Label("Assets", systemImage: "shippingbox") }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    TransformManipulationToolbar(controller: editorController!)
+                        .frame(height: 40)
+                    TabView {
+                        AssetBrowserView(
+                            assets: $assets,
+                            selectedAsset: $selectedAsset,
+                            selectionManager: selectionManager,
+                            editor_addEntityWithAsset: editor_addEntityWithAsset
+                        )
+                        .tabItem { Label("Assets", systemImage: "shippingbox") }
 
-                            LogConsoleView()
-                                .tabItem { Label("Console", systemImage: "terminal") }
-                        }
-                        .frame(height: 200)
-                        .clipped()
+                        LogConsoleView()
+                            .tabItem { Label("Console", systemImage: "terminal") }
                     }
+                    .frame(height: 200)
+                    .clipped()
                 }
 
                 TabView {

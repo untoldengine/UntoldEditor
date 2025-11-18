@@ -54,17 +54,10 @@ struct ModeButton: View {
 
 struct TransformManipulationToolbar: View {
     @ObservedObject var controller: EditorController
-    @Binding var showAssetBrowser: Bool
+
     var body: some View {
         HStack {
-            // Asset browser button aligned to the left
-            Button(action: { showAssetBrowser.toggle() }) {
-                Image(systemName: "folder")
-                    .imageScale(.large)
-                    .help("Toggle Asset Browser")
-            }
-
-            Spacer() // Pushes the mode buttons to the center
+            Spacer()
 
             // Centered mode buttons
             HStack(spacing: 5) {
@@ -88,7 +81,7 @@ struct TransformManipulationToolbar: View {
                 )
             }
 
-            Spacer() // Keeps the mode buttons centered
+            Spacer()
         }
         .padding(.horizontal)
         .background(Color.secondary.opacity(0.1))
