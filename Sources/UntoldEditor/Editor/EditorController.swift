@@ -25,7 +25,39 @@ public class EditorComponentsState: ObservableObject {
 public class EditorAssetBasePath: ObservableObject {
     public static let shared = EditorAssetBasePath()
 
-    @Published public var basePath: URL? = assetBasePath
+    private let userDefaultsKey = "UntoldEditor.AssetBasePath"
+
+    @Published public var basePath: URL? {
+        didSet {
+            // Persist to UserDefaults whenever it changes
+            if let url = basePath {
+                UserDefaults.standard.set(url.path, forKey: userDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+            }
+
+            // Sync with engine's global assetBasePath
+            assetBasePath = basePath
+        }
+    }
+
+    init() {
+        // Load persisted path from UserDefaults on startup
+        if let savedPath = UserDefaults.standard.string(forKey: userDefaultsKey) {
+            let url = URL(fileURLWithPath: savedPath)
+            // Verify the directory still exists
+            if FileManager.default.fileExists(atPath: url.path) {
+                basePath = url
+                assetBasePath = url
+            } else {
+                // Path no longer exists, clear it
+                UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+                basePath = nil
+            }
+        } else {
+            basePath = assetBasePath
+        }
+    }
 }
 
 class EditorController: SelectionDelegate, ObservableObject {
