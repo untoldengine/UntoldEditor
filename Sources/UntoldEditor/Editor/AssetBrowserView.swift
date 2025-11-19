@@ -81,7 +81,7 @@ struct AssetBrowserView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "externaldrive.fill.badge.plus")
                                 .foregroundColor(.white)
-                            Text("Set Path")
+                            Text("Select Asset Folder")
                                 .fontWeight(.semibold)
                         }
                         .padding(.vertical, 6)
@@ -227,8 +227,20 @@ struct AssetBrowserView: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
 
         if panel.runModal() == .OK, let selectedURL = panel.urls.first {
+            // Create the required folder structure if it doesn't exist
+            let fm = FileManager.default
+            let requiredFolders = ["Models", "Animations", "HDR", "Gaussians", "Materials"]
+
+            for folder in requiredFolders {
+                let folderURL = selectedURL.appendingPathComponent(folder, isDirectory: true)
+                if !fm.fileExists(atPath: folderURL.path) {
+                    try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true, attributes: nil)
+                }
+            }
+
             assetBasePath = selectedURL
             EditorAssetBasePath.shared.basePath = assetBasePath
         }
