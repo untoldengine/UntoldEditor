@@ -240,6 +240,7 @@ struct AssetBrowserView: View {
             UTType(filenameExtension: "usdz")!,
             .png, .jpeg, .tiff,
             UTType(filenameExtension: "hdr")!,
+            UTType(filenameExtension: "ply")!,
         ]
         openPanel.canChooseDirectories = (selectedCategory == "Materials")
         openPanel.allowsMultipleSelection = true
@@ -395,7 +396,7 @@ struct AssetBrowserView: View {
                     if isDir.boolValue {
                         return Asset(name: item.lastPathComponent, category: selectedCategory ?? "", path: item, isFolder: true)
                     } else {
-                        let allowedExtensions: Set<String> = ["usdz", "png", "jpg", "hdr", "tif"]
+                        let allowedExtensions: Set<String> = ["usdz", "png", "jpg", "hdr", "tif", "ply"]
                         guard allowedExtensions.contains(item.pathExtension) else { return nil }
 
                         return Asset(name: item.lastPathComponent,
