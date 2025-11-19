@@ -179,4 +179,72 @@ final class InspectorViewTests: XCTestCase {
         // Assert
         XCTAssertEqual(getLightIntensity(entityId: e), initialIntensity + 2.0, accuracy: 0.0001)
     }
+
+    func test_removeComponent_removesDirectionalLight_fromEntity() {
+        // Arrange
+        let e = createEntityWithName("Light Entity")
+        addTransform(to: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Add DirectionalLightComponent
+        sut.addComponentToEntity_Editor(componentType: DirectionalLightComponent.self)
+
+        // Precondition: Verify component was added
+        XCTAssertTrue(hasComponent(entityId: e, componentType: DirectionalLightComponent.self),
+                      "DirectionalLightComponent should be present after adding.")
+        XCTAssertTrue(hasComponent(entityId: e, componentType: LightComponent.self),
+                      "LightComponent should be present after adding directional light.")
+
+        // Act: Remove the DirectionalLightComponent
+        sut.removeComponentFromEntity_Editor(componentType: DirectionalLightComponent.self)
+
+        // Assert: Component should be removed from the scene
+        XCTAssertFalse(hasComponent(entityId: e, componentType: DirectionalLightComponent.self),
+                       "DirectionalLightComponent should be removed from the entity.")
+    }
+
+    func test_removeComponent_removesKinetic_fromEntity() {
+        // Arrange
+        let e = createEntityWithName("Physics Entity")
+        addTransform(to: e)
+        addKinetic(to: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Precondition: Verify component exists
+        XCTAssertTrue(hasComponent(entityId: e, componentType: KineticComponent.self),
+                      "KineticComponent should be present initially.")
+
+        // Act: Remove the KineticComponent
+        sut.removeComponentFromEntity_Editor(componentType: KineticComponent.self)
+
+        // Assert: Component should be removed from the scene
+        XCTAssertFalse(hasComponent(entityId: e, componentType: KineticComponent.self),
+                       "KineticComponent should be removed from the entity.")
+    }
+
+    func test_removeComponent_removesFromEditorState() {
+        // Arrange
+        let e = createEntityWithName("Test Entity")
+        addTransform(to: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Add PointLightComponent
+        sut.addComponentToEntity_Editor(componentType: PointLightComponent.self)
+
+        let key = ObjectIdentifier(PointLightComponent.self)
+
+        // Precondition: Verify component is in editor state
+        XCTAssertNotNil(EditorComponentsState.shared.components[e]?[key],
+                        "Component should be in editor state after adding.")
+
+        // Act: Remove the component
+        sut.removeComponentFromEntity_Editor(componentType: PointLightComponent.self)
+
+        // Assert: Component should be removed from editor state
+        XCTAssertNil(EditorComponentsState.shared.components[e]?[key],
+                     "Component should be removed from editor state.")
+    }
 }

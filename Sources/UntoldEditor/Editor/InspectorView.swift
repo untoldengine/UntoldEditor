@@ -254,8 +254,24 @@ struct InspectorView: View {
                             let sortedComponents = sortEntityComponents(componentOption_Editor: mergedComponents)
 
                             ForEach(sortedComponents, id: \.id) { editor_component in
-                                editor_component.view(entityId, selectedAsset, refreshView)
-                                    .frame(minWidth: 200, maxWidth: 250)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(editor_component.name)
+                                            .font(.headline)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                                        Button(action: {
+                                            removeComponentFromEntity_Editor(componentType: editor_component.type)
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .foregroundColor(.red)
+                                        }
+                                        .buttonStyle(BorderlessButtonStyle())
+                                    }
+
+                                    editor_component.view(entityId, selectedAsset, refreshView)
+                                        .frame(minWidth: 200, maxWidth: 250)
+                                }
                                 Divider()
                             }
                         } else {
@@ -334,6 +350,40 @@ struct InspectorView: View {
                 createGameCamera(entityId: entityId)
             }
         }
+    }
+
+    func removeComponentFromEntity_Editor(componentType: Any.Type) {
+        guard let entityId = selectionManager.selectedEntity else { return }
+
+        let key = ObjectIdentifier(componentType)
+
+        // Remove component from the editor's state
+        editorComponentsState.components[entityId]?[key] = nil
+
+        // Remove component from the engine's scene
+        if key == ObjectIdentifier(RenderComponent.self) {
+            scene.remove(component: RenderComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(LocalTransformComponent.self) {
+            scene.remove(component: LocalTransformComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(AnimationComponent.self) {
+            scene.remove(component: AnimationComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(KineticComponent.self) {
+            scene.remove(component: KineticComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(DirectionalLightComponent.self) {
+            scene.remove(component: DirectionalLightComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(PointLightComponent.self) {
+            scene.remove(component: PointLightComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(SpotLightComponent.self) {
+            scene.remove(component: SpotLightComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(AreaLightComponent.self) {
+            scene.remove(component: AreaLightComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(CameraComponent.self) {
+            scene.remove(component: CameraComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(GaussianComponent.self) {
+            scene.remove(component: GaussianComponent.self, from: entityId)
+        }
+
+        refreshView()
     }
 
     private func refreshView() {
