@@ -205,6 +205,24 @@ struct InspectorView: View {
         VStack(alignment: .leading) {
             Text("Inspector")
                 .font(.headline)
+                .padding(.bottom, 8)
+
+            if selectionManager.selectedEntity != nil, selectionManager.selectedEntity != .invalid {
+                Button(action: { showComponentSelection = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.white)
+                        Text("Add Components")
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if let entityId = selectionManager.selectedEntity, entityId != .invalid {
                 ScrollView { // Make the entire inspector scrollable
@@ -246,17 +264,6 @@ struct InspectorView: View {
                     }
                 }
                 .frame(maxHeight: .infinity) // Ensure ScrollView takes available space
-
-                Button(action: { showComponentSelection = true }) {
-                    HStack {
-                        Image(systemName: "Plus")
-                            .foregroundColor(.white)
-                        Text("Add Components")
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding(.vertical, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
 
             } else {
                 Text("No entity selected")
