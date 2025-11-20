@@ -230,6 +230,13 @@ public struct EditorView: View {
         // For now, during "play" mode, the camera will keep being the scene camera
         // CameraSystem.shared.activeCamera = gameMode ? findGameCamera() : findSceneCamera()
         AnimationSystem.shared.isEnabled = isPlaying
+        
+        // Start/stop USC System
+        if gameMode {
+            USCSystem.shared.startPlayMode()
+        } else {
+            USCSystem.shared.stopPlayMode()
+        }
     }
 
     private func editor_createDirLight() {

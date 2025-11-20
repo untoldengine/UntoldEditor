@@ -152,6 +152,15 @@ var availableComponents_Editor: [ComponentOption_Editor] = [
             }
         )
     }),
+    ComponentOption_Editor(id: getComponentId(for: ScriptComponent.self), name: "Script Component", type: ScriptComponent.self, view: { selectedId, _, refreshView in
+        AnyView(
+            Group {
+                if let entityId = selectedId {
+                    ScriptComponentInspector(entityId: entityId, refreshView: refreshView)
+                }
+            }
+        )
+    }),
 ]
 
 func mergeEntityComponents(
@@ -381,6 +390,8 @@ struct InspectorView: View {
             scene.remove(component: CameraComponent.self, from: entityId)
         } else if key == ObjectIdentifier(GaussianComponent.self) {
             scene.remove(component: GaussianComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(ScriptComponent.self) {
+            scene.remove(component: ScriptComponent.self, from: entityId)
         }
 
         refreshView()
