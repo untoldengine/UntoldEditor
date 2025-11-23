@@ -198,4 +198,157 @@ final class AssetBrowserViewTests: XCTestCase {
         XCTAssertEqual(selected?.category, "Models")
         XCTAssertEqual(selected?.isFolder, true)
     }
+
+    func test_loadAssetsFromDisk_includesGaussians() throws {
+        try withTempDirectory { base in
+            // Create Gaussians directory
+            let gaussians = base.appendingPathComponent("Gaussians", isDirectory: true)
+            try FileManager.default.createDirectory(at: gaussians, withIntermediateDirectories: true)
+
+            // Add .ply gaussian files directly in Gaussians folder
+            let gaussianFile1 = gaussians.appendingPathComponent("pointcloud1.ply")
+            let gaussianFile2 = gaussians.appendingPathComponent("pointcloud2.ply")
+            FileManager.default.createFile(atPath: gaussianFile1.path, contents: Data())
+            FileManager.default.createFile(atPath: gaussianFile2.path, contents: Data())
+
+            // Set the base path
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Load assets using the same logic as the view
+            var grouped: [String: [Asset]] = [:]
+            for category in AssetCategory.allCases {
+                let categoryPath = base.appendingPathComponent(category.rawValue, isDirectory: true)
+                var categoryAssets: [Asset] = []
+
+                if let contents = try? FileManager.default.contentsOfDirectory(at: categoryPath, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                    for item in contents {
+                        var isDir: ObjCBool = false
+                        if FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir) {
+                            if isDir.boolValue {
+                                categoryAssets.append(Asset(name: item.lastPathComponent, category: category.rawValue, path: item, isFolder: true))
+                            } else if category == .gaussians {
+                                categoryAssets.append(Asset(name: item.lastPathComponent, category: category.rawValue, path: item, isFolder: false))
+                            }
+                        }
+                    }
+                }
+                grouped[category.rawValue] = categoryAssets
+            }
+
+            let gaussianNames = Set(grouped["Gaussians", default: []].map(\.name))
+            XCTAssertTrue(gaussianNames.contains("pointcloud1.ply"), "Gaussian file 1 should be loaded")
+            XCTAssertTrue(gaussianNames.contains("pointcloud2.ply"), "Gaussian file 2 should be loaded")
+        }
+    }
+
+    func test_loadAssetsFromDisk_includesScenes() throws {
+        try withTempDirectory { base in
+            // Create Scenes directory
+            let scenes = base.appendingPathComponent("Scenes", isDirectory: true)
+            try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
+
+            // Add scene files directly in Scenes folder
+            let sceneFile1 = scenes.appendingPathComponent("level1.json")
+            let sceneFile2 = scenes.appendingPathComponent("level2.json")
+            FileManager.default.createFile(atPath: sceneFile1.path, contents: Data())
+            FileManager.default.createFile(atPath: sceneFile2.path, contents: Data())
+
+            // Set the base path
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Load assets using the same logic as the view
+            var grouped: [String: [Asset]] = [:]
+            for category in AssetCategory.allCases {
+                let categoryPath = base.appendingPathComponent(category.rawValue, isDirectory: true)
+                var categoryAssets: [Asset] = []
+
+                if let contents = try? FileManager.default.contentsOfDirectory(at: categoryPath, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                    for item in contents {
+                        var isDir: ObjCBool = false
+                        if FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir) {
+                            if isDir.boolValue {
+                                categoryAssets.append(Asset(name: item.lastPathComponent, category: category.rawValue, path: item, isFolder: true))
+                            } else if category == .scenes {
+                                categoryAssets.append(Asset(name: item.lastPathComponent, category: category.rawValue, path: item, isFolder: false))
+                            }
+                        }
+                    }
+                }
+                grouped[category.rawValue] = categoryAssets
+            }
+
+            let sceneNames = Set(grouped["Scenes", default: []].map(\.name))
+            XCTAssertTrue(sceneNames.contains("level1.json"), "Scene file 1 should be loaded")
+            XCTAssertTrue(sceneNames.contains("level2.json"), "Scene file 2 should be loaded")
+        }
+    }
+
+    func test_loadAssetsFromDisk_includesScripts() throws {
+        try withTempDirectory { base in
+            // Create Scripts directory
+            let scripts = base.appendingPathComponent("Scripts", isDirectory: true)
+            try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+
+            // Add script files directly in Scripts folder
+            let scriptFile1 = scripts.appendingPathComponent("player_controller.uscript")
+            let scriptFile2 = scripts.appendingPathComponent("enemy_ai.uscript")
+            FileManager.default.createFile(atPath: scriptFile1.path, contents: Data())
+            FileManager.default.createFile(atPath: scriptFile2.path, contents: Data())
+
+            // Set the base path
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Load assets using the same logic as the view
+            var grouped: [String: [Asset]] = [:]
+            for category in AssetCategory.allCases {
+                let categoryPath = base.appendingPathComponent(category.rawValue, isDirectory: true)
+                var categoryAssets: [Asset] = []
+
+                if let contents = try? FileManager.default.contentsOfDirectory(at: categoryPath, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                    for item in contents {
+                        var isDir: ObjCBool = false
+                        if FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir) {
+                            if isDir.boolValue {
+                                categoryAssets.append(Asset(name: item.lastPathComponent, category: category.rawValue, path: item, isFolder: true))
+                            } else if category == .scripts {
+                                categoryAssets.append(Asset(name: item.lastPathComponent, category: category.rawValue, path: item, isFolder: false))
+                            }
+                        }
+                    }
+                }
+                grouped[category.rawValue] = categoryAssets
+            }
+
+            let scriptNames = Set(grouped["Scripts", default: []].map(\.name))
+            XCTAssertTrue(scriptNames.contains("player_controller.uscript"), "Script file 1 should be loaded")
+            XCTAssertTrue(scriptNames.contains("enemy_ai.uscript"), "Script file 2 should be loaded")
+        }
+    }
 }

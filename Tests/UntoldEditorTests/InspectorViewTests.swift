@@ -247,4 +247,73 @@ final class InspectorViewTests: XCTestCase {
         XCTAssertNil(EditorComponentsState.shared.components[e]?[key],
                      "Component should be removed from editor state.")
     }
+
+    func test_addComponentSheet_addsGaussianComponent() {
+        // Arrange
+        let e = createEntityWithName("Gaussian Holder")
+        addTransform(to: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Precondition
+        XCTAssertFalse(hasComponent(entityId: e, componentType: GaussianComponent.self),
+                       "GaussianComponent should not be present initially.")
+
+        // Act: Add GaussianComponent through the inspector
+        sut.addComponentToEntity_Editor(componentType: GaussianComponent.self)
+
+        // Assert: Component should be added to entity
+        XCTAssertTrue(hasComponent(entityId: e, componentType: GaussianComponent.self),
+                      "GaussianComponent should be present after adding.")
+
+        // Assert: Component should be in editor state
+        let key = ObjectIdentifier(GaussianComponent.self)
+        XCTAssertNotNil(EditorComponentsState.shared.components[e]?[key],
+                        "GaussianComponent should be in editor state after adding.")
+    }
+
+    func test_removeComponent_removesGaussianComponent() {
+        // Arrange
+        let e = createEntityWithName("Gaussian Entity")
+        addTransform(to: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Add GaussianComponent
+        sut.addComponentToEntity_Editor(componentType: GaussianComponent.self)
+
+        // Precondition: Verify component exists
+        XCTAssertTrue(hasComponent(entityId: e, componentType: GaussianComponent.self),
+                      "GaussianComponent should be present after adding.")
+
+        // Act: Remove the GaussianComponent
+        sut.removeComponentFromEntity_Editor(componentType: GaussianComponent.self)
+
+        // Assert: Component should be removed from the scene
+        XCTAssertFalse(hasComponent(entityId: e, componentType: GaussianComponent.self),
+                       "GaussianComponent should be removed from the entity.")
+
+        // Assert: Component should be removed from editor state
+        let key = ObjectIdentifier(GaussianComponent.self)
+        XCTAssertNil(EditorComponentsState.shared.components[e]?[key],
+                     "GaussianComponent should be removed from editor state.")
+    }
+
+    func test_mergeComponents_includesGaussianComponent() {
+        // Arrange
+        let e = createEntityWithName("Gaussian Entity")
+        addTransform(to: e)
+        registerComponent(entityId: e, componentType: GaussianComponent.self)
+        selectionManager.selectedEntity = e
+
+        sut = makeSUT()
+
+        // Act
+        let merged = mergeEntityComponents(selectedEntity: e, editor_availableComponents: availableComponents_Editor)
+
+        // Assert: GaussianComponent should be included in merged components
+        let key = ObjectIdentifier(GaussianComponent.self)
+        XCTAssertNotNil(merged[key], "GaussianComponent should be included in merged components.")
+        XCTAssertEqual(merged[key]?.name, "Gaussian Component", "Component name should match.")
+    }
 }
