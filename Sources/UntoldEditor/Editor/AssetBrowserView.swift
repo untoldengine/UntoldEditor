@@ -16,6 +16,8 @@ enum AssetCategory: String, CaseIterable {
     case hdr = "HDR"
     case animations = "Animations"
     case gaussians = "Gaussians"
+    case scenes = "Scenes"
+    case scripts = "Scripts"
 
     var iconName: String {
         switch self {
@@ -29,6 +31,10 @@ enum AssetCategory: String, CaseIterable {
             return "film"
         case .gaussians:
             return "sparkles"
+        case .scenes:
+            return "house"
+        case .scripts:
+            return "pencil"
         }
     }
 }
@@ -232,7 +238,7 @@ struct AssetBrowserView: View {
         if panel.runModal() == .OK, let selectedURL = panel.urls.first {
             // Create the required folder structure if it doesn't exist
             let fm = FileManager.default
-            let requiredFolders = ["Models", "Animations", "HDR", "Gaussians", "Materials"]
+            let requiredFolders = ["Models", "Animations", "HDR", "Gaussians", "Materials", "Scenes", "Scripts"]
 
             for folder in requiredFolders {
                 let folderURL = selectedURL.appendingPathComponent(folder, isDirectory: true)
@@ -253,13 +259,15 @@ struct AssetBrowserView: View {
             .png, .jpeg, .tiff,
             UTType(filenameExtension: "hdr")!,
             UTType(filenameExtension: "ply")!,
+            UTType(filenameExtension: "json")!,
+            UTType(filenameExtension: "uscript")!,
         ]
         openPanel.canChooseDirectories = (selectedCategory == "Materials")
         openPanel.allowsMultipleSelection = true
 
         guard let basePath = assetBasePath else { return }
         // Supported categories must match your enum/string values
-        guard ["Models", "Animations", "HDR", "Materials", "Gaussians"].contains(selectedCategory) else { return }
+        guard ["Models", "Animations", "HDR", "Materials", "Gaussians", "Scenes", "Scripts"].contains(selectedCategory) else { return }
 
         let fm = FileManager.default
         let categoryRoot = basePath.appendingPathComponent(selectedCategory!, isDirectory: true)
@@ -319,6 +327,18 @@ struct AssetBrowserView: View {
                             }
                         }
 
+                    case "Scenes":
+                        // Copy Scenes files directly into Scenes folder
+                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
+                        if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
+                        try fm.copyItem(at: sourceURL, to: destURL)
+
+                    case "Scripts":
+                        // Copy Scripts files directly into Scripts folder
+                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
+                        if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
+                        try fm.copyItem(at: sourceURL, to: destURL)
+
                     default:
                         break
                     }
@@ -371,6 +391,18 @@ struct AssetBrowserView: View {
                                                         category: category.rawValue,
                                                         path: item,
                                                         isFolder: false))
+                        } else if category == .scripts {
+                            // For Scripts, allow gaussian files directly in the Scripts folder
+                            categoryAssets.append(Asset(name: item.lastPathComponent,
+                                                        category: category.rawValue,
+                                                        path: item,
+                                                        isFolder: false))
+                        } else if category == .scenes {
+                            // For Scenes, allow gaussian files directly in the Scenes folder
+                            categoryAssets.append(Asset(name: item.lastPathComponent,
+                                                        category: category.rawValue,
+                                                        path: item,
+                                                        isFolder: false))
                         }
                     }
                 }
@@ -408,7 +440,7 @@ struct AssetBrowserView: View {
                     if isDir.boolValue {
                         return Asset(name: item.lastPathComponent, category: selectedCategory ?? "", path: item, isFolder: true)
                     } else {
-                        let allowedExtensions: Set<String> = ["usdz", "png", "jpg", "hdr", "tif", "ply"]
+                        let allowedExtensions: Set<String> = ["usdz", "png", "jpg", "hdr", "tif", "ply", "json", "uscript"]
                         guard allowedExtensions.contains(item.pathExtension) else { return nil }
 
                         return Asset(name: item.lastPathComponent,

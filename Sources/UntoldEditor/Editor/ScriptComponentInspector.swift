@@ -9,27 +9,27 @@
 
 // This file were jump-started with AI assistance — then refined by humans. If you spot an issue, please submit an issue.
 
+import Foundation
 import SwiftUI
 import UntoldEngine
-import Foundation
 
 struct ScriptComponentInspector: View {
     let entityId: EntityID
     let refreshView: () -> Void
-    
+
     @State private var scriptFilePath: String = ""
     @State private var scriptName: String = "No script loaded"
     @State private var triggerType: String = "-"
     @State private var executionMode: String = "-"
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Script Properties")
                 .font(.headline)
                 .padding(.bottom, 4)
-            
+
             // Script Info Display
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -40,7 +40,7 @@ struct ScriptComponentInspector: View {
                         .font(.caption)
                         .lineLimit(1)
                 }
-                
+
                 HStack {
                     Text("Trigger:")
                         .font(.caption)
@@ -48,7 +48,7 @@ struct ScriptComponentInspector: View {
                     Text(triggerType)
                         .font(.caption)
                 }
-                
+
                 HStack {
                     Text("Mode:")
                         .font(.caption)
@@ -56,7 +56,7 @@ struct ScriptComponentInspector: View {
                     Text(executionMode)
                         .font(.caption)
                 }
-                
+
                 if !scriptFilePath.isEmpty {
                     Text(scriptFilePath)
                         .font(.system(size: 9))
@@ -69,7 +69,7 @@ struct ScriptComponentInspector: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.secondary.opacity(0.1))
             .cornerRadius(6)
-            
+
             // Action Buttons
             HStack(spacing: 8) {
                 // Load Script Button
@@ -89,7 +89,7 @@ struct ScriptComponentInspector: View {
                     .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
-                
+
                 // Hot Reload Button
                 if !scriptFilePath.isEmpty {
                     Button(action: {
@@ -110,7 +110,7 @@ struct ScriptComponentInspector: View {
                     .buttonStyle(PlainButtonStyle())
                 }
             }
-            
+
             // Error Display
             if showError {
                 Text(errorMessage)
@@ -125,8 +125,9 @@ struct ScriptComponentInspector: View {
             loadExistingScriptInfo()
         }
     }
-    
+
     // MARK: - Load Script File
+
     private func loadScriptFile() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -134,20 +135,21 @@ struct ScriptComponentInspector: View {
         panel.canChooseFiles = true
         panel.allowedContentTypes = [.init(filenameExtension: "uscript")!]
         panel.message = "Select a USC script file"
-        
+
         if panel.runModal() == .OK, let url = panel.url {
             attachScriptToEntity(url: url)
         }
     }
-    
+
     // MARK: - Attach Script to Entity
+
     private func attachScriptToEntity(url: URL) {
         do {
             // Read JSON file
             let jsonData = try Data(contentsOf: url)
             let decoder = JSONDecoder()
             let script = try decoder.decode(USCScript.self, from: jsonData)
-            
+
             // Get or create ScriptComponent
             let scriptComponent: ScriptComponent
             if let existing = scene.get(component: ScriptComponent.self, for: entityId) {
@@ -159,58 +161,62 @@ struct ScriptComponentInspector: View {
                 }
                 scriptComponent = newComp
             }
-            
+
             // Assign script
             scriptComponent.script = script
             scriptComponent.scriptFilePath = url.path
-            
+
             // Update UI
             scriptFilePath = url.path
             scriptName = script.name
             triggerType = describeTriggerType(script.metadata.triggerType)
             executionMode = describeExecutionMode(script.metadata.executionMode)
             showError = false
-            
+
             refreshView()
-            
+
             print("[USC] Script loaded: \(script.name) from \(url.lastPathComponent)")
         } catch {
             showErrorMessage("Failed to load script: \(error.localizedDescription)")
         }
     }
-    
+
     // MARK: - Hot Reload Script
+
     private func hotReloadScript() {
         guard !scriptFilePath.isEmpty else { return }
-        
+
         let url = URL(fileURLWithPath: scriptFilePath)
         attachScriptToEntity(url: url)
     }
-    
+
     // MARK: - Load Existing Script Info
+
     private func loadExistingScriptInfo() {
         guard let scriptComponent = scene.get(component: ScriptComponent.self, for: entityId),
-              let script = scriptComponent.script else {
+              let script = scriptComponent.script
+        else {
             return
         }
-        
+
         scriptName = script.name
         triggerType = describeTriggerType(script.metadata.triggerType)
         executionMode = describeExecutionMode(script.metadata.executionMode)
         scriptFilePath = scriptComponent.scriptFilePath ?? ""
     }
-    
+
     // MARK: - Helpers
+
     private func showErrorMessage(_ message: String) {
         errorMessage = message
         showError = true
-        
+
         // Auto-hide after 5 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             showError = false
         }
     }
-    
+
     private func describeTriggerType(_ triggerType: TriggerType) -> String {
         switch triggerType {
         case .event:
@@ -221,7 +227,7 @@ struct ScriptComponentInspector: View {
             return "Manual"
         }
     }
-    
+
     private func describeExecutionMode(_ executionMode: ExecutionMode) -> String {
         switch executionMode {
         case .interpreted:
