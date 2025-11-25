@@ -23,6 +23,7 @@
         var areaLightCreate: () -> Void
 
         @State private var isPlaying = false
+        @State private var showBuildSettings = false
 
         var body: some View {
             HStack {
@@ -64,8 +65,33 @@
 
                 Spacer()
 
-                // Right-aligned Light Buttons
+                // Right-aligned Buttons
                 HStack(spacing: 12) {
+                    // Build button
+                    Button(action: {
+                        showBuildSettings = true
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hammer.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                            Text("Build")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(Color.green)
+                        .cornerRadius(6)
+                        .shadow(color: Color.black.opacity(0.2), radius: 3, x: 0, y: 1)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Build Game Project")
+                    
+                    Divider()
+                        .frame(height: 24)
+                    
                     ToolbarButton(iconName: "sun.horizon", action: dirLightCreate, tooltip: "Directional Light")
                     ToolbarButton(iconName: "lightbulb.fill", action: pointLightCreate, tooltip: "Point Light")
                     ToolbarButton(iconName: "lamp.ceiling", action: spotLightCreate, tooltip: "Spot Light")
@@ -80,6 +106,9 @@
             )
             .cornerRadius(8)
             .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 1)
+            .sheet(isPresented: $showBuildSettings) {
+                BuildSettingsView()
+            }
         }
     }
 
