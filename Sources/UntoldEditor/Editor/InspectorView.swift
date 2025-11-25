@@ -107,11 +107,11 @@ var availableComponents_Editor: [ComponentOption_Editor] = [
             }
         )
     }),
-    ComponentOption_Editor(id: getComponentId(for: ScriptComponent.self), name: "Script Component", type: ScriptComponent.self, view: { selectedId, _, refreshView in
+    ComponentOption_Editor(id: getComponentId(for: ScriptComponent.self), name: "Script Component", type: ScriptComponent.self, view: { selectedId, asset, refreshView in
         AnyView(
             Group {
                 if let entityId = selectedId {
-                    ScriptComponentInspector(entityId: entityId, refreshView: refreshView)
+                    ScriptComponentInspector(entityId: entityId, asset: asset, refreshView: refreshView)
                 }
             }
         )

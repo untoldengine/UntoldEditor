@@ -15,6 +15,7 @@ import UntoldEngine
 
 struct ScriptComponentInspector: View {
     let entityId: EntityID
+    let asset: Asset?
     let refreshView: () -> Void
 
     @State private var scriptFilePath: String = ""
@@ -129,15 +130,24 @@ struct ScriptComponentInspector: View {
     // MARK: - Load Script File
 
     private func loadScriptFile() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = [.init(filenameExtension: "uscript")!]
-        panel.message = "Select a USC script file"
+        // Check if a script is selected in the Asset Browser
+        if let selectedScript = asset,
+           selectedScript.category == "Scripts",
+           selectedScript.path.pathExtension.lowercased() == "uscript" {
+            // Load from selected asset
+            attachScriptToEntity(url: selectedScript.path)
+        } else {
+            // Fall back to file picker
+            let panel = NSOpenPanel()
+            panel.allowsMultipleSelection = false
+            panel.canChooseDirectories = false
+            panel.canChooseFiles = true
+            panel.allowedContentTypes = [.init(filenameExtension: "uscript")!]
+            panel.message = "Select a USC script file"
 
-        if panel.runModal() == .OK, let url = panel.url {
-            attachScriptToEntity(url: url)
+            if panel.runModal() == .OK, let url = panel.url {
+                attachScriptToEntity(url: url)
+            }
         }
     }
 
