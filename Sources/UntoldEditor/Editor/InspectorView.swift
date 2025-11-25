@@ -98,6 +98,52 @@ var availableComponents_Editor: [ComponentOption_Editor] = [
             }
         )
     }),
+    ComponentOption_Editor(id: getComponentId(for: DirectionalLightComponent.self), name: "Dir Light Component", type: DirectionalLightComponent.self, view: { selectedId, _, refreshView in
+        AnyView(
+            Group {
+                if let entityId = selectedId {
+                    DirLightEditorView(entityId: entityId, refreshView: refreshView)
+                }
+            }
+        )
+    }),
+    ComponentOption_Editor(id: getComponentId(for: PointLightComponent.self), name: "Point Light Component", type: PointLightComponent.self, view: { selectedId, _, refreshView in
+        AnyView(
+            Group {
+                if let entityId = selectedId {
+                    PointLightEditorView(entityId: entityId, refreshView: refreshView)
+                }
+            }
+        )
+    }),
+    ComponentOption_Editor(id: getComponentId(for: SpotLightComponent.self), name: "Spot Light Component", type: SpotLightComponent.self, view: { selectedId, _, refreshView in
+        AnyView(
+            Group {
+                if let entityId = selectedId {
+                    SpotLightEditorView(entityId: entityId, refreshView: refreshView)
+                }
+            }
+        )
+    }),
+    ComponentOption_Editor(id: getComponentId(for: AreaLightComponent.self), name: "Area Light Component", type: AreaLightComponent.self, view: { selectedId, _, refreshView in
+        AnyView(
+            Group {
+                if let entityId = selectedId {
+                    AreaLightEditorView(entityId: entityId, refreshView: refreshView)
+                }
+            }
+        )
+    }),
+    ComponentOption_Editor(id: getComponentId(for: CameraComponent.self), name: "Camera Component", type: CameraComponent.self, view: { selectedId, _, refreshView in
+        AnyView(
+            Group {
+                if let entityId = selectedId {
+                    CameraEditorView(entityId: entityId, refreshView: refreshView)
+                }
+            }
+        )
+    }),
+
     ComponentOption_Editor(id: getComponentId(for: GaussianComponent.self), name: "Gaussian Component", type: GaussianComponent.self, view: { selectedId, asset, refreshView in
         AnyView(
             Group {
