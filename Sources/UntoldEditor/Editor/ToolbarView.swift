@@ -15,7 +15,6 @@
         var onSave: () -> Void
         var onLoad: () -> Void
         var onClear: () -> Void
-        var onCameraSave: () -> Void
         var onPlayToggled: (Bool) -> Void
         var dirLightCreate: () -> Void
         var pointLightCreate: () -> Void
@@ -112,7 +111,7 @@
                     .help(isPlaying ? "Pause Scene" : "Play Scene")
 
                     ToolbarButton(iconName: "square.and.arrow.up", action: onSave, tooltip: "Export JSON Scene")
-                    ToolbarButton(iconName: "camera.fill", action: onCameraSave, tooltip: "Save Camera Transform")
+                    
                 }
 
                 Spacer()

@@ -41,7 +41,7 @@ public struct EditorView: View {
         VStack {
             ToolbarView(
                 selectionManager: selectionManager, onSave: editor_handleSave,
-                onLoad: editor_handleLoad, onClear: editor_clearScene, onCameraSave: editor_cameraSave,
+                onLoad: editor_handleLoad, onClear: editor_clearScene,
                 onPlayToggled: { isPlaying in editor_handlePlayToggle(isPlaying) },
                 dirLightCreate: editor_createDirLight,
                 pointLightCreate: editor_createPointLight,
@@ -59,20 +59,21 @@ public struct EditorView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     TransformManipulationToolbar(controller: editorController!)
                         .frame(height: 40)
-                    TabView {
+                    HStack(spacing: 0) {
                         AssetBrowserView(
                             assets: $assets,
                             selectedAsset: $selectedAsset,
                             selectionManager: selectionManager,
                             editor_addEntityWithAsset: editor_addEntityWithAsset
                         )
-                        .tabItem { Label("Assets", systemImage: "shippingbox") }
-
+                        .frame(width: 400)
+                        //.tabItem { Label("Assets", systemImage: "shippingbox") }
+                        Divider()
                         LogConsoleView()
                             .tabItem { Label("Console", systemImage: "terminal") }
                     }
                     .frame(height: 200)
-                    .clipped()
+                    //.clipped()
                 }
 
                 TabView {
