@@ -61,7 +61,7 @@ struct AssetBrowserView: View {
 
                 HStack {
                     Text("Assets")
-                        .font(.title2)
+                        .font(.title3)
                         .bold()
                         .foregroundColor(.primary)
 
@@ -87,7 +87,7 @@ struct AssetBrowserView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "externaldrive.fill.badge.plus")
                                 .foregroundColor(.white)
-                            Text("Select Asset Folder")
+                            Text("Asset Folder")
                                 .fontWeight(.semibold)
                         }
                         .padding(.vertical, 6)
