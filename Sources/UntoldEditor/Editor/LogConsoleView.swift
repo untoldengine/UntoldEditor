@@ -11,33 +11,6 @@ import Foundation
 import SwiftUI
 import UntoldEngine
 
-public final class LogStore: ObservableObject, LoggerSink {
-    public static let shared = LogStore()
-    @Published public private(set) var entries: [LogEvent] = []
-
-    private let queue = DispatchQueue(label: "engine.log.store", qos: .utility)
-    private let maxEntries = 5000
-
-    private init() {}
-
-    public func didLog(_ event: LogEvent) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            entries.append(event)
-            if entries.count > maxEntries {
-                entries.removeFirst(entries.count - maxEntries)
-            }
-        }
-    }
-
-    // Provide a safe way to clear entries without exposing a public setter
-    public func clear() {
-        DispatchQueue.main.async { [weak self] in
-            self?.entries.removeAll()
-        }
-    }
-}
-
 struct LogConsoleView: View {
     @StateObject private var store = LogStore.shared
     @State private var selectedLevel: LogLevel? = nil
@@ -52,7 +25,56 @@ struct LogConsoleView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            
+            HStack {
+                Text("Console")
+                    .font(.title3)
+                    .bold()
+                    .foregroundColor(.primary)
+               Spacer()
+                TextField("Search…", text: $search)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
+                
+                Toggle("Auto‑scroll", isOn: $autoScroll)
+                    .toggleStyle(.checkbox)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.secondary.opacity(0.1))
+            .cornerRadius(8)
+            
+            ScrollViewReader { proxy in
+                List(store.entries.filter(passes)) { e in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(shortTime(e.timestamp))
+                            .font(.caption).foregroundColor(.secondary)
+                            .frame(width: 84, alignment: .leading)
+
+//                        Text("[\(e.category)]")
+//                            .font(.caption).foregroundColor(.secondary)
+//                            .frame(width: 120, alignment: .leading)
+//
+//                        Text(tag(for: e.level))
+//                            .font(.caption2)
+//                            .padding(.horizontal, 6).padding(.vertical, 2)
+//                            .background(badgeColor(for: e.level).opacity(0.15))
+//                            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                        Text(e.message)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .lineLimit(4)
+                    }
+                    .id(e.id)
+                }
+                .onChange(of: store.entries.last?.id) { _, last in
+                    if autoScroll, let last { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
+                }
+            }
+            
+            /*
             HStack {
                 Picker("Level", selection: $selectedLevel) {
                     Text("All").tag(LogLevel?.none)
@@ -64,13 +86,8 @@ struct LogConsoleView: View {
                 }
                 .pickerStyle(.segmented)
 
-                TextField("Search…", text: $search)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 280)
-
-                Toggle("Auto‑scroll", isOn: $autoScroll)
-                    .toggleStyle(.checkbox)
-                /* //Disabling Buttons for now
+                
+                 //Disabling Buttons for now
                                 Spacer()
 
                                 Button("Copy") {
@@ -90,40 +107,14 @@ struct LogConsoleView: View {
                                 Button("Clear") {
                                     // optional: expose a clear API on Logger/LogStore if you want
                                 }
-                 */
+                 
             }
             .padding(.horizontal, 8)
-
-            ScrollViewReader { proxy in
-                List(store.entries.filter(passes)) { e in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(shortTime(e.timestamp))
-                            .font(.caption).foregroundColor(.secondary)
-                            .frame(width: 84, alignment: .leading)
-
-                        Text("[\(e.category)]")
-                            .font(.caption).foregroundColor(.secondary)
-                            .frame(width: 120, alignment: .leading)
-
-                        Text(tag(for: e.level))
-                            .font(.caption2)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(badgeColor(for: e.level).opacity(0.15))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                        Text(e.message)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .lineLimit(4)
-                    }
-                    .id(e.id)
-                }
-                .onChange(of: store.entries.last?.id) { _, last in
-                    if autoScroll, let last { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
-                }
-            }
+            */
+            
+            
         }
-        .padding(8)
+        .padding(10)
     }
 
     private func shortTime(_ d: Date) -> String {
