@@ -107,7 +107,20 @@ public struct EditorView: View {
     }
 
     private func editor_handleLoad() {
-        if let sceneData = loadGameScene() {
+        var sceneData: SceneData?
+        
+        // Check if a scene is selected in the Asset Browser
+        if let asset = selectedAsset, 
+           asset.category == "Scenes",
+           asset.path.pathExtension.lowercased() == "json" {
+            // Load from selected asset
+            sceneData = loadGameScene(from: asset.path)
+        } else {
+            // Fall back to file picker
+            sceneData = loadGameScene()
+        }
+        
+        if let sceneData = sceneData {
             destroyAllEntities()
             removeGizmo()
             EditorComponentsState.shared.clear()
