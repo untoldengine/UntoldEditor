@@ -24,7 +24,7 @@ struct ScriptComponentInspector: View {
     @State private var executionMode: String = "-"
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Script Properties")
@@ -248,4 +248,5 @@ struct ScriptComponentInspector: View {
             return "Auto"
         }
     }
+    
 }

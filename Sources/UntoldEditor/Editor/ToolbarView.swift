@@ -24,11 +24,63 @@
 
         @State private var isPlaying = false
         @State private var showBuildSettings = false
+        @State private var showingNewScriptDialog = false
+        @State private var newScriptName = ""
 
         var body: some View {
             HStack {
                 HStack(spacing: 12) {
                     ToolbarButton(iconName: "clear.fill", action: onClear, tooltip: "Clear Scene")
+                }
+                
+                Divider()
+                    .frame(height: 24)
+                
+                // Scripts Section
+                HStack(spacing: 8) {
+                    Text("Scripts:")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    
+                    Button(action: {
+                        showingNewScriptDialog = true
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                            Text("New")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white)
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.green)
+                        .cornerRadius(5)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Create New Script")
+                    
+                    Button(action: {
+                        openInXcode()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "hammer.circle.fill")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                            Text("Open in Xcode")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white)
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.blue)
+                        .cornerRadius(5)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Open Scripts Project in Xcode")
                 }
 
                 Spacer() // Push content to the center
@@ -109,6 +161,76 @@
             .sheet(isPresented: $showBuildSettings) {
                 BuildSettingsView()
             }
+            .sheet(isPresented: $showingNewScriptDialog) {
+                NewScriptDialog(
+                    scriptName: $newScriptName,
+                    onCancel: {
+                        showingNewScriptDialog = false
+                        newScriptName = ""
+                    },
+                    onCreate: {
+                        createNewScript()
+                    }
+                )
+            }
+        }
+        
+        // MARK: - Script Management Functions
+        
+        private func createNewScript() {
+            let manager = ScriptProjectManager.shared
+            
+            // Initialize project if needed
+            if !manager.isProjectInitialized() {
+                do {
+                    try manager.initializeProject()
+                    print("✅ Script project initialized!")
+                } catch {
+                    print("❌ Failed to initialize project: \(error.localizedDescription)")
+                    showingNewScriptDialog = false
+                    newScriptName = ""
+                    return
+                }
+            }
+            
+            // Create the script
+            do {
+                try manager.createNewScript(name: newScriptName)
+                print("✅ Script \(newScriptName).swift created!")
+                print("⚠️ Don't forget to add generate\(newScriptName)(to:) to GenerateScripts.swift main()")
+            } catch {
+                print("❌ Failed to create script: \(error.localizedDescription)")
+            }
+            
+            showingNewScriptDialog = false
+            newScriptName = ""
+        }
+        
+        private func openInXcode() {
+            let manager = ScriptProjectManager.shared
+            
+            // Initialize project if needed
+            if !manager.isProjectInitialized() {
+                do {
+                    try manager.initializeProject()
+                    print("✅ Script project initialized! Opening in Xcode...")
+                } catch {
+                    print("❌ Failed to initialize: \(error.localizedDescription)")
+                    return
+                }
+            }
+            
+            // Open Package.swift in Xcode
+            guard let scriptsDir = manager.scriptsDirectory() else {
+                print("❌ Scripts directory not found")
+                return
+            }
+            
+            let packageSwiftPath = scriptsDir.appendingPathComponent("Package.swift")
+            
+            // Use NSWorkspace to open the file with default app (Xcode)
+            NSWorkspace.shared.open(packageSwiftPath)
+            print("✅ Opening Scripts project in Xcode")
         }
     }
 
@@ -131,6 +253,44 @@
             }
             .buttonStyle(PlainButtonStyle())
             .help(tooltip)
+        }
+    }
+    
+    // MARK: - New Script Dialog
+    
+    struct NewScriptDialog: View {
+        @Binding var scriptName: String
+        let onCancel: () -> Void
+        let onCreate: () -> Void
+        
+        var body: some View {
+            VStack(spacing: 16) {
+                Text("Create New Script")
+                    .font(.headline)
+                
+                TextField("Script Name (e.g., PlayerController)", text: $scriptName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .frame(width: 300)
+                
+                Text("Name should be alphanumeric and start with a letter.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                HStack(spacing: 12) {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    
+                    Button("Create") {
+                        onCreate()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(scriptName.isEmpty)
+                }
+            }
+            .padding(24)
+            .frame(width: 400)
         }
     }
 #endif
