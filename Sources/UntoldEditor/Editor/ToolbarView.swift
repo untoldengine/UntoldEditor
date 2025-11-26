@@ -28,127 +28,15 @@
 
         var body: some View {
             HStack {
-                HStack(spacing: 12) {
-                    ToolbarButton(iconName: "clear.fill", action: onClear, tooltip: "Clear Scene")
-                }
-                
-                Divider()
-                    .frame(height: 24)
-                
-                // Scripts Section
-                HStack(spacing: 8) {
-                    Text("Scripts:")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                    
-                    Button(action: {
-                        showingNewScriptDialog = true
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                            Text("New")
-                                .font(.system(size: 11))
-                                .foregroundColor(.white)
-                                .fontWeight(.semibold)
-                        }
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.green)
-                        .cornerRadius(5)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Create New Script")
-                    
-                    Button(action: {
-                        openInXcode()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "hammer.circle.fill")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                            Text("Open in Xcode")
-                                .font(.system(size: 11))
-                                .foregroundColor(.white)
-                                .fontWeight(.semibold)
-                        }
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 8)
-                        .background(Color.blue)
-                        .cornerRadius(5)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Open Scripts Project in Xcode")
-                }
-
-                Spacer() // Push content to the center
-
-                // Centered Buttons
-                HStack(spacing: 12) {
-                    ToolbarButton(iconName: "square.and.arrow.down", action: onLoad, tooltip: "Import JSON Scene")
-
-                    Button(action: {
-                        isPlaying.toggle()
-                        onPlayToggled(isPlaying)
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                            Text(isPlaying ? "Pause" : "Play")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white)
-                                .fontWeight(.semibold)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(isPlaying ? Color.red : Color.blue)
-                        .cornerRadius(6)
-                        .shadow(color: Color.black.opacity(0.2), radius: 3, x: 0, y: 1)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help(isPlaying ? "Pause Scene" : "Play Scene")
-
-                    ToolbarButton(iconName: "square.and.arrow.up", action: onSave, tooltip: "Export JSON Scene")
-                    
-                }
+                leftSection
 
                 Spacer()
 
-                // Right-aligned Buttons
-                HStack(spacing: 12) {
-                    // Build button
-                    Button(action: {
-                        showBuildSettings = true
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "hammer.fill")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                            Text("Build")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white)
-                                .fontWeight(.semibold)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(Color.green)
-                        .cornerRadius(6)
-                        .shadow(color: Color.black.opacity(0.2), radius: 3, x: 0, y: 1)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Build Game Project")
-                    
-                    Divider()
-                        .frame(height: 24)
-                    
-                    ToolbarButton(iconName: "sun.horizon", action: dirLightCreate, tooltip: "Directional Light")
-                    ToolbarButton(iconName: "lightbulb.fill", action: pointLightCreate, tooltip: "Point Light")
-                    ToolbarButton(iconName: "lamp.ceiling", action: spotLightCreate, tooltip: "Spot Light")
-                    ToolbarButton(iconName: "light.panel.fill", action: areaLightCreate, tooltip: "Area Light")
-                }
+                rightSection
             }
+            .overlay(
+                centeredButtons
+            )
             .padding(.horizontal, 20)
             .padding(.vertical, 6)
             .background(
@@ -171,6 +59,91 @@
                         createNewScript()
                     }
                 )
+            }
+        }
+        
+        var rightSection: some View {
+            HStack(spacing: 12) {
+                Button(action: { showBuildSettings = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "hammer.fill")
+                        Text("Build")
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+
+                Divider().frame(height: 24)
+            }
+        }
+
+        
+        var centeredButtons: some View {
+            HStack(spacing: 12) {
+                ToolbarButton(iconName: "clear.fill", action: onClear, tooltip: "Clear Scene")
+
+                ToolbarButton(iconName: "square.and.arrow.down", action: onLoad, tooltip: "Import JSON Scene")
+
+                Button(action: {
+                    isPlaying.toggle()
+                    onPlayToggled(isPlaying)
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        Text(isPlaying ? "Pause" : "Play")
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(isPlaying ? Color.red : Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+
+                ToolbarButton(iconName: "square.and.arrow.up", action: onSave, tooltip: "Export JSON Scene")
+            }
+        }
+
+        
+        var leftSection: some View {
+            HStack(spacing: 8) {
+                Text("Scripts:")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                // New Script
+                Button(action: { showingNewScriptDialog = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("New")
+                    }
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(Color.green)
+                    .cornerRadius(5)
+                }
+                .buttonStyle(.plain)
+
+                // Open in Xcode
+                Button(action: { openInXcode() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "hammer.circle.fill")
+                        Text("Open in Xcode")
+                    }
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(Color.blue)
+                    .cornerRadius(5)
+                }
+                .buttonStyle(.plain)
             }
         }
         
