@@ -140,7 +140,12 @@ struct AssetBrowserView: View {
                                 .background(selectedCategory == category.rawValue ? Color.blue.opacity(0.1) : Color.clear)
                                 .cornerRadius(6)
                                 .onTapGesture {
-                                    selectedCategory = category.rawValue
+                                    // If reselecting the same category, force a reload
+                                    if selectedCategory == category.rawValue {
+                                        loadAssets()
+                                    } else {
+                                        selectedCategory = category.rawValue
+                                    }
                                     // Reset folder navigation when switching category,
                                     // but Scripts will not use folder navigation at all.
                                     folderPathStack = []
@@ -228,6 +233,10 @@ struct AssetBrowserView: View {
         .frame(maxHeight: 200)
         .onAppear(perform: loadAssets)
         .onChange(of: editorBaseAssetPath.basePath) {
+            loadAssets()
+        }
+        // Refresh when category changes (covers normal switching)
+        .onChange(of: selectedCategory) { _, _ in
             loadAssets()
         }
         // Listen for external requests to reload assets (e.g., after saveScene copies into Scenes)

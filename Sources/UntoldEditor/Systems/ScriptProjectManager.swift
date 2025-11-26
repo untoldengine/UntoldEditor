@@ -168,6 +168,8 @@ class ScriptProjectManager {
                 
                 if process.terminationStatus == 0 {
                     DispatchQueue.main.async {
+                        // Notify Asset Browser to reload (new .uscript files likely created)
+                        NotificationCenter.default.post(name: .assetBrowserReload, object: nil)
                         completion(.success(combinedOutput))
                     }
                 } else {
@@ -285,3 +287,4 @@ class ScriptProjectManager {
         """
     }
 }
+
