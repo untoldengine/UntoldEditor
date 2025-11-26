@@ -224,6 +224,10 @@ struct AssetBrowserView: View {
         .onChange(of: editorBaseAssetPath.basePath) {
             loadAssets()
         }
+        // Listen for external requests to reload assets (e.g., after saveScene copies into Scenes)
+        .onReceive(NotificationCenter.default.publisher(for: .assetBrowserReload)) { _ in
+            loadAssets()
+        }
     }
 
     // MARK: - Select Resource Directory
