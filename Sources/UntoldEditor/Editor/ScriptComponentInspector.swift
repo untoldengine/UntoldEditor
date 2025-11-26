@@ -18,64 +18,47 @@ struct ScriptComponentInspector: View {
     let asset: Asset?
     let refreshView: () -> Void
 
-    @State private var scriptFilePath: String = ""
-    @State private var scriptName: String = "No script loaded"
-    @State private var triggerType: String = "-"
-    @State private var executionMode: String = "-"
+    // We keep minimal UI state; details are read from the component each render.
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Script Properties")
                 .font(.headline)
                 .padding(.bottom, 4)
 
-            // Script Info Display
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("Script:")
+            // List all scripts attached to this entity
+            if let comp = scene.get(component: ScriptComponent.self, for: entityId) {
+                if comp.scripts.isEmpty {
+                    Text("No scripts attached")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text(scriptName)
-                        .font(.caption)
-                        .lineLimit(1)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(6)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(comp.scripts.indices, id: \.self) { index in
+                            scriptRow(comp: comp, index: index)
+                        }
+                    }
                 }
-
-                HStack {
-                    Text("Trigger:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(triggerType)
-                        .font(.caption)
-                }
-
-                HStack {
-                    Text("Mode:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(executionMode)
-                        .font(.caption)
-                }
-
-                if !scriptFilePath.isEmpty {
-                    Text(scriptFilePath)
-                        .font(.system(size: 9))
-                        .foregroundColor(.gray)
-                        .lineLimit(2)
-                        .truncationMode(.middle)
-                }
+            } else {
+                Text("No Script Component found")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(6)
             }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(6)
 
             // Action Buttons
             HStack(spacing: 8) {
-                // Load Script Button
                 Button(action: {
-                    loadScriptFile()
+                    loadScriptFileAndAppend()
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "doc.badge.plus")
@@ -90,11 +73,69 @@ struct ScriptComponentInspector: View {
                     .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
+            }
 
-                // Hot Reload Button
-                if !scriptFilePath.isEmpty {
+            // Error Display
+            if showError {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding(6)
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(4)
+            }
+        }
+        .onAppear {
+            // Nothing to pre-load; we render directly from the component.
+        }
+    }
+
+    // MARK: - Script Row
+
+    @ViewBuilder
+    private func scriptRow(comp: ScriptComponent, index: Int) -> some View {
+        let script = comp.scripts[index]
+        let path = comp.scriptFilePaths?.indices.contains(index) == true ? comp.scriptFilePaths?[index] : nil
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Script:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(script.name)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            HStack {
+                Text("Trigger:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(describeTriggerType(script.metadata.triggerType))
+                    .font(.caption)
+            }
+
+            HStack {
+                Text("Mode:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(describeExecutionMode(script.metadata.executionMode))
+                    .font(.caption)
+            }
+
+            if let path, !path.isEmpty {
+                Text(path)
+                    .font(.system(size: 9))
+                    .foregroundColor(.gray)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+            }
+
+            HStack(spacing: 8) {
+                if let path, !path.isEmpty {
                     Button(action: {
-                        hotReloadScript()
+                        hotReloadScript(at: index)
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise")
@@ -110,32 +151,37 @@ struct ScriptComponentInspector: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
-            }
 
-            // Error Display
-            if showError {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .padding(6)
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(4)
+                Button(role: .destructive, action: {
+                    removeScript(at: index)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash")
+                        Text("Remove")
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(Color.red)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
-        .onAppear {
-            loadExistingScriptInfo()
-        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.1))
+        .cornerRadius(6)
     }
 
-    // MARK: - Load Script File
+    // MARK: - Load Script File (Append)
 
-    private func loadScriptFile() {
-        // Check if a script is selected in the Asset Browser
+    private func loadScriptFileAndAppend() {
+        // Prefer selected asset from Asset Browser
         if let selectedScript = asset,
            selectedScript.category == "Scripts",
            selectedScript.path.pathExtension.lowercased() == "uscript" {
-            // Load from selected asset
-            attachScriptToEntity(url: selectedScript.path)
+            appendScript(from: selectedScript.path)
         } else {
             // Fall back to file picker
             let panel = NSOpenPanel()
@@ -146,21 +192,19 @@ struct ScriptComponentInspector: View {
             panel.message = "Select a USC script file"
 
             if panel.runModal() == .OK, let url = panel.url {
-                attachScriptToEntity(url: url)
+                appendScript(from: url)
             }
         }
     }
 
-    // MARK: - Attach Script to Entity
+    // MARK: - Append Script to Component
 
-    private func attachScriptToEntity(url: URL) {
+    private func appendScript(from url: URL) {
         do {
-            // Read JSON file
             let jsonData = try Data(contentsOf: url)
             let decoder = JSONDecoder()
-            let script = try decoder.decode(USCScript.self, from: jsonData)
+            let loaded = try decoder.decode(USCScript.self, from: jsonData)
 
-            // Get or create ScriptComponent
             let scriptComponent: ScriptComponent
             if let existing = scene.get(component: ScriptComponent.self, for: entityId) {
                 scriptComponent = existing
@@ -172,47 +216,64 @@ struct ScriptComponentInspector: View {
                 scriptComponent = newComp
             }
 
-            // Assign script
-            scriptComponent.script = script
-            scriptComponent.scriptFilePath = url.path
+            // Append new script and its path (keeping indices aligned)
+            scriptComponent.scripts.append(loaded)
+            if scriptComponent.scriptFilePaths == nil {
+                scriptComponent.scriptFilePaths = []
+            }
+            scriptComponent.scriptFilePaths?.append(url.path)
 
-            // Update UI
-            scriptFilePath = url.path
-            scriptName = script.name
-            triggerType = describeTriggerType(script.metadata.triggerType)
-            executionMode = describeExecutionMode(script.metadata.executionMode)
+            // Update UI and notify
             showError = false
-
             refreshView()
 
-            print("[USC] Script loaded: \(script.name) from \(url.lastPathComponent)")
+            print("[USC] Script appended: \(loaded.name) from \(url.lastPathComponent)")
         } catch {
             showErrorMessage("Failed to load script: \(error.localizedDescription)")
         }
     }
 
-    // MARK: - Hot Reload Script
+    // MARK: - Hot Reload Script (by index)
 
-    private func hotReloadScript() {
-        guard !scriptFilePath.isEmpty else { return }
+    private func hotReloadScript(at index: Int) {
+        guard let comp = scene.get(component: ScriptComponent.self, for: entityId),
+              comp.scripts.indices.contains(index),
+              let paths = comp.scriptFilePaths,
+              paths.indices.contains(index)
+        else { return }
 
-        let url = URL(fileURLWithPath: scriptFilePath)
-        attachScriptToEntity(url: url)
+        let url = URL(fileURLWithPath: paths[index])
+        do {
+            let jsonData = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            let reloaded = try decoder.decode(USCScript.self, from: jsonData)
+
+            comp.scripts[index] = reloaded
+
+            showError = false
+            refreshView()
+
+            print("[USC] Script reloaded: \(reloaded.name) from \(url.lastPathComponent)")
+        } catch {
+            showErrorMessage("Failed to reload script: \(error.localizedDescription)")
+        }
     }
 
-    // MARK: - Load Existing Script Info
+    // MARK: - Remove Script (by index)
 
-    private func loadExistingScriptInfo() {
-        guard let scriptComponent = scene.get(component: ScriptComponent.self, for: entityId),
-              let script = scriptComponent.script
-        else {
-            return
+    private func removeScript(at index: Int) {
+        guard let comp = scene.get(component: ScriptComponent.self, for: entityId),
+              comp.scripts.indices.contains(index)
+        else { return }
+
+        comp.scripts.remove(at: index)
+
+        if var paths = comp.scriptFilePaths, paths.indices.contains(index) {
+            paths.remove(at: index)
+            comp.scriptFilePaths = paths.isEmpty ? nil : paths
         }
 
-        scriptName = script.name
-        triggerType = describeTriggerType(script.metadata.triggerType)
-        executionMode = describeExecutionMode(script.metadata.executionMode)
-        scriptFilePath = scriptComponent.scriptFilePath ?? ""
+        refreshView()
     }
 
     // MARK: - Helpers
@@ -248,5 +309,4 @@ struct ScriptComponentInspector: View {
             return "Auto"
         }
     }
-    
 }
