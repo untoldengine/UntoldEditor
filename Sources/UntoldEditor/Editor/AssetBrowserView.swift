@@ -140,8 +140,10 @@ struct AssetBrowserView: View {
                                 .background(selectedCategory == category.rawValue ? Color.blue.opacity(0.1) : Color.clear)
                                 .cornerRadius(6)
                                 .onTapGesture {
-                                    selectedCategory = category.rawValue // Use enum rawValue
-                                    folderPathStack = [] // reset folder navigation when switching category
+                                    selectedCategory = category.rawValue
+                                    // Reset folder navigation when switching category,
+                                    // but Scripts will not use folder navigation at all.
+                                    folderPathStack = []
                                 }
                             }
                         }
@@ -157,8 +159,11 @@ struct AssetBrowserView: View {
                     ScrollView(.vertical, showsIndicators: true) {
                         VStack(alignment: .leading, spacing: 8) {
                             if let selectedCategory {
-                                // Show breadcrumb if inside folders
-                                if !folderPathStack.isEmpty {
+                                // Scripts: flat, no breadcrumbs or folders
+                                let isScripts = (selectedCategory == AssetCategory.scripts.rawValue)
+
+                                if !isScripts, !folderPathStack.isEmpty {
+                                    // Show breadcrumb if inside folders (non-Scripts only)
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack(spacing: 4) {
                                             Button("Assets") {
@@ -181,21 +186,22 @@ struct AssetBrowserView: View {
                                 }
 
                                 // Show either folder contents or top-level categories
-                                if let currentFolderPath {
+                                if let currentFolderPath, !isScripts {
                                     folderContentsView(for: currentFolderPath, selectionManager: selectionManager)
                                 } else {
                                     if let categoryAssets = assets[selectedCategory] {
                                         ForEach(categoryAssets) { asset in
+                                            // For Scripts, we never navigate into folders (we won't list folders anyway)
                                             assetRow(asset)
                                                 .onTapGesture(count: 2) {
-//                                                    if !asset.isFolder, selectedCategory == "HDR" {
-//                                                        selectAsset(asset)
-//                                                        addIBL(asset: asset)
-//                                                    }
+                                                    // Optional double-click behavior can go here.
                                                 }
                                                 .onTapGesture(count: 1) {
                                                     if asset.isFolder {
-                                                        folderPathStack.append(asset.path)
+                                                        // Only allow folder navigation for non-Scripts categories
+                                                        if !isScripts {
+                                                            folderPathStack.append(asset.path)
+                                                        }
                                                     } else {
                                                         selectAsset(asset)
                                                     }
@@ -363,10 +369,27 @@ struct AssetBrowserView: View {
         var groupedAssets: [String: [Asset]] = [:]
 
         for category in AssetCategory.allCases {
-            // Flattened: <Base>/<Category> (no "Assets" root)
             let categoryPath = basePath.appendingPathComponent(category.rawValue, isDirectory: true)
             var categoryAssets: [Asset] = []
 
+            if category == .scripts {
+                // Flat list of .uscript files anywhere under Scripts
+                let uscriptURLs = findUScriptFilesRecursively(at: categoryPath)
+                for url in uscriptURLs {
+                    categoryAssets.append(
+                        Asset(name: url.lastPathComponent,
+                              category: category.rawValue,
+                              path: url,
+                              isFolder: false)
+                    )
+                }
+                // Sort for stable UI
+                categoryAssets.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                groupedAssets[category.rawValue] = categoryAssets
+                continue
+            }
+
+            // Non-Scripts categories: list immediate children, with folder navigation support
             if let contents = try? FileManager.default.contentsOfDirectory(
                 at: categoryPath,
                 includingPropertiesForKeys: nil,
@@ -396,13 +419,9 @@ struct AssetBrowserView: View {
                                                         path: item,
                                                         isFolder: false))
                         } else if category == .scripts {
-                            // For Scripts, allow gaussian files directly in the Scripts folder
-                            categoryAssets.append(Asset(name: item.lastPathComponent,
-                                                        category: category.rawValue,
-                                                        path: item,
-                                                        isFolder: false))
+                            // Not used anymore due to flat listing, but keep for safety (won’t execute due to continue above)
                         } else if category == .scenes {
-                            // For Scenes, allow gaussian files directly in the Scenes folder
+                            // For Scenes, allow files directly in the Scenes folder
                             categoryAssets.append(Asset(name: item.lastPathComponent,
                                                         category: category.rawValue,
                                                         path: item,
@@ -416,6 +435,24 @@ struct AssetBrowserView: View {
         }
 
         assets = groupedAssets
+    }
+
+    // Recursively find all .uscript files under a root directory
+    private func findUScriptFilesRecursively(at root: URL) -> [URL] {
+        var results: [URL] = []
+        let fm = FileManager.default
+
+        guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
+            return results
+        }
+
+        for case let url as URL in enumerator {
+            if url.pathExtension.lowercased() == "uscript" {
+                results.append(url)
+            }
+        }
+
+        return results
     }
 
     @ViewBuilder
@@ -459,19 +496,14 @@ struct AssetBrowserView: View {
                 ForEach(items) { asset in
                     assetRow(asset)
                         .onTapGesture(count: 2) {
-//                            if !asset.isFolder, asset.path.pathExtension == "usdc", selectedCategory == "Models" {
-//                                selectAsset(asset)
-//                                editor_addEntityWithAsset()
-//                            }
-//
-//                            if !asset.isFolder, asset.path.pathExtension == "png" || asset.path.pathExtension == "jpg" || asset.path.pathExtension == "tif", selectedCategory == "Materials" {
-//                                selectAsset(asset)
-//                                loadTextureType(entityId: selectionManager.selectedEntity!, assetName: asset.name, path: asset.path)
-//                            }
+                            // Intentionally left blank for now
                         }
                         .onTapGesture(count: 1) {
                             if asset.isFolder {
-                                folderPathStack.append(asset.path)
+                                // Only navigate for non-Scripts categories
+                                if selectedCategory != AssetCategory.scripts.rawValue {
+                                    folderPathStack.append(asset.path)
+                                }
                             } else {
                                 selectAsset(asset)
                             }
@@ -492,3 +524,4 @@ struct AssetBrowserView: View {
         selectedAssetName = asset.name
     }
 }
+
