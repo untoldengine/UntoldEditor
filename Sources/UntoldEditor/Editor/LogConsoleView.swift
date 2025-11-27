@@ -26,17 +26,16 @@ struct LogConsoleView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            
             HStack {
                 Text("Console")
                     .font(.title3)
                     .bold()
                     .foregroundColor(.primary)
-               Spacer()
+                Spacer()
                 TextField("Search…", text: $search)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 200)
-                
+
                 Toggle("Auto‑scroll", isOn: $autoScroll)
                     .toggleStyle(.checkbox)
             }
@@ -44,7 +43,7 @@ struct LogConsoleView: View {
             .padding(.vertical, 6)
             .background(Color.secondary.opacity(0.1))
             .cornerRadius(8)
-            
+
             ScrollViewReader { proxy in
                 List(store.entries.filter(passes)) { e in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -73,46 +72,43 @@ struct LogConsoleView: View {
                     if autoScroll, let last { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
                 }
             }
-            
+
             /*
-            HStack {
-                Picker("Level", selection: $selectedLevel) {
-                    Text("All").tag(LogLevel?.none)
-                    Text("Error").tag(LogLevel?.some(.error))
-                    Text("Warning").tag(LogLevel?.some(.warning))
-                    Text("Info").tag(LogLevel?.some(.info))
-                    Text("Debug").tag(LogLevel?.some(.debug))
-                    Text("Test").tag(LogLevel?.some(.test))
-                }
-                .pickerStyle(.segmented)
+             HStack {
+                 Picker("Level", selection: $selectedLevel) {
+                     Text("All").tag(LogLevel?.none)
+                     Text("Error").tag(LogLevel?.some(.error))
+                     Text("Warning").tag(LogLevel?.some(.warning))
+                     Text("Info").tag(LogLevel?.some(.info))
+                     Text("Debug").tag(LogLevel?.some(.debug))
+                     Text("Test").tag(LogLevel?.some(.test))
+                 }
+                 .pickerStyle(.segmented)
 
-                
-                 //Disabling Buttons for now
-                                Spacer()
+                  //Disabling Buttons for now
+                                 Spacer()
 
-                                Button("Copy") {
-                                    let text = store.entries.filter(passes).map {
-                                        "[\($0.level)] \($0.message)"
-                                    }.joined(separator: "\n")
-                                    #if os(macOS)
-                                    NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(text, forType: .string)
-                                    #endif
-                                }
+                                 Button("Copy") {
+                                     let text = store.entries.filter(passes).map {
+                                         "[\($0.level)] \($0.message)"
+                                     }.joined(separator: "\n")
+                                     #if os(macOS)
+                                     NSPasteboard.general.clearContents()
+                                     NSPasteboard.general.setString(text, forType: .string)
+                                     #endif
+                                 }
 
-                                Button("Export") {
-                                    //exportLog(store.entries.filter(passes))
-                                }
+                                 Button("Export") {
+                                     //exportLog(store.entries.filter(passes))
+                                 }
 
-                                Button("Clear") {
-                                    // optional: expose a clear API on Logger/LogStore if you want
-                                }
-                 
-            }
-            .padding(.horizontal, 8)
-            */
-            
-            
+                                 Button("Clear") {
+                                     // optional: expose a clear API on Logger/LogStore if you want
+                                 }
+
+             }
+             .padding(.horizontal, 8)
+             */
         }
         .padding(10)
     }

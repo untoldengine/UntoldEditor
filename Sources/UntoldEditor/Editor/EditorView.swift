@@ -67,13 +67,13 @@ public struct EditorView: View {
                             editor_addEntityWithAsset: editor_addEntityWithAsset
                         )
                         .frame(width: 400)
-                        //.tabItem { Label("Assets", systemImage: "shippingbox") }
+                        // .tabItem { Label("Assets", systemImage: "shippingbox") }
                         Divider()
                         LogConsoleView()
                             .tabItem { Label("Console", systemImage: "terminal") }
                     }
                     .frame(height: 200)
-                    //.clipped()
+                    // .clipped()
                 }
 
                 TabView {
@@ -109,19 +109,20 @@ public struct EditorView: View {
 
     private func editor_handleLoad() {
         var sceneData: SceneData?
-        
+
         // Check if a scene is selected in the Asset Browser
-        if let asset = selectedAsset, 
+        if let asset = selectedAsset,
            asset.category == "Scenes",
-           asset.path.pathExtension.lowercased() == "json" {
+           asset.path.pathExtension.lowercased() == "json"
+        {
             // Load from selected asset
             sceneData = loadGameScene(from: asset.path)
         } else {
             // Fall back to file picker
             sceneData = loadGameScene()
         }
-        
-        if let sceneData = sceneData {
+
+        if let sceneData {
             destroyAllEntities()
             removeGizmo()
             EditorComponentsState.shared.clear()

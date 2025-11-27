@@ -180,7 +180,8 @@ struct ScriptComponentInspector: View {
         // Prefer selected asset from Asset Browser
         if let selectedScript = asset,
            selectedScript.category == "Scripts",
-           selectedScript.path.pathExtension.lowercased() == "uscript" {
+           selectedScript.path.pathExtension.lowercased() == "uscript"
+        {
             appendScript(from: selectedScript.path)
         } else {
             // Fall back to file picker

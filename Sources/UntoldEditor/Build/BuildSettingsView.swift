@@ -2,7 +2,9 @@
 //  BuildSettingsView.swift
 //  UntoldEditor
 //
-//  Build configuration UI
+//  Copyright (C) Untold Engine Studios
+//  Licensed under the GNU LGPL v3.0 or later.
+//  See the LICENSE file or <https://www.gnu.org/licenses/> for details.
 //
 
 import SwiftUI
@@ -17,19 +19,19 @@ struct BuildSettingsView: View {
     @State private var optimizationLevel: Int = 0 // none
     @State private var teamID: String = ""
     @State private var outputPath: String = ""
-    
+
     @State private var isBuilding: Bool = false
     @State private var buildProgress: String = ""
     @State private var showBuildResult: Bool = false
     @State private var buildResultMessage: String = ""
     @State private var buildSucceeded: Bool = false
-    
+
     @Environment(\.dismiss) private var dismiss
-    
+
     private let targets = ["macOS", "iOS", "visionOS"]
     private let macOSVersions = ["13.0", "14.0", "15.0"]
     private let optimizationLevels = ["None", "Speed", "Size"]
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -44,9 +46,9 @@ struct BuildSettingsView: View {
             }
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
-            
+
             Divider()
-            
+
             // Settings Form
             Form {
                 Section("Project") {
@@ -54,39 +56,39 @@ struct BuildSettingsView: View {
                     TextField("Bundle Identifier", text: $bundleIdentifier)
                         .textContentType(.none)
                 }
-                
+
                 Section("Target Platform") {
                     Picker("Platform", selection: $selectedTarget) {
-                        ForEach(0..<targets.count, id: \.self) { index in
+                        ForEach(0 ..< targets.count, id: \.self) { index in
                             Text(targets[index]).tag(index)
                         }
                     }
                     .pickerStyle(.segmented)
-                    
+
                     if selectedTarget == 0 { // macOS
                         Picker("macOS Version", selection: $macOSVersion) {
-                            ForEach(0..<macOSVersions.count, id: \.self) { index in
+                            ForEach(0 ..< macOSVersions.count, id: \.self) { index in
                                 Text(macOSVersions[index]).tag(index)
                             }
                         }
                     }
                 }
-                
+
                 Section("Build Options") {
                     Toggle("Include Debug Info", isOn: $includeDebugInfo)
-                    
+
                     Picker("Optimization", selection: $optimizationLevel) {
-                        ForEach(0..<optimizationLevels.count, id: \.self) { index in
+                        ForEach(0 ..< optimizationLevels.count, id: \.self) { index in
                             Text(optimizationLevels[index]).tag(index)
                         }
                     }
                 }
-                
+
                 Section("Code Signing") {
                     TextField("Team ID (Optional)", text: $teamID)
                         .help("Your Apple Developer Team ID for code signing")
                 }
-                
+
                 Section("Output") {
                     HStack {
                         TextField("Output Path", text: $outputPath)
@@ -99,9 +101,9 @@ struct BuildSettingsView: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
-            
+
             Divider()
-            
+
             // Build Progress
             if isBuilding {
                 VStack(spacing: 8) {
@@ -115,7 +117,7 @@ struct BuildSettingsView: View {
                 .frame(maxWidth: .infinity)
                 .background(Color(NSColor.controlBackgroundColor))
             }
-            
+
             // Build Button
             HStack {
                 Spacer()
@@ -148,14 +150,14 @@ struct BuildSettingsView: View {
             loadDefaultSettings()
         }
     }
-    
+
     private func loadDefaultSettings() {
         // Set default output path
         if let homeDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             outputPath = homeDir.appendingPathComponent("UntoldEngineBuilds").path
         }
     }
-    
+
     private func chooseOutputPath() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -163,38 +165,38 @@ struct BuildSettingsView: View {
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.message = "Choose build output directory"
-        
+
         if panel.runModal() == .OK {
             outputPath = panel.url?.path ?? outputPath
         }
     }
-    
+
     private func startBuild() {
         isBuilding = true
         buildProgress = "Preparing build..."
-        
+
         Task {
             do {
                 let settings = createBuildSettings()
-                
+
                 let result = try await BuildSystem.shared.build(settings: settings) { progress in
                     Task { @MainActor in
                         buildProgress = progress
                     }
                 }
-                
+
                 await MainActor.run {
                     isBuilding = false
                     buildSucceeded = true
                     buildResultMessage = """
                     Build completed successfully in \(String(format: "%.2f", result.buildTime))s
-                    
+
                     Project: \(result.xcodeProjectPath.path)
                     Assets: \(result.bundledAssets.count) files
                     """
                     showBuildResult = true
                 }
-                
+
             } catch {
                 await MainActor.run {
                     isBuilding = false
@@ -205,7 +207,7 @@ struct BuildSettingsView: View {
             }
         }
     }
-    
+
     private func createBuildSettings() -> BuildSettings {
         let target: BuildTarget
         switch selectedTarget {
@@ -225,7 +227,7 @@ struct BuildSettingsView: View {
         default:
             target = .macOS(deployment: .v15)
         }
-        
+
         let optimization: OptimizationLevel
         switch optimizationLevel {
         case 0: optimization = .none
@@ -233,7 +235,7 @@ struct BuildSettingsView: View {
         case 2: optimization = .size
         default: optimization = .none
         }
-        
+
         return BuildSettings(
             projectName: projectName,
             bundleIdentifier: bundleIdentifier,
@@ -245,17 +247,17 @@ struct BuildSettingsView: View {
             teamID: teamID.isEmpty ? nil : teamID
         )
     }
-    
+
     private func openBuildOutput() {
         let buildPath = URL(fileURLWithPath: outputPath).appendingPathComponent(projectName)
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: buildPath.path)
     }
-    
+
     private func openInXcode() {
         let xcodeProjectPath = URL(fileURLWithPath: outputPath)
             .appendingPathComponent(projectName)
             .appendingPathComponent("\(projectName).xcodeproj")
-        
+
         NSWorkspace.shared.open(xcodeProjectPath)
     }
 }

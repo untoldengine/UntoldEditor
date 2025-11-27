@@ -61,7 +61,7 @@
                 )
             }
         }
-        
+
         var rightSection: some View {
             HStack(spacing: 12) {
                 Button(action: { showBuildSettings = true }) {
@@ -81,7 +81,6 @@
             }
         }
 
-        
         var centeredButtons: some View {
             HStack(spacing: 12) {
                 ToolbarButton(iconName: "clear.fill", action: onClear, tooltip: "Clear Scene")
@@ -108,7 +107,6 @@
             }
         }
 
-        
         var leftSection: some View {
             HStack(spacing: 8) {
                 Text("Scripts:")
@@ -146,12 +144,12 @@
                 .buttonStyle(.plain)
             }
         }
-        
+
         // MARK: - Script Management Functions
-        
+
         private func createNewScript() {
             let manager = ScriptProjectManager.shared
-            
+
             // Initialize project if needed
             if !manager.isProjectInitialized() {
                 do {
@@ -164,7 +162,7 @@
                     return
                 }
             }
-            
+
             // Create the script
             do {
                 try manager.createNewScript(name: newScriptName)
@@ -173,14 +171,14 @@
             } catch {
                 print("❌ Failed to create script: \(error.localizedDescription)")
             }
-            
+
             showingNewScriptDialog = false
             newScriptName = ""
         }
-        
+
         private func openInXcode() {
             let manager = ScriptProjectManager.shared
-            
+
             // Initialize project if needed
             if !manager.isProjectInitialized() {
                 do {
@@ -191,15 +189,15 @@
                     return
                 }
             }
-            
+
             // Open Package.swift in Xcode
             guard let scriptsDir = manager.scriptsDirectory() else {
                 print("❌ Scripts directory not found")
                 return
             }
-            
+
             let packageSwiftPath = scriptsDir.appendingPathComponent("Package.swift")
-            
+
             // Use NSWorkspace to open the file with default app (Xcode)
             NSWorkspace.shared.open(packageSwiftPath)
             print("✅ Opening Scripts project in Xcode")
@@ -227,33 +225,33 @@
             .help(tooltip)
         }
     }
-    
+
     // MARK: - New Script Dialog
-    
+
     struct NewScriptDialog: View {
         @Binding var scriptName: String
         let onCancel: () -> Void
         let onCreate: () -> Void
-        
+
         var body: some View {
             VStack(spacing: 16) {
                 Text("Create New Script")
                     .font(.headline)
-                
+
                 TextField("Script Name (e.g., PlayerController)", text: $scriptName)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(width: 300)
-                
+
                 Text("Name should be alphanumeric and start with a letter.")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 HStack(spacing: 12) {
                     Button("Cancel") {
                         onCancel()
                     }
                     .keyboardShortcut(.cancelAction)
-                    
+
                     Button("Create") {
                         onCreate()
                     }

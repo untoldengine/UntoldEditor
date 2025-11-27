@@ -533,4 +533,3 @@ struct AssetBrowserView: View {
         selectedAssetName = asset.name
     }
 }
-
