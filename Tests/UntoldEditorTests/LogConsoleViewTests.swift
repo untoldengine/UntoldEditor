@@ -52,6 +52,7 @@ final class LogConsoleViewTests: XCTestCase {
     override func setUp() {
         super.setUp()
         // Ensure a clean LogStore before each test
+        LogStore.shared.clear()
         // Wait for main-queue clear to complete
         let exp = expectation(description: "clear flush")
         DispatchQueue.main.async { exp.fulfill() }
@@ -59,6 +60,7 @@ final class LogConsoleViewTests: XCTestCase {
     }
 
     override func tearDown() {
+        LogStore.shared.clear()
         let exp = expectation(description: "clear flush")
         DispatchQueue.main.async { exp.fulfill() }
         wait(for: [exp], timeout: 1.0)
