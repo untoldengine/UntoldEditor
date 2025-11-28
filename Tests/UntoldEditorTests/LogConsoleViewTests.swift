@@ -52,7 +52,6 @@ final class LogConsoleViewTests: XCTestCase {
     override func setUp() {
         super.setUp()
         // Ensure a clean LogStore before each test
-        UntoldEditor.LogStore.shared.clear()
         // Wait for main-queue clear to complete
         let exp = expectation(description: "clear flush")
         DispatchQueue.main.async { exp.fulfill() }
@@ -60,7 +59,6 @@ final class LogConsoleViewTests: XCTestCase {
     }
 
     override func tearDown() {
-        UntoldEditor.LogStore.shared.clear()
         let exp = expectation(description: "clear flush")
         DispatchQueue.main.async { exp.fulfill() }
         wait(for: [exp], timeout: 1.0)
@@ -90,7 +88,7 @@ final class LogConsoleViewTests: XCTestCase {
         // Act
         for i in 0 ..< many {
             let e = makeEvent(level: .info, category: "General", message: "msg \(i)")
-            UntoldEditor.LogStore.shared.didLog(e)
+            LogStore.shared.didLog(e)
         }
 
         // didLog enqueues on main; wait for it.
@@ -99,10 +97,10 @@ final class LogConsoleViewTests: XCTestCase {
         wait(for: [exp], timeout: 1.0)
 
         // Assert
-        XCTAssertEqual(UntoldEditor.LogStore.shared.entries.count, max, "Store should trim to \(max) entries.")
-        XCTAssertTrue(UntoldEditor.LogStore.shared.entries.first?.message == "msg 25",
+        XCTAssertEqual(LogStore.shared.entries.count, max, "Store should trim to \(max) entries.")
+        XCTAssertTrue(LogStore.shared.entries.first?.message == "msg 25",
                       "Oldest entries should be trimmed first.")
-        XCTAssertTrue(UntoldEditor.LogStore.shared.entries.last?.message == "msg \(many - 1)")
+        XCTAssertTrue(LogStore.shared.entries.last?.message == "msg \(many - 1)")
     }
 
     func test_filtering_byLevel_andSearch() {
@@ -116,32 +114,32 @@ final class LogConsoleViewTests: XCTestCase {
             makeEvent(level: .test, category: "Tests", message: "Injected"),
         ]
 
-        events.forEach { UntoldEditor.LogStore.shared.didLog($0) }
+        events.forEach { LogStore.shared.didLog($0) }
         let exp = expectation(description: "didLog flush")
         DispatchQueue.main.async { exp.fulfill() }
         wait(for: [exp], timeout: 1.0)
 
         // Act + Assert: no filter
-        var filtered = UntoldEditor.LogStore.shared.entries.filter { harness.passes($0, selectedLevel: nil, search: "") }
+        var filtered = LogStore.shared.entries.filter { harness.passes($0, selectedLevel: nil, search: "") }
         XCTAssertEqual(filtered.count, events.count)
 
         // Filter by level
-        filtered = UntoldEditor.LogStore.shared.entries.filter { harness.passes($0, selectedLevel: .warning, search: "") }
+        filtered = LogStore.shared.entries.filter { harness.passes($0, selectedLevel: .warning, search: "") }
         XCTAssertEqual(filtered.count, 1)
         XCTAssertEqual(filtered.first?.level, .warning)
 
         // Search by message
-        filtered = UntoldEditor.LogStore.shared.entries.filter { harness.passes($0, selectedLevel: nil, search: "draw") }
+        filtered = LogStore.shared.entries.filter { harness.passes($0, selectedLevel: nil, search: "draw") }
         XCTAssertEqual(filtered.count, 1)
         XCTAssertEqual(filtered.first?.message, "Draw call 42")
 
         // Search by category (case-insensitive)
-        filtered = UntoldEditor.LogStore.shared.entries.filter { harness.passes($0, selectedLevel: nil, search: "renderer") }
+        filtered = LogStore.shared.entries.filter { harness.passes($0, selectedLevel: nil, search: "renderer") }
         XCTAssertEqual(filtered.count, 2)
         XCTAssertTrue(filtered.allSatisfy { $0.category == "Renderer" })
 
         // Combined level + search
-        filtered = UntoldEditor.LogStore.shared.entries.filter { harness.passes($0, selectedLevel: .debug, search: "renderer") }
+        filtered = LogStore.shared.entries.filter { harness.passes($0, selectedLevel: .debug, search: "renderer") }
         XCTAssertEqual(filtered.count, 1)
         XCTAssertEqual(filtered.first?.level, .debug)
         XCTAssertEqual(filtered.first?.category, "Renderer")

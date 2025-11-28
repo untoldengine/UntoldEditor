@@ -193,7 +193,6 @@ final class TransformManipulationViewTests: XCTestCase {
     func test_toolbar_modeButtons_update_controller_activeMode() {
         // Arrange
         let controller = TestEditorController()
-        var show = false
         let sut = TransformManipulationToolbar(controller: controller)
 
         // Precondition

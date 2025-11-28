@@ -21,7 +21,7 @@ import XCTest
             onSaveCalled: UnsafeMutablePointer<Bool>,
             onLoadCalled: UnsafeMutablePointer<Bool>,
             onClearCalled: UnsafeMutablePointer<Bool>,
-            onCameraSaveCalled: UnsafeMutablePointer<Bool>,
+            onCameraSaveCalled _: UnsafeMutablePointer<Bool>,
             onPlayToggledValues: UnsafeMutablePointer<[Bool]>,
             onDirLightCalled: UnsafeMutablePointer<Bool>,
             onPointLightCalled: UnsafeMutablePointer<Bool>,
@@ -33,7 +33,6 @@ import XCTest
                 onSave: { onSaveCalled.pointee = true },
                 onLoad: { onLoadCalled.pointee = true },
                 onClear: { onClearCalled.pointee = true },
-                onCameraSave: { onCameraSaveCalled.pointee = true },
                 onPlayToggled: { value in onPlayToggledValues.pointee.append(value) },
                 dirLightCreate: { onDirLightCalled.pointee = true },
                 pointLightCreate: { onPointLightCalled.pointee = true },
@@ -70,7 +69,6 @@ import XCTest
             sut.onSave()
             sut.onLoad()
             sut.onClear()
-            sut.onCameraSave()
             sut.dirLightCreate()
             sut.pointLightCreate()
             sut.spotLightCreate()
@@ -79,7 +77,6 @@ import XCTest
             XCTAssertTrue(onSave, "onSave should be wired.")
             XCTAssertTrue(onLoad, "onLoad should be wired.")
             XCTAssertTrue(onClear, "onClear should be wired.")
-            XCTAssertTrue(onCameraSave, "onCameraSave should be wired.")
             XCTAssertTrue(onDir, "dirLightCreate should be wired.")
             XCTAssertTrue(onPoint, "pointLightCreate should be wired.")
             XCTAssertTrue(onSpot, "spotLightCreate should be wired.")
@@ -102,7 +99,6 @@ import XCTest
                 onSave: {},
                 onLoad: {},
                 onClear: {},
-                onCameraSave: {},
                 onPlayToggled: { playValues.append($0) },
                 dirLightCreate: {},
                 pointLightCreate: {},

@@ -358,6 +358,8 @@ struct InspectorView: View {
                 setEntityKinetics(entityId: entityId)
             } else if key == ObjectIdentifier(CameraComponent.self) {
                 createGameCamera(entityId: entityId)
+            } else if key == ObjectIdentifier(GaussianComponent.self) {
+                registerComponent(entityId: entityId, componentType: GaussianComponent.self)
             }
         }
     }
