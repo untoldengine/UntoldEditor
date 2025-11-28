@@ -239,8 +239,18 @@ class ScriptProjectManager {
             static func main() {
                 print("🔨 Generating USC scripts...")
 
-                let outputDir = URL(fileURLWithPath: "Generated/")
+                // Get the directory where GenerateScripts.swift lives (project root)
+                let projectRoot = URL(fileURLWithPath: #filePath)
+                    .deletingLastPathComponent()  // Remove GenerateScripts.swift
+                    .deletingLastPathComponent()  // Remove GenerateScripts
+                    .deletingLastPathComponent()  // Remove Sources
+
+                let outputDir = projectRoot.appendingPathComponent("Generated")
+
+                // Create the directory if it doesn't exist
                 try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+
+                print("📁 Output directory: \\(outputDir.path)")
 
                 // TODO: Call your script generation functions here
                 // Example: generatePlayerController(to: outputDir)
