@@ -1,11 +1,50 @@
 # Untold Editor
 
-The **Untold Editor** is a companion tool for the [Untold Engine](https://github.com/untoldengine/UntoldEngine).  
-It provides a visual environment for managing assets, scenes, and entities in projects built with the engine.  
+The **Untold Editor** is the visual development environment for the [Untold Engine](https://github.com/untoldengine/UntoldEngine).  
+It provides a complete toolkit for building games with scripting support, asset management, scene editing, and more.
 
-The editor is not required to use the engine, but it makes iteration faster by giving developers and designers a user-friendly interface.
+## 🎮 For Game Developers
+
+**Want to make games? Download [Untold Engine Studio](https://github.com/untoldengine/UntoldEditor/releases)** — a standalone app that includes everything you need:
+
+- ✅ Complete visual editor
+- ✅ Scripting system for game logic
+- ✅ All engine features built-in
+- ✅ No setup required — just download the DMG and start creating
+
+👉 **[Download Untold Engine Studio](https://github.com/untoldengine/UntoldEditor/releases)**
+
+## 🛠️ For Contributors
+
+This repository is for developers who want to **contribute to the editor itself**. If you're looking to improve the editor, fix bugs, or add features, you're in the right place!
 
 ![UntoldEditorScreenshot](images/editorscreenshot.png)
+---
+
+## 📚 Understanding the Ecosystem
+
+The Untold Engine project has three main components:
+
+### For Game Developers:
+- **[Untold Engine Studio](https://github.com/untoldengine/UntoldEditor/releases)** (Download)
+  - Standalone app with everything included
+  - Scripting, visual editor, asset management
+  - No GitHub or build tools required
+  - **Start here if you want to make games**
+
+### For Engine/Editor Contributors:
+- **[Untold Engine](https://github.com/untoldengine/UntoldEngine)** (Clone to contribute)
+  - Core engine repository
+  - Rendering, physics, ECS, animation systems
+  - Clone this if you want to contribute to the engine core
+
+- **[Untold Editor](https://github.com/untoldengine/UntoldEditor)** (This repo)
+  - Editor interface and tooling
+  - Clone this if you want to contribute to the editor
+
+### Additional Resources:
+- **Examples / Starter Projects:** [UntoldEngineExamples](https://github.com/untoldengine/UntoldEngineExamples)
+
 ---
 
 ## ✨ Features
@@ -27,9 +66,11 @@ The editor is not required to use the engine, but it makes iteration faster by g
 
 ---
 
-## 📦 Getting the Editor
+## 📦 Development Setup
 
-Clone this repository:
+**Note:** If you just want to make games, download [Untold Engine Studio](https://github.com/untoldengine/UntoldEditor/releases) instead.
+
+For editor development, clone this repository:
 
 ```bash
 git clone https://github.com/untoldengine/UntoldEditor.git
@@ -112,13 +153,6 @@ We welcome PRs!
 4. Push the branch and open a Pull Request  
 
 See **CONTRIBUTING.md** and **CODE_OF_CONDUCT.md** (coming soon).
-
----
-
-## 📚 Related Repos
-
-- **Engine Core:** [Untold Engine](https://github.com/untoldengine/UntoldEngine)  
-- **Examples / Starter Projects:** [UntoldEngineExamples](https://github.com/untoldengine/UntoldEngineExamples)  
 
 ---
 
