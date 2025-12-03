@@ -26,7 +26,12 @@ import XCTest
             onDirLightCalled: UnsafeMutablePointer<Bool>,
             onPointLightCalled: UnsafeMutablePointer<Bool>,
             onSpotLightCalled: UnsafeMutablePointer<Bool>,
-            onAreaLightCalled: UnsafeMutablePointer<Bool>
+            onAreaLightCalled: UnsafeMutablePointer<Bool>,
+            onCreateCubeCalled: UnsafeMutablePointer<Bool>,
+            onCreateSphereCalled: UnsafeMutablePointer<Bool>,
+            onCreatePlaneCalled: UnsafeMutablePointer<Bool>,
+            onCreateCylinderCalled: UnsafeMutablePointer<Bool>,
+            onCreateConeCalled: UnsafeMutablePointer<Bool>
         ) -> ToolbarView {
             ToolbarView(
                 selectionManager: selectionManager,
@@ -37,7 +42,12 @@ import XCTest
                 dirLightCreate: { onDirLightCalled.pointee = true },
                 pointLightCreate: { onPointLightCalled.pointee = true },
                 spotLightCreate: { onSpotLightCalled.pointee = true },
-                areaLightCreate: { onAreaLightCalled.pointee = true }
+                areaLightCreate: { onAreaLightCalled.pointee = true },
+                onCreateCube: { onCreateCubeCalled.pointee = true },
+                onCreateSphere: { onCreateSphereCalled.pointee = true },
+                onCreatePlane: { onCreatePlaneCalled.pointee = true },
+                onCreateCylinder: { onCreateCylinderCalled.pointee = true },
+                onCreateCone: { onCreateConeCalled.pointee = true }
             )
         }
 
@@ -51,6 +61,11 @@ import XCTest
             var onPoint = false
             var onSpot = false
             var onArea = false
+            var onCube = false
+            var onSphere = false
+            var onPlane = false
+            var onCylinder = false
+            var onCone = false
 
             let sut = makeSUT(
                 onSaveCalled: &onSave,
@@ -61,7 +76,12 @@ import XCTest
                 onDirLightCalled: &onDir,
                 onPointLightCalled: &onPoint,
                 onSpotLightCalled: &onSpot,
-                onAreaLightCalled: &onArea
+                onAreaLightCalled: &onArea,
+                onCreateCubeCalled: &onCube,
+                onCreateSphereCalled: &onSphere,
+                onCreatePlaneCalled: &onPlane,
+                onCreateCylinderCalled: &onCylinder,
+                onCreateConeCalled: &onCone
             )
 
             // We cannot programmatically tap SwiftUI Buttons without a host and introspection.
@@ -73,6 +93,11 @@ import XCTest
             sut.pointLightCreate()
             sut.spotLightCreate()
             sut.areaLightCreate()
+            sut.onCreateCube()
+            sut.onCreateSphere()
+            sut.onCreatePlane()
+            sut.onCreateCylinder()
+            sut.onCreateCone()
 
             XCTAssertTrue(onSave, "onSave should be wired.")
             XCTAssertTrue(onLoad, "onLoad should be wired.")
@@ -81,6 +106,11 @@ import XCTest
             XCTAssertTrue(onPoint, "pointLightCreate should be wired.")
             XCTAssertTrue(onSpot, "spotLightCreate should be wired.")
             XCTAssertTrue(onArea, "areaLightCreate should be wired.")
+            XCTAssertTrue(onCube, "onCreateCube should be wired.")
+            XCTAssertTrue(onSphere, "onCreateSphere should be wired.")
+            XCTAssertTrue(onPlane, "onCreatePlane should be wired.")
+            XCTAssertTrue(onCylinder, "onCreateCylinder should be wired.")
+            XCTAssertTrue(onCone, "onCreateCone should be wired.")
 
             // For play toggle, verify the closure records values we pass.
             // Since @State is internal, we mimic the button behavior by calling the closure directly.
@@ -103,7 +133,12 @@ import XCTest
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},
-                areaLightCreate: {}
+                areaLightCreate: {},
+                onCreateCube: {},
+                onCreateSphere: {},
+                onCreatePlane: {},
+                onCreateCylinder: {},
+                onCreateCone: {}
             )
 
             // Wrap in a hosting controller to ensure SwiftUI can build the body.
@@ -111,6 +146,111 @@ import XCTest
             XCTAssertNotNil(host.view, "Hosting controller should create a view.")
             _ = host // keep alive
             _ = playValues // keep referenced to avoid 'never read' warning
+        }
+
+        // MARK: - Primitive Creation Tests
+
+        func test_primitiveButtons_callCorrectClosures() {
+            // Given: A ToolbarView with tracked primitive creation callbacks
+            var cubeCreated = false
+            var sphereCreated = false
+            var planeCreated = false
+            var cylinderCreated = false
+            var coneCreated = false
+
+            let sut = ToolbarView(
+                selectionManager: SelectionManager(),
+                onSave: {},
+                onLoad: {},
+                onClear: {},
+                onPlayToggled: { _ in },
+                dirLightCreate: {},
+                pointLightCreate: {},
+                spotLightCreate: {},
+                areaLightCreate: {},
+                onCreateCube: { cubeCreated = true },
+                onCreateSphere: { sphereCreated = true },
+                onCreatePlane: { planeCreated = true },
+                onCreateCylinder: { cylinderCreated = true },
+                onCreateCone: { coneCreated = true }
+            )
+
+            // When: Invoking the primitive creation closures
+            sut.onCreateCube()
+            sut.onCreateSphere()
+            sut.onCreatePlane()
+            sut.onCreateCylinder()
+            sut.onCreateCone()
+
+            // Then: Each closure should be called
+            XCTAssertTrue(cubeCreated, "Cube creation callback should be invoked")
+            XCTAssertTrue(sphereCreated, "Sphere creation callback should be invoked")
+            XCTAssertTrue(planeCreated, "Plane creation callback should be invoked")
+            XCTAssertTrue(cylinderCreated, "Cylinder creation callback should be invoked")
+            XCTAssertTrue(coneCreated, "Cone creation callback should be invoked")
+        }
+
+        func test_primitivesSection_existsInView() {
+            // Given: A ToolbarView instance
+            var callCount = 0
+            let sut = ToolbarView(
+                selectionManager: SelectionManager(),
+                onSave: {},
+                onLoad: {},
+                onClear: {},
+                onPlayToggled: { _ in },
+                dirLightCreate: {},
+                pointLightCreate: {},
+                spotLightCreate: {},
+                areaLightCreate: {},
+                onCreateCube: { callCount += 1 },
+                onCreateSphere: { callCount += 1 },
+                onCreatePlane: { callCount += 1 },
+                onCreateCylinder: {},
+                onCreateCone: {}
+            )
+
+            // When: Calling the primitive closures
+            sut.onCreateCube()
+            sut.onCreateSphere()
+            sut.onCreatePlane()
+
+            // Then: All three active primitives should have been called
+            XCTAssertEqual(callCount, 3, "All three active primitive buttons (cube, sphere, plane) should be functional")
+        }
+
+        func test_primitiveCallbacks_areIndependent() {
+            // Given: Separate tracking for each primitive
+            var cubeCount = 0
+            var sphereCount = 0
+            var planeCount = 0
+
+            let sut = ToolbarView(
+                selectionManager: SelectionManager(),
+                onSave: {},
+                onLoad: {},
+                onClear: {},
+                onPlayToggled: { _ in },
+                dirLightCreate: {},
+                pointLightCreate: {},
+                spotLightCreate: {},
+                areaLightCreate: {},
+                onCreateCube: { cubeCount += 1 },
+                onCreateSphere: { sphereCount += 1 },
+                onCreatePlane: { planeCount += 1 },
+                onCreateCylinder: {},
+                onCreateCone: {}
+            )
+
+            // When: Calling specific primitive closures multiple times
+            sut.onCreateCube()
+            sut.onCreateCube()
+            sut.onCreateSphere()
+
+            // Then: Each closure should track independently
+            XCTAssertEqual(cubeCount, 2, "Cube should be created twice")
+            XCTAssertEqual(sphereCount, 1, "Sphere should be created once")
+            XCTAssertEqual(planeCount, 0, "Plane should not be created")
         }
     }
 #endif
