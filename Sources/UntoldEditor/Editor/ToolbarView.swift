@@ -20,6 +20,11 @@
         var pointLightCreate: () -> Void
         var spotLightCreate: () -> Void
         var areaLightCreate: () -> Void
+        var onCreateCube: () -> Void
+        var onCreateSphere: () -> Void
+        var onCreatePlane: () -> Void
+        var onCreateCylinder: () -> Void
+        var onCreateCone: () -> Void
 
         @State private var isPlaying = false
         @State private var showBuildSettings = false
@@ -109,6 +114,68 @@
 
         var leftSection: some View {
             HStack(spacing: 8) {
+                // Primitives Section
+                Text("Primitives:")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                Button(action: onCreateCube) {
+                    Image(systemName: "cube.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white)
+                }
+                .padding(2)
+                .background(Color.gray.opacity(0.8))
+                .cornerRadius(6)
+                .buttonStyle(.plain)
+                .help("Add Cube")
+
+                Button(action: onCreateSphere) {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white)
+                }
+                .padding(2)
+                .background(Color.gray.opacity(0.8))
+                .cornerRadius(6)
+                .buttonStyle(.plain)
+                .help("Add Sphere")
+
+                Button(action: onCreatePlane) {
+                    Image(systemName: "rectangle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white)
+                }
+                .padding(2)
+                .background(Color.gray.opacity(0.8))
+                .cornerRadius(6)
+                .buttonStyle(.plain)
+                .help("Add Plane")
+
+//                Button(action: onCreateCylinder) {
+//                    Image(systemName: "cylinder.fill")
+//                        .font(.system(size: 14))
+//                        .foregroundColor(.white)
+//                }
+//                .padding(6)
+//                .background(Color.blue.opacity(0.8))
+//                .cornerRadius(6)
+//                .buttonStyle(.plain)
+//                .help("Add Cylinder")
+//
+//                Button(action: onCreateCone) {
+//                    Image(systemName: "cone.fill")
+//                        .font(.system(size: 14))
+//                        .foregroundColor(.white)
+//                }
+//                .padding(6)
+//                .background(Color.blue.opacity(0.8))
+//                .cornerRadius(6)
+//                .buttonStyle(.plain)
+//                .help("Add Cone")
+
+                Divider().frame(height: 24)
+
                 Text("Scripts:")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)

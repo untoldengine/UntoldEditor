@@ -46,7 +46,12 @@ public struct EditorView: View {
                 dirLightCreate: editor_createDirLight,
                 pointLightCreate: editor_createPointLight,
                 spotLightCreate: editor_createSpotLight,
-                areaLightCreate: editor_createAreaLight
+                areaLightCreate: editor_createAreaLight,
+                onCreateCube: editor_createCube,
+                onCreateSphere: editor_createSphere,
+                onCreatePlane: editor_createPlane,
+                onCreateCylinder: editor_createCylinder,
+                onCreateCone: editor_createCone
             )
             Divider()
             HStack {
@@ -327,5 +332,60 @@ public struct EditorView: View {
         let spawnPosition = camPosition + forward * spawnDistance
 
         translateTo(entityId: selectionManager.selectedEntity!, position: spawnPosition)
+    }
+
+    // MARK: - Primitive Creation Functions
+
+    private func editor_createPrimitive(name: String, meshes: [Mesh]) {
+        removeGizmo()
+
+        let entityId = createEntity()
+        // Append entity ID to make the name unique
+        let uniqueName = "\(name)-\(entityId)"
+        setEntityName(entityId: entityId, name: uniqueName)
+
+        // Use setEntityMeshDirect which follows the same pattern as setEntityMesh
+        setEntityMeshDirect(entityId: entityId, meshes: meshes, assetName: name)
+
+        // Spawn in front of camera
+        guard let camera = CameraSystem.shared.activeCamera, let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
+            handleError(.noActiveCamera)
+            return
+        }
+
+        var forward = forwardDirectionVector(from: cameraComponent.rotation)
+        forward *= -1.0
+        let camPosition = cameraComponent.localPosition
+        let spawnPosition = camPosition + forward * spawnDistance
+        translateTo(entityId: entityId, position: simd_float3(0.0,0.0,0.0))
+
+        selectionManager.selectedEntity = entityId
+        editor_entities = getAllGameEntities()
+        sceneGraphModel.refreshHierarchy()
+    }
+
+    private func editor_createCube() {
+        let meshes = BasicPrimitives.createCube()
+        editor_createPrimitive(name: "Cube", meshes: meshes)
+    }
+
+    private func editor_createSphere() {
+        let meshes = BasicPrimitives.createSphere()
+        editor_createPrimitive(name: "Sphere", meshes: meshes)
+    }
+
+    private func editor_createPlane() {
+        let meshes = BasicPrimitives.createPlane()
+        editor_createPrimitive(name: "Plane", meshes: meshes)
+    }
+
+    private func editor_createCylinder() {
+        let meshes = BasicPrimitives.createCylinder()
+        editor_createPrimitive(name: "Cylinder", meshes: meshes)
+    }
+
+    private func editor_createCone() {
+        let meshes = BasicPrimitives.createCone()
+        editor_createPrimitive(name: "Cone", meshes: meshes)
     }
 }

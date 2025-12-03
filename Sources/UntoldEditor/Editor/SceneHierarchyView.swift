@@ -21,10 +21,10 @@ struct SceneHierarchyView: View {
             // MARK: - Header with Add/Remove Buttons
 
             HStack {
-                Image(systemName: "diagram.tree")
+                Image(systemName: "list.bullet.indent")
                     .foregroundColor(.accentColor)
                 Text("Scene Graph")
-                    .font(.title2)
+                    .font(.title3)
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
 
