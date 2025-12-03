@@ -74,7 +74,7 @@ func getMaterialTextureImage(entityId: EntityID, type: TextureType) -> NSImage? 
     guard let url = getMaterialTextureURL(entityId: entityId, type: type) else {
         return nil
     }
-    
+
     // Check if this is an embedded USDZ texture
     if isEmbeddedUSDZTexture(url) {
         // For embedded textures, we need to extract the image from MDLTexture
@@ -82,7 +82,7 @@ func getMaterialTextureImage(entityId: EntityID, type: TextureType) -> NSImage? 
             print("Warning: Could not get MDLTexture for embedded texture: \(url)")
             return nil
         }
-        
+
         // Convert MDLTexture to NSImage via CGImage
         if let image = nsImageFromMDLTexture(mdlTexture) {
             return image
@@ -103,29 +103,29 @@ func nsImageFromMDLTexture(_ mdlTexture: MDLTexture) -> NSImage? {
         print("Error: texelDataWithTopLeftOrigin() returned nil")
         return nil
     }
-    
+
     let width = Int(mdlTexture.dimensions.x)
     let height = Int(mdlTexture.dimensions.y)
     let channelCount = Int(mdlTexture.channelCount)
-    
+
     // Validate dimensions
-    guard width > 0 && height > 0 && channelCount > 0 else {
+    guard width > 0, height > 0, channelCount > 0 else {
         print("Error: Invalid texture dimensions - width: \(width), height: \(height), channels: \(channelCount)")
         return nil
     }
-    
+
     let bytesPerRow = width * channelCount
-    
+
     // Create a CGImage from the texture data
     guard let dataProvider = CGDataProvider(data: texelData as CFData) else {
         return nil
     }
-    
+
     let colorSpace = CGColorSpaceCreateDeviceRGB()
-    let bitmapInfo: CGBitmapInfo = mdlTexture.channelCount == 4 
+    let bitmapInfo: CGBitmapInfo = mdlTexture.channelCount == 4
         ? CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         : CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue)
-    
+
     guard let cgImage = CGImage(
         width: width,
         height: height,
@@ -142,7 +142,7 @@ func nsImageFromMDLTexture(_ mdlTexture: MDLTexture) -> NSImage? {
         print("Error: Failed to create CGImage with dimensions \(width)x\(height), channels: \(channelCount)")
         return nil
     }
-    
+
     let size = NSSize(width: CGFloat(width), height: CGFloat(height))
     return NSImage(cgImage: cgImage, size: size)
 }

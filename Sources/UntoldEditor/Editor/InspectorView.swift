@@ -504,7 +504,7 @@ struct RenderingEditorView: View {
                                         .foregroundColor(.red)
                                 }
                                 .buttonStyle(BorderlessButtonStyle())
-                                
+
                                 // Restore button (only show if there's an embedded texture to restore)
                                 if canRestoreEmbeddedTexture(entityId: entityId, type: type) {
                                     Button(action: {
