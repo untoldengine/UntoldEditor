@@ -463,9 +463,8 @@ struct RenderingEditorView: View {
                 HStack(alignment: .top, spacing: 24) {
                     ForEach(TextureType.allCases) { type in
                         let image: NSImage? = {
-                            if let url = getMaterialTextureURL(entityId: entityId, type: type),
-                               let img = NSImage(contentsOf: url)
-                            {
+                            // Use the helper function that handles both regular and embedded textures
+                            if let img = getMaterialTextureImage(entityId: entityId, type: type) {
                                 return img
                             } else {
                                 return NSImage(named: "Default Texture")
@@ -494,15 +493,31 @@ struct RenderingEditorView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
 
-                            // Remove texture
-                            Button(action: {
-                                removeMaterialTexture(entityId: entityId, textureType: type)
-                                refreshView()
-                            }) {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red)
+                            // Remove or Restore texture buttons
+                            HStack(spacing: 8) {
+                                // Remove texture button
+                                Button(action: {
+                                    removeMaterialTexture(entityId: entityId, textureType: type)
+                                    refreshView()
+                                }) {
+                                    Image(systemName: "minus.circle.fill")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
+                                
+                                // Restore button (only show if there's an embedded texture to restore)
+                                if canRestoreEmbeddedTexture(entityId: entityId, type: type) {
+                                    Button(action: {
+                                        restoreEmbeddedTexture(entityId: entityId, textureType: type)
+                                        refreshView()
+                                    }) {
+                                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                                            .foregroundColor(.blue)
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
+                                    .help("Restore original embedded texture")
+                                }
                             }
-                            .buttonStyle(BorderlessButtonStyle())
 
                             // Texture name
                             Text(type.displayName)
