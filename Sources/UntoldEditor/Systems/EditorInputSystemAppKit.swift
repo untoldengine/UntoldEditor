@@ -175,7 +175,20 @@
             activeHitGizmoEntity = .invalid
 
             if hit {
-                activeEntity = entityId
+                // If hit a child mesh, select the parent instead (except for gizmos)
+                var hitEntityId = entityId
+                if hasComponent(entityId: entityId, componentType: GizmoComponent.self) {
+                    // Gizmo hit - select the gizmo directly
+                    hitEntityId = entityId
+                } else if let parentId = getEntityParent(entityId: entityId) {
+                    // Non-gizmo child hit - select parent
+                    hitEntityId = parentId
+                } else {
+                    // Entity with no parent - select it directly
+                    hitEntityId = entityId
+                }
+
+                activeEntity = hitEntityId
 
                 selectionDelegate?.didSelectEntity(activeEntity)
                 selectionDelegate?.resetActiveAxis()

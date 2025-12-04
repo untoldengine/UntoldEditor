@@ -572,10 +572,7 @@ extension RenderPasses {
             return
         }
 
-        guard let renderComponent = scene.get(component: RenderComponent.self, for: activeEntity) else {
-            handleError(.noRenderComponent)
-            return
-        }
+        let renderComponent = scene.get(component: RenderComponent.self, for: activeEntity)
 
         renderEncoder.setVertexBytes(
             &cameraComponent.viewSpace, length: MemoryLayout<matrix_float4x4>.stride, index: 1
