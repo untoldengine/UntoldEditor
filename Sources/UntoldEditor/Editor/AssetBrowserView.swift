@@ -399,8 +399,25 @@ struct AssetBrowserView: View {
 
             if category == .scripts {
                 // Flat list of .uscript files anywhere under Scripts
-                let uscriptURLs = findUScriptFilesRecursively(at: categoryPath)
+                let uscriptURLs = findFilesRecursively(at: categoryPath, withExtension: "uscript")
                 for url in uscriptURLs {
+                    categoryAssets.append(
+                        Asset(name: url.lastPathComponent,
+                              category: category.rawValue,
+                              path: url,
+                              isFolder: false)
+                    )
+                }
+                // Sort for stable UI
+                categoryAssets.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                groupedAssets[category.rawValue] = categoryAssets
+                continue
+            }
+            
+            // Flat list for Models and Animations - show .usdz files directly
+            if category == .models || category == .animations {
+                let usdzURLs = findFilesRecursively(at: categoryPath, withExtension: "usdz")
+                for url in usdzURLs {
                     categoryAssets.append(
                         Asset(name: url.lastPathComponent,
                               category: category.rawValue,
@@ -462,8 +479,8 @@ struct AssetBrowserView: View {
         assets = groupedAssets
     }
 
-    // Recursively find all .uscript files under a root directory
-    private func findUScriptFilesRecursively(at root: URL) -> [URL] {
+    // Recursively find all files with a specific extension under a root directory
+    private func findFilesRecursively(at root: URL, withExtension ext: String) -> [URL] {
         var results: [URL] = []
         let fm = FileManager.default
 
@@ -472,7 +489,7 @@ struct AssetBrowserView: View {
         }
 
         for case let url as URL in enumerator {
-            if url.pathExtension.lowercased() == "uscript" {
+            if url.pathExtension.lowercased() == ext.lowercased() {
                 results.append(url)
             }
         }
