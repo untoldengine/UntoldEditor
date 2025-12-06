@@ -608,5 +608,49 @@ struct AssetBrowserView: View {
             // Refresh view
             selectionManager.objectWillChange.send()
         }
+        // Handle Script files (uscript)
+        else if asset.category == AssetCategory.scripts.rawValue,
+                withExtension.lowercased() == "uscript" {
+            
+            // Scripts require a selected entity to work with
+            guard let entityId = selectionManager.selectedEntity,
+                  entityId != .invalid else {
+                print("⚠️ Please select an entity first to add script")
+                return
+            }
+            
+            // Get or create ScriptComponent
+            let scriptComponent: ScriptComponent
+            if let existing = scene.get(component: ScriptComponent.self, for: entityId) {
+                scriptComponent = existing
+            } else {
+                guard let newComp = scene.assign(to: entityId, component: ScriptComponent.self) else {
+                    print("❌ Failed to create ScriptComponent")
+                    return
+                }
+                scriptComponent = newComp
+            }
+            
+            // Load and append the script
+            do {
+                let jsonData = try Data(contentsOf: asset.path)
+                let decoder = JSONDecoder()
+                let loadedScript = try decoder.decode(USCScript.self, from: jsonData)
+                
+                // Append script and its path
+                scriptComponent.scripts.append(loadedScript)
+                if scriptComponent.scriptFilePaths == nil {
+                    scriptComponent.scriptFilePaths = []
+                }
+                scriptComponent.scriptFilePaths?.append(asset.path.path)
+                
+                print("✅ Script added: \(loadedScript.name)")
+                
+                // Refresh view
+                selectionManager.objectWillChange.send()
+            } catch {
+                print("❌ Failed to load script: \(error.localizedDescription)")
+            }
+        }
     }
 }
