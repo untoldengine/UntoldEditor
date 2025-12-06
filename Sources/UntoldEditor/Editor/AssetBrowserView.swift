@@ -48,6 +48,8 @@ struct AssetBrowserView: View {
     @ObservedObject var selectionManager: SelectionManager
     @ObservedObject var sceneGraphModel: SceneGraphModel
     @State private var folderPathStack: [URL] = []
+    @State private var showSceneLoadConfirmation = false
+    @State private var pendingSceneToLoad: URL?
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
         folderPathStack.last
@@ -243,6 +245,19 @@ struct AssetBrowserView: View {
         // Listen for external requests to reload assets (e.g., after saveScene copies into Scenes)
         .onReceive(NotificationCenter.default.publisher(for: .assetBrowserReload)) { _ in
             loadAssets()
+        }
+        .alert("Load Scene?", isPresented: $showSceneLoadConfirmation) {
+            Button("Cancel", role: .cancel) {
+                pendingSceneToLoad = nil
+            }
+            Button("Load Scene", role: .destructive) {
+                if let sceneURL = pendingSceneToLoad {
+                    loadScene(from: sceneURL)
+                }
+                pendingSceneToLoad = nil
+            }
+        } message: {
+            Text("Loading a new scene will replace the current scene. Any unsaved changes will be lost.")
         }
     }
 
@@ -652,5 +667,44 @@ struct AssetBrowserView: View {
                 print("❌ Failed to load script: \(error.localizedDescription)")
             }
         }
+        // Handle Scene files (json)
+        else if asset.category == AssetCategory.scenes.rawValue,
+                withExtension.lowercased() == "json" {
+            
+            // Show confirmation dialog before loading scene
+            pendingSceneToLoad = asset.path
+            showSceneLoadConfirmation = true
+        }
+    }
+    
+    // MARK: - Load Scene Helper
+    
+    private func loadScene(from url: URL) {
+        guard let sceneData = loadGameScene(from: url) else {
+            print("❌ Failed to load scene from \(url.lastPathComponent)")
+            return
+        }
+        
+        // Clear current scene
+        destroyAllEntities()
+        removeGizmo()
+        EditorComponentsState.shared.clear()
+        
+        // Load new scene
+        deserializeScene(sceneData: sceneData)
+        
+        // Reset editor state
+        selectionManager.selectedEntity = nil
+        activeEntity = .invalid
+        gizmoActive = false
+        
+        // Refresh UI
+        selectionManager.objectWillChange.send()
+        sceneGraphModel.refreshHierarchy()
+        
+        // Reset camera
+        CameraSystem.shared.activeCamera = findSceneCamera()
+        
+        print("✅ Scene loaded: \(url.lastPathComponent)")
     }
 }
