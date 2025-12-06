@@ -675,6 +675,17 @@ struct AssetBrowserView: View {
             pendingSceneToLoad = asset.path
             showSceneLoadConfirmation = true
         }
+        // Handle HDR files (hdr)
+        else if asset.category == AssetCategory.hdr.rawValue,
+                withExtension.lowercased() == "hdr" {
+            
+            // Load HDR as environment IBL
+            let filename = asset.path.lastPathComponent
+            let directoryURL = asset.path.deletingLastPathComponent()
+            generateHDR(filename, from: directoryURL)
+            
+            print("✅ HDR environment loaded: \(filename)")
+        }
     }
     
     // MARK: - Load Scene Helper
