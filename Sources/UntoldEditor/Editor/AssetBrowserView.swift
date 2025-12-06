@@ -540,26 +540,46 @@ struct AssetBrowserView: View {
         // Don't handle folders
         guard !asset.isFolder else { return }
         
-        // Only handle model files (usdz)
-        guard asset.category == AssetCategory.models.rawValue,
-              asset.path.pathExtension.lowercased() == "usdz" else { return }
-        
-        // Create entity
-        let entityId = createEntity()
-        
-        // Set entity name based on asset filename
-        let entityName = asset.path.deletingPathExtension().lastPathComponent
-        setEntityName(entityId: entityId, name: entityName)
-        
-        // Add mesh to entity
         let filename = asset.path.deletingPathExtension().lastPathComponent
         let withExtension = asset.path.pathExtension
-        setEntityMesh(entityId: entityId, filename: filename, withExtension: withExtension)
         
-        // Refresh the scene hierarchy to show the new entity
-        sceneGraphModel.refreshHierarchy()
-        
-        // Select the newly created entity in the editor
-        selectionManager.selectedEntity = entityId
+        // Handle model files (usdz)
+        if asset.category == AssetCategory.models.rawValue,
+           withExtension.lowercased() == "usdz" {
+            
+            // Create entity
+            let entityId = createEntity()
+            
+            // Set entity name based on asset filename
+            setEntityName(entityId: entityId, name: filename)
+            
+            // Add mesh to entity
+            setEntityMesh(entityId: entityId, filename: filename, withExtension: withExtension)
+            
+            // Refresh the scene hierarchy to show the new entity
+            sceneGraphModel.refreshHierarchy()
+            
+            // Select the newly created entity in the editor
+            selectionManager.selectedEntity = entityId
+        }
+        // Handle Gaussian files (ply)
+        else if asset.category == AssetCategory.gaussians.rawValue,
+                withExtension.lowercased() == "ply" {
+            
+            // Create entity
+            let entityId = createEntity()
+            
+            // Set entity name based on asset filename
+            setEntityName(entityId: entityId, name: filename)
+            
+            // Add Gaussian component to entity
+            setEntityGaussian(entityId: entityId, filename: filename, withExtension: withExtension)
+            
+            // Refresh the scene hierarchy to show the new entity
+            sceneGraphModel.refreshHierarchy()
+            
+            // Select the newly created entity in the editor
+            selectionManager.selectedEntity = entityId
+        }
     }
 }
