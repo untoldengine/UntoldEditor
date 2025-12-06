@@ -581,5 +581,32 @@ struct AssetBrowserView: View {
             // Select the newly created entity in the editor
             selectionManager.selectedEntity = entityId
         }
+        // Handle Animation files (usdz in Animations category)
+        else if asset.category == AssetCategory.animations.rawValue,
+                withExtension.lowercased() == "usdz" {
+            
+            // Animations require a selected entity to work with
+            guard let entityId = selectionManager.selectedEntity,
+                  entityId != .invalid else {
+                print("⚠️ Please select an entity first to add animation")
+                return
+            }
+            
+            // Add AnimationComponent if not already present
+            if !hasComponent(entityId: entityId, componentType: AnimationComponent.self) {
+                registerComponent(entityId: entityId, componentType: AnimationComponent.self)
+            }
+            
+            // Add the animation to the entity
+            setEntityAnimations(entityId: entityId, filename: filename, withExtension: withExtension, name: filename)
+            
+            // Store the animation file URL in the component
+            if let animationComponent = scene.get(component: AnimationComponent.self, for: entityId) {
+                animationComponent.animationsFilenames.append(asset.path)
+            }
+            
+            // Refresh view
+            selectionManager.objectWillChange.send()
+        }
     }
 }
