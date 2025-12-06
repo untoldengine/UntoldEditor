@@ -46,6 +46,7 @@ struct AssetBrowserView: View {
     @State private var selectedAssetName: String?
     @ObservedObject var editorBaseAssetPath = EditorAssetBasePath.shared
     @ObservedObject var selectionManager: SelectionManager
+    @ObservedObject var sceneGraphModel: SceneGraphModel
     @State private var folderPathStack: [URL] = []
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
@@ -199,7 +200,7 @@ struct AssetBrowserView: View {
                                             // For Scripts, we never navigate into folders (we won't list folders anyway)
                                             assetRow(asset)
                                                 .onTapGesture(count: 2) {
-                                                    // Optional double-click behavior can go here.
+                                                    handle_add_model_double_click(asset: asset)
                                                 }
                                                 .onTapGesture(count: 1) {
                                                     if asset.isFolder {
@@ -505,7 +506,7 @@ struct AssetBrowserView: View {
                 ForEach(items) { asset in
                     assetRow(asset)
                         .onTapGesture(count: 2) {
-                            // Intentionally left blank for now
+                            handle_add_model_double_click(asset: asset)
                         }
                         .onTapGesture(count: 1) {
                             if asset.isFolder {
@@ -531,5 +532,34 @@ struct AssetBrowserView: View {
     private func selectAsset(_ asset: Asset) {
         selectedAsset = asset
         selectedAssetName = asset.name
+    }
+    
+    // MARK: - Add Model with Double Click
+    
+    private func handle_add_model_double_click(asset: Asset) {
+        // Don't handle folders
+        guard !asset.isFolder else { return }
+        
+        // Only handle model files (usdz)
+        guard asset.category == AssetCategory.models.rawValue,
+              asset.path.pathExtension.lowercased() == "usdz" else { return }
+        
+        // Create entity
+        let entityId = createEntity()
+        
+        // Set entity name based on asset filename
+        let entityName = asset.path.deletingPathExtension().lastPathComponent
+        setEntityName(entityId: entityId, name: entityName)
+        
+        // Add mesh to entity
+        let filename = asset.path.deletingPathExtension().lastPathComponent
+        let withExtension = asset.path.pathExtension
+        setEntityMesh(entityId: entityId, filename: filename, withExtension: withExtension)
+        
+        // Refresh the scene hierarchy to show the new entity
+        sceneGraphModel.refreshHierarchy()
+        
+        // Select the newly created entity in the editor
+        selectionManager.selectedEntity = entityId
     }
 }

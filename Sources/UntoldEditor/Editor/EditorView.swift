@@ -69,6 +69,7 @@ public struct EditorView: View {
                             assets: $assets,
                             selectedAsset: $selectedAsset,
                             selectionManager: selectionManager,
+                            sceneGraphModel: sceneGraphModel,
                             editor_addEntityWithAsset: editor_addEntityWithAsset
                         )
                         .frame(width: 400)
