@@ -413,7 +413,7 @@ struct AssetBrowserView: View {
                 groupedAssets[category.rawValue] = categoryAssets
                 continue
             }
-            
+
             // Flat list for Models and Animations - show .usdz files directly
             if category == .models || category == .animations {
                 let usdzURLs = findFilesRecursively(at: categoryPath, withExtension: "usdz")
@@ -565,92 +565,94 @@ struct AssetBrowserView: View {
         selectedAsset = asset
         selectedAssetName = asset.name
     }
-    
+
     // MARK: - Add Model with Double Click
-    
+
     private func handle_add_model_double_click(asset: Asset) {
         // Don't handle folders
         guard !asset.isFolder else { return }
-        
+
         let filename = asset.path.deletingPathExtension().lastPathComponent
         let withExtension = asset.path.pathExtension
-        
+
         // Handle model files (usdz)
         if asset.category == AssetCategory.models.rawValue,
-           withExtension.lowercased() == "usdz" {
-            
+           withExtension.lowercased() == "usdz"
+        {
             // Create entity
             let entityId = createEntity()
-            
+
             // Set entity name based on asset filename
             setEntityName(entityId: entityId, name: filename)
-            
+
             // Add mesh to entity
             setEntityMesh(entityId: entityId, filename: filename, withExtension: withExtension)
-            
+
             // Refresh the scene hierarchy to show the new entity
             sceneGraphModel.refreshHierarchy()
-            
+
             // Select the newly created entity in the editor
             selectionManager.selectedEntity = entityId
         }
         // Handle Gaussian files (ply)
         else if asset.category == AssetCategory.gaussians.rawValue,
-                withExtension.lowercased() == "ply" {
-            
+                withExtension.lowercased() == "ply"
+        {
             // Create entity
             let entityId = createEntity()
-            
+
             // Set entity name based on asset filename
             setEntityName(entityId: entityId, name: filename)
-            
+
             // Add Gaussian component to entity
             setEntityGaussian(entityId: entityId, filename: filename, withExtension: withExtension)
-            
+
             // Refresh the scene hierarchy to show the new entity
             sceneGraphModel.refreshHierarchy()
-            
+
             // Select the newly created entity in the editor
             selectionManager.selectedEntity = entityId
         }
         // Handle Animation files (usdz in Animations category)
         else if asset.category == AssetCategory.animations.rawValue,
-                withExtension.lowercased() == "usdz" {
-            
+                withExtension.lowercased() == "usdz"
+        {
             // Animations require a selected entity to work with
             guard let entityId = selectionManager.selectedEntity,
-                  entityId != .invalid else {
+                  entityId != .invalid
+            else {
                 print("⚠️ Please select an entity first to add animation")
                 return
             }
-            
+
             // Add AnimationComponent if not already present
             if !hasComponent(entityId: entityId, componentType: AnimationComponent.self) {
                 registerComponent(entityId: entityId, componentType: AnimationComponent.self)
             }
-            
+
             // Add the animation to the entity
             setEntityAnimations(entityId: entityId, filename: filename, withExtension: withExtension, name: filename)
-            
+
             // Store the animation file URL in the component
             if let animationComponent = scene.get(component: AnimationComponent.self, for: entityId) {
                 animationComponent.animationsFilenames.append(asset.path)
             }
-            
+
             // Refresh view
             selectionManager.objectWillChange.send()
         }
         // Handle Script files (uscript)
         else if asset.category == AssetCategory.scripts.rawValue,
-                withExtension.lowercased() == "uscript" {
-            
+                withExtension.lowercased() == "uscript"
+        {
             // Scripts require a selected entity to work with
             guard let entityId = selectionManager.selectedEntity,
-                  entityId != .invalid else {
+                  entityId != .invalid
+            else {
                 print("⚠️ Please select an entity first to add script")
                 return
             }
-            
+
             // Get or create ScriptComponent
             let scriptComponent: ScriptComponent
             if let existing = scene.get(component: ScriptComponent.self, for: entityId) {
@@ -662,22 +664,22 @@ struct AssetBrowserView: View {
                 }
                 scriptComponent = newComp
             }
-            
+
             // Load and append the script
             do {
                 let jsonData = try Data(contentsOf: asset.path)
                 let decoder = JSONDecoder()
                 let loadedScript = try decoder.decode(USCScript.self, from: jsonData)
-                
+
                 // Append script and its path
                 scriptComponent.scripts.append(loadedScript)
                 if scriptComponent.scriptFilePaths == nil {
                     scriptComponent.scriptFilePaths = []
                 }
                 scriptComponent.scriptFilePaths?.append(asset.path.path)
-                
+
                 print("✅ Script added: \(loadedScript.name)")
-                
+
                 // Refresh view
                 selectionManager.objectWillChange.send()
             } catch {
@@ -686,53 +688,53 @@ struct AssetBrowserView: View {
         }
         // Handle Scene files (json)
         else if asset.category == AssetCategory.scenes.rawValue,
-                withExtension.lowercased() == "json" {
-            
+                withExtension.lowercased() == "json"
+        {
             // Show confirmation dialog before loading scene
             pendingSceneToLoad = asset.path
             showSceneLoadConfirmation = true
         }
         // Handle HDR files (hdr)
         else if asset.category == AssetCategory.hdr.rawValue,
-                withExtension.lowercased() == "hdr" {
-            
+                withExtension.lowercased() == "hdr"
+        {
             // Load HDR as environment IBL
             let filename = asset.path.lastPathComponent
             let directoryURL = asset.path.deletingLastPathComponent()
             generateHDR(filename, from: directoryURL)
-            
+
             print("✅ HDR environment loaded: \(filename)")
         }
     }
-    
+
     // MARK: - Load Scene Helper
-    
+
     private func loadScene(from url: URL) {
         guard let sceneData = loadGameScene(from: url) else {
             print("❌ Failed to load scene from \(url.lastPathComponent)")
             return
         }
-        
+
         // Clear current scene
         destroyAllEntities()
         removeGizmo()
         EditorComponentsState.shared.clear()
-        
+
         // Load new scene
         deserializeScene(sceneData: sceneData)
-        
+
         // Reset editor state
         selectionManager.selectedEntity = nil
         activeEntity = .invalid
         gizmoActive = false
-        
+
         // Refresh UI
         selectionManager.objectWillChange.send()
         sceneGraphModel.refreshHierarchy()
-        
+
         // Reset camera
         CameraSystem.shared.activeCamera = findSceneCamera()
-        
+
         print("✅ Scene loaded: \(url.lastPathComponent)")
     }
 }
