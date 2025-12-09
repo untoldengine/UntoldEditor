@@ -8,6 +8,9 @@
 //
 #if canImport(AppKit)
     import SwiftUI
+    import CodeEditorView
+    import LanguageSupport
+    import AppKit
 
     struct ToolbarView: View {
         @ObservedObject var selectionManager: SelectionManager
@@ -30,6 +33,7 @@
         @State private var showBuildSettings = false
         @State private var showingNewScriptDialog = false
         @State private var newScriptName = ""
+        @State private var showingScriptEditor = false
 
         var body: some View {
             HStack {
@@ -64,6 +68,9 @@
                         createNewScript()
                     }
                 )
+            }
+            .sheet(isPresented: $showingScriptEditor) {
+                ScriptEditorSheet(isPresented: $showingScriptEditor)
             }
         }
 
@@ -209,6 +216,21 @@
                     .cornerRadius(5)
                 }
                 .buttonStyle(.plain)
+
+                // Open in-app script editor
+                Button(action: { showingScriptEditor = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        Text("Script Editor")
+                    }
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .background(Color.gray.opacity(0.9))
+                    .cornerRadius(5)
+                }
+                .buttonStyle(.plain)
             }
         }
 
@@ -328,6 +350,247 @@
             }
             .padding(24)
             .frame(width: 400)
+        }
+    }
+
+    struct ScriptEditorSheet: View {
+        @Binding var isPresented: Bool
+
+        @State private var scriptFiles: [URL] = []
+        @State private var selectedFile: URL?
+        @State private var scriptText: String = ""
+        @State private var editPosition: CodeEditor.Position = .init()
+        @State private var messages: Set<TextLocated<Message>> = []
+        @State private var statusMessage: String?
+        @State private var isBuilding = false
+        @State private var buildOutput: String = ""
+        @State private var keyMonitor: Any?
+
+        @Environment(\.colorScheme) private var colorScheme
+
+        private let manager = ScriptProjectManager.shared
+
+        var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            HStack(spacing: 0) {
+                scriptList
+                Divider()
+                editorPanel
+            }
+            Divider()
+            buildLog
+        }
+        .frame(minWidth: 1100, minHeight: 700)
+        .onAppear {
+            prepareScripts()
+            installControlCopyPasteShortcuts()
+        }
+        .onDisappear {
+            removeControlCopyPasteShortcuts()
+        }
+    }
+
+        private var header: some View {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Script Editor")
+                        .font(.headline)
+                    if let statusMessage {
+                        Text(statusMessage)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Button("Build Scripts") {
+                    runBuild()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isBuilding)
+
+                Button("Save") {
+                    saveCurrentScript()
+                }
+                .disabled(selectedFile == nil)
+
+                Button("Close") {
+                    isPresented = false
+                }
+            }
+            .padding()
+        }
+
+        private var scriptList: some View {
+            List(selection: $selectedFile) {
+                ForEach(scriptFiles, id: \.self) { url in
+                    Text(url.lastPathComponent)
+                        .lineLimit(1)
+                        .tag(Optional(url))
+                }
+            }
+            .frame(minWidth: 150, idealWidth: 175, maxWidth: 200, maxHeight: .infinity)
+            .onChange(of: selectedFile) { _ in
+                loadSelectedScript()
+            }
+        }
+
+        private var editorPanel: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                if let selectedFile {
+                    Text(selectedFile.lastPathComponent)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    CodeEditor(
+                        text: $scriptText,
+                        position: $editPosition,
+                        messages: $messages,
+                        language: .swift()
+                    )
+                    .environment(
+                        \.codeEditorTheme,
+                        colorScheme == .dark ? Theme.defaultDark : Theme.defaultLight
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
+                } else {
+                    VStack {
+                        Text("Select a script to edit")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .layoutPriority(1)
+        }
+
+        private var buildLog: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Build Output")
+                        .font(.subheadline.bold())
+                    if isBuilding {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                    }
+                }
+                ScrollView {
+                    Text(buildOutput.isEmpty ? "No builds yet." : buildOutput)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(4)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding()
+            .frame(minHeight: 160, maxHeight: 200)
+        }
+
+        private func prepareScripts() {
+            do {
+                if !manager.isProjectInitialized() {
+                    try manager.initializeProject()
+                }
+                statusMessage = nil
+            } catch {
+                statusMessage = "Failed to initialize scripts: \(error.localizedDescription)"
+            }
+
+            reloadScripts()
+        }
+
+        private func reloadScripts() {
+            scriptFiles = manager.listScriptFiles().sorted { $0.lastPathComponent < $1.lastPathComponent }
+            if selectedFile == nil {
+                selectedFile = scriptFiles.first
+            }
+            loadSelectedScript()
+        }
+
+        private func loadSelectedScript() {
+            guard let selectedFile else {
+                scriptText = ""
+                return
+            }
+
+            do {
+                scriptText = try String(contentsOf: selectedFile, encoding: .utf8)
+                statusMessage = nil
+            } catch {
+                scriptText = ""
+                statusMessage = "Failed to load \(selectedFile.lastPathComponent)"
+            }
+        }
+
+        private func saveCurrentScript() {
+            guard let selectedFile else { return }
+
+            do {
+                try scriptText.write(to: selectedFile, atomically: true, encoding: .utf8)
+                statusMessage = "Saved \(selectedFile.lastPathComponent)"
+            } catch {
+                statusMessage = "Failed to save \(selectedFile.lastPathComponent)"
+            }
+        }
+
+        private func runBuild() {
+            // Ensure current edits are saved before building
+            saveCurrentScript()
+
+            isBuilding = true
+            buildOutput = "Running swift run...\n"
+
+            manager.buildScripts { result in
+                isBuilding = false
+
+                switch result {
+                case .success(let output):
+                    buildOutput += output
+                    statusMessage = "Scripts built successfully"
+                case .failure(let error):
+                    buildOutput += error.localizedDescription
+                    statusMessage = "Build failed"
+                }
+            }
+        }
+
+        // Map Cmd+C/V/X/A to standard copy/paste/cut/select-all while the sheet is active.
+        private func installControlCopyPasteShortcuts() {
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+                guard event.modifierFlags.contains(.command),
+                      let character = event.charactersIgnoringModifiers?.lowercased()
+                else { return event }
+
+                switch character {
+                case "c":
+                    NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil)
+                    return nil
+                case "v":
+                    NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil)
+                    return nil
+                case "x":
+                    NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil)
+                    return nil
+                case "a":
+                    NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+                    return nil
+                default:
+                    return event
+                }
+            }
+        }
+
+        private func removeControlCopyPasteShortcuts() {
+            if let monitor = keyMonitor {
+                NSEvent.removeMonitor(monitor)
+                keyMonitor = nil
+            }
         }
     }
 #endif

@@ -126,6 +126,9 @@ class ScriptProjectManager {
         let scriptContent = generateScriptTemplate(name: name)
         try scriptContent.write(to: scriptPath, atomically: true, encoding: .utf8)
 
+        // Ensure GenerateScripts main triggers this generator
+        try addScriptInvocationToMain(name: name)
+
         print("✅ Created script: \(scriptPath.path)")
     }
 
@@ -200,6 +203,35 @@ class ScriptProjectManager {
 
     // MARK: - Template Generators
 
+    /// Adds a generate<Name>(to:) invocation into GenerateScripts.swift if not present.
+    private func addScriptInvocationToMain(name: String) throws {
+        guard let sourcesDir = sourcesDirectory() else { return }
+        let generateScriptsPath = sourcesDir.appendingPathComponent("GenerateScripts.swift")
+
+        var contents = try String(contentsOf: generateScriptsPath, encoding: .utf8)
+
+        let callLine = "generate\(name)(to: outputDir)"
+        if contents.contains(callLine) {
+            return
+        }
+
+        let anchor = "print(\"✅ All scripts generated in Generated/\")"
+        if let range = contents.range(of: anchor) {
+            // Preserve existing indentation from the anchor line
+            let lineStart = contents[..<range.lowerBound].lastIndex(of: "\n") ?? contents.startIndex
+            let indentStart = contents.index(after: lineStart)
+            let indent = String(contents[indentStart..<range.lowerBound])
+
+            let insertion = "\(indent)\(callLine)\n\n\(indent)\(anchor)"
+            contents.replaceSubrange(range, with: insertion)
+        } else {
+            // Fallback: append at end of file
+            contents.append("\n        \(callLine)\n")
+        }
+
+        try contents.write(to: generateScriptsPath, atomically: true, encoding: .utf8)
+    }
+
     private func generatePackageSwift() -> String {
         """
         // swift-tools-version: 5.10
@@ -254,6 +286,7 @@ class ScriptProjectManager {
 
                 // TODO: Call your script generation functions here
                 // Example: generatePlayerController(to: outputDir)
+                // New scripts created in the editor are auto-added below.
 
                 print("✅ All scripts generated in Generated/")
             }
