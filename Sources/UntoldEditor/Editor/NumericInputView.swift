@@ -15,6 +15,7 @@
         @Binding var value: SIMD3<Float>
         @State private var tempValues: [String] = ["0", "0", "0"]
         @FocusState private var focusedField: Int?
+        @State private var lastFocusedField: Int?
 
         public init(label: String, value: Binding<SIMD3<Float>>) {
             self.label = label
@@ -44,6 +45,15 @@
                             }
                             focusedField = nil
                         }
+                        .onChange(of: focusedField) { oldValue, newValue in
+                            // Commit when this field loses focus (e.g., via Tab)
+                            if oldValue == index, newValue != index {
+                                if let newValue = Float(tempValues[index]) {
+                                    value[index] = newValue
+                                }
+                            }
+                            lastFocusedField = newValue
+                        }
                     }
                 }
             }
@@ -59,6 +69,7 @@
         @Binding var value: Float
         @State private var tempValues: String = "0"
         @FocusState private var focusedField: Int?
+        @State private var wasFocused: Bool = false
 
         public init(label: String, value: Binding<Float>) {
             self.label = label
@@ -86,6 +97,15 @@
                             value = newValue
                         }
                         focusedField = nil
+                    }
+                    .onChange(of: focusedField) { _, newValue in
+                        // Commit when focus leaves (e.g., Tab)
+                        if wasFocused, newValue != 1 {
+                            if let newValue = Float(tempValues) {
+                                value = newValue
+                            }
+                        }
+                        wasFocused = (newValue == 1)
                     }
                 }
             }
