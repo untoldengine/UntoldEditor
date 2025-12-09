@@ -16,6 +16,7 @@ struct LogConsoleView: View {
     @State private var selectedLevel: LogLevel? = nil
     @State private var search = ""
     @State private var autoScroll = true
+    @State private var clearLog = false
 
     private func passes(_ e: LogEvent) -> Bool {
         (selectedLevel == nil || e.level == selectedLevel!) &&
@@ -38,6 +39,15 @@ struct LogConsoleView: View {
 
                 Toggle("Auto‑scroll", isOn: $autoScroll)
                     .toggleStyle(.checkbox)
+
+                Toggle("Clear", isOn: $clearLog)
+                    .toggleStyle(.checkbox)
+                    .onChange(of: clearLog) { _, newValue in
+                        if newValue {
+                            LogStore.shared.clear()
+                            clearLog = false
+                        }
+                    }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
