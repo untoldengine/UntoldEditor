@@ -329,4 +329,21 @@ class ScriptProjectManager {
         .DS_Store
         """
     }
+
+    /// Removes a generate<Name>(to:) invocation from GenerateScripts.swift if present.
+    func removeScriptInvocationFromMain(name: String) {
+        guard let sourcesDir = sourcesDirectory() else { return }
+        let generateScriptsPath = sourcesDir.appendingPathComponent("GenerateScripts.swift")
+
+        guard FileManager.default.fileExists(atPath: generateScriptsPath.path),
+              var contents = try? String(contentsOf: generateScriptsPath, encoding: .utf8)
+        else { return }
+
+        let callLine = "generate\(name)(to: outputDir)"
+        if contents.contains(callLine) {
+            contents = contents.replacingOccurrences(of: callLine + "\n", with: "")
+            contents = contents.replacingOccurrences(of: callLine, with: "")
+            try? contents.write(to: generateScriptsPath, atomically: true, encoding: .utf8)
+        }
+    }
 }

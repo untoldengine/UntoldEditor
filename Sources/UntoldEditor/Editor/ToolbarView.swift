@@ -365,6 +365,9 @@
         @State private var isBuilding = false
         @State private var buildOutput: String = ""
         @State private var keyMonitor: Any?
+        @State private var undoStack: [String] = []
+        @State private var lastSavedText: String = ""
+        @State private var showDeleteConfirm = false
 
         @Environment(\.colorScheme) private var colorScheme
 
@@ -416,6 +419,35 @@
                     saveCurrentScript()
                 }
                 .disabled(selectedFile == nil)
+
+                Button("Revert to Saved") {
+                    revertToLastSaved()
+                }
+                .disabled(selectedFile == nil)
+
+                Button("Undo Last Change") {
+                    undoLastChange()
+                }
+                .disabled(undoStack.isEmpty)
+
+                Button("Delete") {
+                    showDeleteConfirm = true
+                }
+                .disabled(selectedFile == nil || isProtectedFile(selectedFile))
+                .confirmationDialog(
+                    "Delete script?",
+                    isPresented: $showDeleteConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete", role: .destructive) {
+                        deleteSelectedScript()
+                    }
+                    Button("Cancel", role: .cancel) { showDeleteConfirm = false }
+                } message: {
+                    if let selectedFile {
+                        Text("Are you sure you want to delete \(selectedFile.lastPathComponent)? This cannot be undone.")
+                    }
+                }
 
                 Button("Close") {
                     isPresented = false
@@ -522,6 +554,8 @@
             do {
                 scriptText = try String(contentsOf: selectedFile, encoding: .utf8)
                 statusMessage = nil
+                lastSavedText = scriptText
+                undoStack.removeAll()
             } catch {
                 scriptText = ""
                 statusMessage = "Failed to load \(selectedFile.lastPathComponent)"
@@ -532,8 +566,12 @@
             guard let selectedFile else { return }
 
             do {
+                if scriptText != lastSavedText {
+                    undoStack.append(lastSavedText)
+                }
                 try scriptText.write(to: selectedFile, atomically: true, encoding: .utf8)
                 statusMessage = "Saved \(selectedFile.lastPathComponent)"
+                lastSavedText = scriptText
             } catch {
                 statusMessage = "Failed to save \(selectedFile.lastPathComponent)"
             }
@@ -558,6 +596,50 @@
                     statusMessage = "Build failed"
                 }
             }
+        }
+
+        private func revertToLastSaved() {
+            guard selectedFile != nil else { return }
+            scriptText = lastSavedText
+            statusMessage = "Reverted to last saved."
+        }
+
+        private func undoLastChange() {
+            guard let previous = undoStack.popLast() else {
+                statusMessage = "Nothing to undo."
+                return
+            }
+            scriptText = previous
+            statusMessage = "Reverted last change."
+        }
+
+        private func deleteSelectedScript() {
+            guard let file = selectedFile else { return }
+            guard !isProtectedFile(file) else {
+                statusMessage = "Cannot delete protected file."
+                return
+            }
+            do {
+                try FileManager.default.removeItem(at: file)
+                statusMessage = "Deleted \(file.lastPathComponent)"
+                showDeleteConfirm = false
+                manager.removeScriptInvocationFromMain(name: file.deletingPathExtension().lastPathComponent)
+                reloadScripts()
+                if scriptFiles.isEmpty {
+                    selectedFile = nil
+                    scriptText = ""
+                } else {
+                    selectedFile = scriptFiles.first
+                    loadSelectedScript()
+                }
+            } catch {
+                statusMessage = "Failed to delete \(file.lastPathComponent)"
+            }
+        }
+
+        private func isProtectedFile(_ url: URL?) -> Bool {
+            guard let url else { return true }
+            return url.lastPathComponent == "GenerateScripts.swift"
         }
 
         // Map Cmd+C/V/X/A to standard copy/paste/cut/select-all while the sheet is active.
