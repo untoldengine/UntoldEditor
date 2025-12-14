@@ -306,6 +306,7 @@ class ScriptProjectManager {
 
         import Foundation
         import UntoldEngine
+        import simd
 
         extension GenerateScripts {
             static func generate\(name)(to dir: URL) {
