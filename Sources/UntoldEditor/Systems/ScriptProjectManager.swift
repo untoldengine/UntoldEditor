@@ -340,6 +340,7 @@ class ScriptProjectManager {
         else { return }
 
         let callLine = "generate\(name)(to: outputDir)"
+
         if contents.contains(callLine) {
             contents = contents.replacingOccurrences(of: callLine + "\n", with: "")
             contents = contents.replacingOccurrences(of: callLine, with: "")

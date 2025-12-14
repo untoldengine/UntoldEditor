@@ -33,7 +33,7 @@
         @State private var showBuildSettings = false
         @State private var showingNewScriptDialog = false
         @State private var newScriptName = ""
-        @State private var showingScriptEditor = false
+        @State private var scriptEditorWindow: NSWindow?
 
         var body: some View {
             HStack {
@@ -68,9 +68,6 @@
                         createNewScript()
                     }
                 )
-            }
-            .sheet(isPresented: $showingScriptEditor) {
-                ScriptEditorSheet(isPresented: $showingScriptEditor)
             }
         }
 
@@ -218,7 +215,7 @@
                 .buttonStyle(.plain)
 
                 // Open in-app script editor
-                Button(action: { showingScriptEditor = true }) {
+                Button(action: { toggleScriptEditorWindow() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left.forwardslash.chevron.right")
                         Text("Script Editor")
@@ -291,6 +288,27 @@
             NSWorkspace.shared.open(packageSwiftPath)
             print("✅ Opening Scripts project in Xcode")
         }
+
+        private func toggleScriptEditorWindow() {
+            if let window = scriptEditorWindow {
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
+
+            let editorView = ScriptEditorSheet { self.scriptEditorWindow?.close(); self.scriptEditorWindow = nil }
+            let hosting = NSHostingController(rootView: editorView)
+            let window = NSWindow(contentViewController: hosting)
+            window.title = "Script Editor"
+            window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+            window.setContentSize(NSSize(width: 1200, height: 900))
+            window.minSize = NSSize(width: 400, height: 300)
+            window.isReleasedWhenClosed = false
+            window.center()
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            self.scriptEditorWindow = window
+        }
     }
 
     // MARK: - Toolbar Button Component
@@ -354,7 +372,7 @@
     }
 
     struct ScriptEditorSheet: View {
-        @Binding var isPresented: Bool
+        var onClose: (() -> Void)?
 
         @State private var scriptFiles: [URL] = []
         @State private var selectedFile: URL?
@@ -368,10 +386,19 @@
         @State private var undoStack: [String] = []
         @State private var lastSavedText: String = ""
         @State private var showDeleteConfirm = false
-
+        @State private var pendingSelection: URL?
+        @State private var lastKnownSelection: URL?
+        @State private var showUnsavedAlert = false
+        @State private var pendingClose = false
+        @State private var showingNewScriptDialogInSheet = false
+        @State private var newScriptNameInSheet = ""
         @Environment(\.colorScheme) private var colorScheme
 
         private let manager = ScriptProjectManager.shared
+
+        private var isDirty: Bool {
+            selectedFile != nil && scriptText != lastSavedText
+        }
 
         var body: some View {
         VStack(spacing: 0) {
@@ -385,13 +412,40 @@
             Divider()
             buildLog
         }
-        .frame(minWidth: 1100, minHeight: 700)
+        .frame(minWidth: 600, idealWidth: 1100, minHeight: 500, idealHeight: 800)
         .onAppear {
             prepareScripts()
             installControlCopyPasteShortcuts()
         }
         .onDisappear {
             removeControlCopyPasteShortcuts()
+        }
+        .interactiveDismissDisabled(isDirty) // Prevent accidental ESC dismissal with unsaved edits (if presented modally elsewhere)
+        .alert("Unsaved changes", isPresented: $showUnsavedAlert) {
+            Button("Save") {
+                saveCurrentScript()
+                continuePendingAction()
+            }
+            Button("Discard", role: .destructive) {
+                continuePendingAction()
+            }
+            Button("Cancel", role: .cancel) {
+                cancelPendingAction()
+            }
+        } message: {
+            Text("You have unsaved changes. Do you want to save before continuing?")
+        }
+        .sheet(isPresented: $showingNewScriptDialogInSheet) {
+            NewScriptDialog(
+                scriptName: $newScriptNameInSheet,
+                onCancel: {
+                    showingNewScriptDialogInSheet = false
+                    newScriptNameInSheet = ""
+                },
+                onCreate: {
+                    createNewScriptInSheet()
+                }
+            )
         }
     }
 
@@ -409,11 +463,16 @@
 
                 Spacer()
 
-                Button("Build Scripts") {
+                Button("Build All") {
                     runBuild()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isBuilding)
+
+                Button("New Script") {
+                    showingNewScriptDialogInSheet = true
+                }
+                .buttonStyle(.bordered)
 
                 Button("Save") {
                     saveCurrentScript()
@@ -450,7 +509,12 @@
                 }
 
                 Button("Close") {
-                    isPresented = false
+                    if isDirty {
+                        pendingClose = true
+                        showUnsavedAlert = true
+                    } else {
+                        onClose?()
+                    }
                 }
             }
             .padding()
@@ -464,9 +528,9 @@
                         .tag(Optional(url))
                 }
             }
-            .frame(minWidth: 150, idealWidth: 175, maxWidth: 200, maxHeight: .infinity)
-            .onChange(of: selectedFile) { _ in
-                loadSelectedScript()
+            .frame(minWidth: 180, idealWidth: 220, maxWidth: 260, maxHeight: .infinity)
+            .onChange(of: selectedFile) { newSelection in
+                handleSelectionChange(newSelection)
             }
         }
 
@@ -542,6 +606,7 @@
             if selectedFile == nil {
                 selectedFile = scriptFiles.first
             }
+            lastKnownSelection = selectedFile
             loadSelectedScript()
         }
 
@@ -673,6 +738,54 @@
                 NSEvent.removeMonitor(monitor)
                 keyMonitor = nil
             }
+        }
+
+        private func handleSelectionChange(_ newSelection: URL?) {
+            guard let newSelection else { return }
+
+            if isDirty {
+                pendingSelection = newSelection
+                selectedFile = lastKnownSelection
+                showUnsavedAlert = true
+                return
+            }
+
+            lastKnownSelection = newSelection
+            loadSelectedScript()
+        }
+
+        private func continuePendingAction() {
+            if let target = pendingSelection {
+                selectedFile = target
+                lastKnownSelection = target
+                loadSelectedScript()
+            } else if pendingClose {
+                onClose?()
+            }
+            pendingSelection = nil
+            pendingClose = false
+        }
+
+        private func cancelPendingAction() {
+            pendingSelection = nil
+            pendingClose = false
+        }
+
+        private func createNewScriptInSheet() {
+            do {
+                try manager.createNewScript(name: newScriptNameInSheet)
+                reloadScripts()
+                if let created = scriptFiles.first(where: { $0.deletingPathExtension().lastPathComponent == newScriptNameInSheet }) {
+                    selectedFile = created
+                    lastKnownSelection = created
+                    loadSelectedScript()
+                }
+                statusMessage = "Created \(newScriptNameInSheet).swift"
+            } catch {
+                statusMessage = "Failed to create script: \(error.localizedDescription)"
+            }
+            newScriptNameInSheet = ""
+            showingNewScriptDialogInSheet = false
         }
     }
 #endif
