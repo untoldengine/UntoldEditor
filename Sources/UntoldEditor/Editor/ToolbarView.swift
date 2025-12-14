@@ -395,6 +395,7 @@
         @Environment(\.colorScheme) private var colorScheme
 
         private let manager = ScriptProjectManager.shared
+        private let uscDocsURL = URL(string: "https://untoldengine.github.io/UntoldEngine/docs/Scripting/usc-scripting-api")!
 
         private var isDirty: Bool {
             selectedFile != nil && scriptText != lastSavedText
@@ -459,6 +460,8 @@
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    Link("View Untold Engine API Docs", destination: uscDocsURL)
+                        .font(.caption)
                 }
 
                 Spacer()
@@ -472,27 +475,30 @@
                 Button("New Script") {
                     showingNewScriptDialogInSheet = true
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
 
                 Button("Save") {
                     saveCurrentScript()
                 }
                 .disabled(selectedFile == nil)
 
-                Button("Revert to Saved") {
-                    revertToLastSaved()
-                }
-                .disabled(selectedFile == nil)
-
-                Button("Undo Last Change") {
-                    undoLastChange()
-                }
-                .disabled(undoStack.isEmpty)
+//                Button("Revert to Saved") {
+//                    revertToLastSaved()
+//                }
+//                .disabled(selectedFile == nil)
+//
+//                Button("Undo Last Change") {
+//                    undoLastChange()
+//                }
+//                .disabled(undoStack.isEmpty)
 
                 Button("Delete") {
                     showDeleteConfirm = true
                 }
                 .disabled(selectedFile == nil || isProtectedFile(selectedFile))
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
                 .confirmationDialog(
                     "Delete script?",
                     isPresented: $showDeleteConfirm,
