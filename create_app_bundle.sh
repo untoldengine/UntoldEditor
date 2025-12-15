@@ -8,39 +8,20 @@ echo "🔨 Building UntoldEditor app bundle..."
 APP_NAME="Untold Engine Studio"
 EXECUTABLE_NAME="UntoldEditor"
 BUNDLE_ID="com.untoldengine.studio"
+VERSION="0.2.0"
+BUILD_DIR=".build/arm64-apple-macosx/release"
 APP_BUNDLE="$APP_NAME.app"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 UNTOLD_ENGINE_ROOT="$SCRIPT_DIR/../UntoldEngine"
 METALLIB_PATH="$UNTOLD_ENGINE_ROOT/Sources/UntoldEngine/UntoldEngineKernels/UntoldEngineKernels.metallib"
 
-# Determine version:
-# 1) If VERSION env is set, use it
-# 2) Else if on a release/* branch, use the suffix (release/0.2.1 -> 0.2.1)
-# 3) Else if a tag vX.Y.Z exists, use the latest tag (drop the leading v)
-# 4) Fallback to 0.0.0-dev
-detect_version() {
-    if [ -n "${VERSION:-}" ]; then
-        echo "$VERSION"; return
-    fi
-    branch=$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-    if [[ "$branch" == release/* ]]; then
-        echo "${branch#release/}"; return
-    fi
-    tag=$(git -C "$SCRIPT_DIR" describe --tags --abbrev=0 2>/dev/null || echo "")
-    if [[ "$tag" == v* ]]; then
-        echo "${tag#v}"; return
-    fi
-    echo "0.0.0-dev"
-}
-VERSION="$(detect_version)"
-
 # Clean previous bundle
 echo "🧹 Cleaning previous bundle..."
 rm -rf "$APP_BUNDLE"
 
-# Build the executable with Swift Package Manager and discover the bin path
+# Build the executable with Swift Package Manager
 echo "🔧 Building executable..."
-BIN_PATH=$(swift build --configuration release --show-bin-path)
+swift build --configuration release
 
 # Create app bundle structure
 echo "📦 Creating app bundle structure..."
@@ -49,7 +30,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 # Copy the executable
 echo "📋 Copying executable..."
-cp "$BIN_PATH/$EXECUTABLE_NAME" "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
+cp "$BUILD_DIR/$EXECUTABLE_NAME" "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 
 # Copy Metal shaders
 if [ -f "$METALLIB_PATH" ]; then
