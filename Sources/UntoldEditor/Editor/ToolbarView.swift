@@ -34,6 +34,7 @@
         @State private var showingNewScriptDialog = false
         @State private var newScriptName = ""
         @State private var scriptEditorWindow: NSWindow?
+        @State private var showBasePathAlert = false
 
         var body: some View {
             HStack {
@@ -68,6 +69,11 @@
                         createNewScript()
                     }
                 )
+            }
+            .alert("Set Asset Folder First", isPresented: $showBasePathAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Please set the Asset Folder in the Asset Browser before creating or editing scripts.")
             }
         }
 
@@ -185,7 +191,10 @@
                     .foregroundColor(.secondary)
 
                 // New Script
-                Button(action: { showingNewScriptDialog = true }) {
+                Button(action: {
+                    guard ensureAssetBasePath() else { return }
+                    showingNewScriptDialog = true
+                }) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus.circle.fill")
                         Text("New")
@@ -200,7 +209,10 @@
                 .buttonStyle(.plain)
 
                 // Open in Xcode
-                Button(action: { openInXcode() }) {
+                Button(action: {
+                    guard ensureAssetBasePath() else { return }
+                    openInXcode()
+                }) {
                     HStack(spacing: 4) {
                         Image(systemName: "hammer.circle.fill")
                         Text("Open in Xcode")
@@ -215,7 +227,10 @@
                 .buttonStyle(.plain)
 
                 // Open in-app script editor
-                Button(action: { toggleScriptEditorWindow() }) {
+                Button(action: {
+                    guard ensureAssetBasePath() else { return }
+                    toggleScriptEditorWindow()
+                }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left.forwardslash.chevron.right")
                         Text("Script Editor")
@@ -234,6 +249,7 @@
         // MARK: - Script Management Functions
 
         private func createNewScript() {
+            guard ensureAssetBasePath() else { return }
             let manager = ScriptProjectManager.shared
 
             // Initialize project if needed
@@ -263,6 +279,7 @@
         }
 
         private func openInXcode() {
+            guard ensureAssetBasePath() else { return }
             let manager = ScriptProjectManager.shared
 
             // Initialize project if needed
@@ -290,6 +307,7 @@
         }
 
         private func toggleScriptEditorWindow() {
+            guard ensureAssetBasePath() else { return }
             if let window = scriptEditorWindow {
                 window.makeKeyAndOrderFront(nil)
                 NSApp.activate(ignoringOtherApps: true)
@@ -308,6 +326,14 @@
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             self.scriptEditorWindow = window
+        }
+
+        private func ensureAssetBasePath() -> Bool {
+            guard EditorAssetBasePath.shared.basePath != nil else {
+                showBasePathAlert = true
+                return false
+            }
+            return true
         }
     }
 

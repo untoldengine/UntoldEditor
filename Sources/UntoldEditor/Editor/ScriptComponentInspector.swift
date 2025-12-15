@@ -21,6 +21,7 @@ struct ScriptComponentInspector: View {
     // We keep minimal UI state; details are read from the component each render.
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
+    @State private var showBasePathAlert: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -87,6 +88,11 @@ struct ScriptComponentInspector: View {
         }
         .onAppear {
             // Nothing to pre-load; we render directly from the component.
+        }
+        .alert("Set Asset Folder First", isPresented: $showBasePathAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please set the Asset Folder in the Asset Browser before loading or creating scripts.")
         }
     }
 
@@ -177,6 +183,11 @@ struct ScriptComponentInspector: View {
     // MARK: - Load Script File (Append)
 
     private func loadScriptFileAndAppend() {
+        guard EditorAssetBasePath.shared.basePath != nil else {
+            showBasePathAlert = true
+            return
+        }
+
         // Prefer selected asset from Asset Browser
         if let selectedScript = asset,
            selectedScript.category == "Scripts",

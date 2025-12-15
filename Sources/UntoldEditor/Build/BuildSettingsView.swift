@@ -25,6 +25,7 @@ struct BuildSettingsView: View {
     @State private var showBuildResult: Bool = false
     @State private var buildResultMessage: String = ""
     @State private var buildSucceeded: Bool = false
+    @State private var showBasePathAlert: Bool = false
 
     @Environment(\.dismiss) private var dismiss
 
@@ -122,6 +123,7 @@ struct BuildSettingsView: View {
             HStack {
                 Spacer()
                 Button("Build") {
+                    guard ensureAssetBasePath() else { return }
                     startBuild()
                 }
                 .buttonStyle(.borderedProminent)
@@ -145,6 +147,11 @@ struct BuildSettingsView: View {
             }
         } message: {
             Text(buildResultMessage)
+        }
+        .alert("Set Asset Folder First", isPresented: $showBasePathAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please set the Asset Folder in the Asset Browser before building.")
         }
         .onAppear {
             loadDefaultSettings()
@@ -259,6 +266,14 @@ struct BuildSettingsView: View {
             .appendingPathComponent("\(projectName).xcodeproj")
 
         NSWorkspace.shared.open(xcodeProjectPath)
+    }
+
+    private func ensureAssetBasePath() -> Bool {
+        guard EditorAssetBasePath.shared.basePath != nil else {
+            showBasePathAlert = true
+            return false
+        }
+        return true
     }
 }
 

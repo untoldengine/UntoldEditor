@@ -50,6 +50,7 @@ struct AssetBrowserView: View {
     @State private var folderPathStack: [URL] = []
     @State private var showSceneLoadConfirmation = false
     @State private var pendingSceneToLoad: URL?
+    @State private var showBasePathAlert = false
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
         folderPathStack.last
@@ -259,6 +260,11 @@ struct AssetBrowserView: View {
         } message: {
             Text("Loading a new scene will replace the current scene. Any unsaved changes will be lost.")
         }
+        .alert("Set Asset Folder First", isPresented: $showBasePathAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please set the Asset Folder in the Asset Browser before importing assets.")
+        }
     }
 
     // MARK: - Select Resource Directory
@@ -288,6 +294,11 @@ struct AssetBrowserView: View {
     }
 
     private func importAsset() {
+        guard editorBaseAssetPath.basePath != nil else {
+            showBasePathAlert = true
+            return
+        }
+
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [
             UTType(filenameExtension: "usdz")!,
@@ -307,7 +318,7 @@ struct AssetBrowserView: View {
         let fm = FileManager.default
         let categoryRoot = basePath.appendingPathComponent(selectedCategory!, isDirectory: true)
         // Ensure category folder exists (e.g., <Base>/Models)
-        try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
+            try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
 
         if openPanel.runModal() == .OK {
             for sourceURL in openPanel.urls {
@@ -389,6 +400,7 @@ struct AssetBrowserView: View {
     // MARK: - Load Assets
 
     private func loadAssets() {
+        guard editorBaseAssetPath.basePath != nil else { return }
         guard let basePath = assetBasePath else { return }
 
         var groupedAssets: [String: [Asset]] = [:]
