@@ -30,8 +30,9 @@ public struct EditorView: View {
     @State private var pendingTargetURL: URL?
     @State private var isSaveAs = false
     @State private var showSaveBasePathAlert = false
-    enum BottomPaneSelection: String, CaseIterable, Hashable { case assets = "Assets"; case console = "Console" }
-    @State private var bottomPaneSelection: BottomPaneSelection = .assets
+    @State private var showAssetLibrary = false
+    @State private var assetWindow: NSWindow?
+    @State private var assetWindowDelegate: AssetWindowDelegate?
 
     var renderer: UntoldRenderer?
 
@@ -55,9 +56,16 @@ public struct EditorView: View {
     public var body: some View {
         VStack {
             ToolbarView(
-                selectionManager: selectionManager, onSave: editor_handleSave, onSaveAs: editor_handleSaveAs,
+                selectionManager: selectionManager,
+                onSave: editor_handleSave,
+                onSaveAs: editor_handleSaveAs,
                 onClear: editor_clearScene,
-                onPlayToggled: { isPlaying in editor_handlePlayToggle(isPlaying) },
+                onPlayToggled: { isPlaying in
+                    editor_handlePlayToggle(isPlaying)
+                },
+                onShowAssets: {
+                    openAssetWindow()
+                },
                 dirLightCreate: editor_createDirLight,
                 pointLightCreate: editor_createPointLight,
                 spotLightCreate: editor_createSpotLight,
@@ -68,6 +76,31 @@ public struct EditorView: View {
                 onCreateCylinder: editor_createCylinder,
                 onCreateCone: editor_createCone
             )
+            .popover(isPresented: $showAssetLibrary, arrowEdge: .bottom) {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Assets Library")
+                            .font(.headline)
+                        Spacer()
+                        Button("Close") { showAssetLibrary = false }
+                            .keyboardShortcut(.cancelAction)
+                    }
+                    .padding()
+                    .background(Color.editorPanelBackground.opacity(0.9))
+
+                    Divider()
+
+                    AssetBrowserView(
+                        assets: $assets,
+                        selectedAsset: $selectedAsset,
+                        selectionManager: selectionManager,
+                        sceneGraphModel: sceneGraphModel,
+                        editor_addEntityWithAsset: editor_addEntityWithAsset
+                    )
+                    .frame(minWidth: 700, minHeight: 500)
+                }
+                .frame(minWidth: 720, minHeight: 540)
+            }
             Divider()
             HStack {
                 VStack {
@@ -92,30 +125,8 @@ public struct EditorView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     TransformManipulationToolbar(controller: editorController!)
                         .frame(height: 40)
-                    VStack(spacing: 6) {
-                        Picker("", selection: $bottomPaneSelection) {
-                            ForEach(BottomPaneSelection.allCases, id: \.self) { sel in
-                                Text(sel.rawValue).tag(sel)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal, 8)
-
-                        if bottomPaneSelection == .assets {
-                            AssetBrowserView(
-                                assets: $assets,
-                                selectedAsset: $selectedAsset,
-                                selectionManager: selectionManager,
-                                sceneGraphModel: sceneGraphModel,
-                                editor_addEntityWithAsset: editor_addEntityWithAsset
-                            )
-                            .frame(maxHeight: 260)
-                        } else {
-                            LogConsoleView()
-                                .frame(maxHeight: 260)
-                        }
-                    }
-                    .frame(height: 300)
+                    LogConsoleView()
+                        .frame(height: 260)
                 }
 
                 VStack(spacing: 8) {
@@ -282,6 +293,45 @@ public struct EditorView: View {
         showSaveNamePrompt = false
         showOverwriteAlert = false
         isSaveAs = false
+    }
+
+    // MARK: - Asset Library Window
+
+    private func openAssetWindow() {
+        if let existing = assetWindow {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let content = AssetBrowserView(
+            assets: $assets,
+            selectedAsset: $selectedAsset,
+            selectionManager: selectionManager,
+            sceneGraphModel: sceneGraphModel,
+            editor_addEntityWithAsset: editor_addEntityWithAsset
+        )
+
+        let hosting = NSHostingController(rootView: content)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Assets Library"
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.setContentSize(NSSize(width: 900, height: 600))
+        window.minSize = NSSize(width: 700, height: 500)
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        let delegate = AssetWindowDelegate { 
+            // Window is closing — clear our references
+            self.assetWindow = nil
+            self.assetWindowDelegate = nil
+        }
+        window.delegate = delegate
+        assetWindowDelegate = delegate
+
+        assetWindow = window
     }
 
     private func editor_handleLoad() {
