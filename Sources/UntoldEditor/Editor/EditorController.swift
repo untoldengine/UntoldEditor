@@ -65,6 +65,7 @@ class EditorController: SelectionDelegate, ObservableObject {
     var isEnabled: Bool = false
     @Published var activeMode: TransformManipulationMode = .none
     @Published var activeAxis: TransformAxis = .none
+    @Published var currentSceneURL: URL?
 
     init(selectionManager: SelectionManager) {
         self.selectionManager = selectionManager
@@ -154,6 +155,49 @@ func saveScene(sceneData: SceneData) {
                 Logger.log(message: "Failed to save scene: \(error)")
             }
         }
+    }
+}
+
+/// Save directly to a URL (used by the inline save flow).
+func saveSceneDirect(sceneData: SceneData, to url: URL) {
+    do {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+
+        let jsonData = try encoder.encode(sceneData)
+        try jsonData.write(to: url)
+        Logger.log(message: "Scene saved to \(url.path)")
+
+        guard let basePath = assetBasePath else {
+            Logger.log(message: "Warning: assetBasePath is not set; cannot copy scene into Scenes folder.")
+            NotificationCenter.default.post(name: .assetBrowserReload, object: nil)
+            return
+        }
+
+        let fm = FileManager.default
+        let scenesRoot = basePath.appendingPathComponent("Scenes", isDirectory: true)
+        try? fm.createDirectory(at: scenesRoot, withIntermediateDirectories: true)
+
+        let resolvedSaveURL = url.resolvingSymlinksInPath()
+        let resolvedScenesRoot = scenesRoot.resolvingSymlinksInPath()
+        let saveParent = resolvedSaveURL.deletingLastPathComponent()
+
+        let isAlreadyInScenes = (saveParent == resolvedScenesRoot)
+        let destURL = resolvedScenesRoot.appendingPathComponent(resolvedSaveURL.lastPathComponent)
+
+        if isAlreadyInScenes {
+            Logger.log(message: "Scene already in Scenes folder: \(destURL.path)")
+        } else {
+            if fm.fileExists(atPath: destURL.path) {
+                try fm.removeItem(at: destURL)
+            }
+            try fm.copyItem(at: resolvedSaveURL, to: destURL)
+            Logger.log(message: "Scene copied into Scenes folder: \(destURL.path)")
+        }
+
+        NotificationCenter.default.post(name: .assetBrowserReload, object: nil)
+    } catch {
+        Logger.log(message: "Failed to save scene: \(error)")
     }
 }
 

@@ -12,12 +12,12 @@ import UntoldEngine
 
 enum AssetCategory: String, CaseIterable {
     case models = "Models"
+    case animations = "Animations"
+    case scripts = "Scripts"
+    case scenes = "Scenes"
+    case gaussians = "Gaussians"
     case materials = "Materials"
     case hdr = "HDR"
-    case animations = "Animations"
-    case gaussians = "Gaussians"
-    case scenes = "Scenes"
-    case scripts = "Scripts"
 
     var iconName: String {
         switch self {
@@ -50,7 +50,12 @@ struct AssetBrowserView: View {
     @State private var folderPathStack: [URL] = []
     @State private var showSceneLoadConfirmation = false
     @State private var pendingSceneToLoad: URL?
+    @State private var showDeleteConfirmation = false
+    @State private var pendingDeleteAsset: Asset?
     @State private var showBasePathAlert = false
+    @State private var searchQuery: String = ""
+    @State private var statusMessage: String?
+    @State private var statusIsError = false
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
         folderPathStack.last
@@ -83,6 +88,22 @@ struct AssetBrowserView: View {
                         .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                     }
                     .buttonStyle(PlainButtonStyle())
+
+                    Button(action: promptDeleteAsset) {
+                        HStack(spacing: 6) {
+                            Text("Delete")
+                            Image(systemName: "trash")
+                                .foregroundColor(.white)
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(selectedAsset == nil ? Color.gray.opacity(0.5) : Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(selectedAsset == nil)
 
                     Spacer()
 
@@ -123,6 +144,15 @@ struct AssetBrowserView: View {
                         .padding(.horizontal, 10)
                         .padding(.bottom, 5)
                 }
+
+                // MARK: - Search
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                    TextField("Filter assets", text: $searchQuery)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 4)
 
                 // MARK: - Sidebar and Asset List Layout
 
@@ -198,8 +228,8 @@ struct AssetBrowserView: View {
                                 if let currentFolderPath, !isScripts {
                                     folderContentsView(for: currentFolderPath, selectionManager: selectionManager)
                                 } else {
-                                    if let categoryAssets = assets[selectedCategory] {
-                                        ForEach(categoryAssets) { asset in
+                                if let categoryAssets = assets[selectedCategory] {
+                                        ForEach(categoryAssets.filter { matchesSearch($0) }) { asset in
                                             // For Scripts, we never navigate into folders (we won't list folders anyway)
                                             assetRow(asset)
                                                 .onTapGesture(count: 2) {
@@ -264,6 +294,34 @@ struct AssetBrowserView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Please set the Asset Folder in the Asset Browser before importing assets.")
+        }
+        .alert("Delete Asset?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {
+                pendingDeleteAsset = nil
+            }
+            Button("Delete", role: .destructive) {
+                if let asset = pendingDeleteAsset {
+                    deleteAsset(asset)
+                }
+                pendingDeleteAsset = nil
+            }
+        } message: {
+            if let asset = pendingDeleteAsset {
+                Text("This will remove \(asset.name) from disk under your Asset Folder.")
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(statusIsError ? Color.red.opacity(0.85) : Color.green.opacity(0.85))
+                    .cornerRadius(8)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
     }
 
@@ -394,7 +452,14 @@ struct AssetBrowserView: View {
             }
 
             loadAssets()
+            showStatus("Imported \(openPanel.urls.count) item(s)")
         }
+    }
+
+    private func promptDeleteAsset() {
+        guard let asset = selectedAsset else { return }
+        pendingDeleteAsset = asset
+        showDeleteConfirmation = true
     }
 
     // MARK: - Load Assets
@@ -491,6 +556,23 @@ struct AssetBrowserView: View {
         assets = groupedAssets
     }
 
+    private func matchesSearch(_ asset: Asset) -> Bool {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.isEmpty == false else { return true }
+        return asset.name.localizedCaseInsensitiveContains(query)
+    }
+
+    private func showStatus(_ message: String, isError: Bool = false) {
+        statusMessage = message
+        statusIsError = isError
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            if statusMessage == message {
+                statusMessage = nil
+            }
+        }
+    }
+
     // Recursively find all files with a specific extension under a root directory
     private func findFilesRecursively(at root: URL, withExtension ext: String) -> [URL] {
         var results: [URL] = []
@@ -547,7 +629,7 @@ struct AssetBrowserView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(items) { asset in
+                ForEach(items.filter { matchesSearch($0) }) { asset in
                     assetRow(asset)
                         .onTapGesture(count: 2) {
                             handle_add_model_double_click(asset: asset)
@@ -578,6 +660,36 @@ struct AssetBrowserView: View {
         selectedAssetName = asset.name
     }
 
+    // MARK: - Delete Asset
+
+    private func deleteAsset(_ asset: Asset) {
+        guard let basePath = assetBasePath else {
+            showBasePathAlert = true
+            return
+        }
+
+        // Ensure the asset lives under the base path before deleting
+        guard asset.path.resolvingSymlinksInPath().path.hasPrefix(basePath.resolvingSymlinksInPath().path) else {
+            print("⚠️ Refusing to delete asset outside base path: \(asset.path.path)")
+            showStatus("Cannot delete outside Asset Folder", isError: true)
+            return
+        }
+
+        do {
+            try FileManager.default.removeItem(at: asset.path)
+            print("✅ Deleted asset: \(asset.name)")
+            if selectedAsset?.id == asset.id {
+                selectedAsset = nil
+                selectedAssetName = nil
+            }
+            loadAssets()
+            showStatus("Deleted \(asset.name)")
+        } catch {
+            print("❌ Failed to delete asset \(asset.name): \(error)")
+            showStatus("Failed to delete \(asset.name)", isError: true)
+        }
+    }
+
     // MARK: - Add Model with Double Click
 
     private func handle_add_model_double_click(asset: Asset) {
@@ -594,8 +706,9 @@ struct AssetBrowserView: View {
             // Create entity
             let entityId = createEntity()
 
-            // Set entity name based on asset filename
-            setEntityName(entityId: entityId, name: filename)
+            // Use a generated name to avoid duplicate names when importing repeatedly
+            let uniqueName = generateEntityName()
+            setEntityName(entityId: entityId, name: uniqueName)
 
             // Add mesh to entity
             setEntityMesh(entityId: entityId, filename: filename, withExtension: withExtension)
@@ -613,8 +726,9 @@ struct AssetBrowserView: View {
             // Create entity
             let entityId = createEntity()
 
-            // Set entity name based on asset filename
-            setEntityName(entityId: entityId, name: filename)
+            // Use a generated name to avoid duplicate names when importing repeatedly
+            let uniqueName = generateEntityName()
+            setEntityName(entityId: entityId, name: uniqueName)
 
             // Add Gaussian component to entity
             setEntityGaussian(entityId: entityId, filename: filename, withExtension: withExtension)
@@ -705,6 +819,7 @@ struct AssetBrowserView: View {
             // Show confirmation dialog before loading scene
             pendingSceneToLoad = asset.path
             showSceneLoadConfirmation = true
+            editorController?.currentSceneURL = asset.path
         }
         // Handle HDR files (hdr)
         else if asset.category == AssetCategory.hdr.rawValue,
@@ -747,6 +862,7 @@ struct AssetBrowserView: View {
         // Reset camera
         CameraSystem.shared.activeCamera = findSceneCamera()
 
+        editorController?.currentSceneURL = url
         print("✅ Scene loaded: \(url.lastPathComponent)")
     }
 }

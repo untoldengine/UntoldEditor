@@ -16,7 +16,7 @@
         @ObservedObject var selectionManager: SelectionManager
 
         var onSave: () -> Void
-        var onLoad: () -> Void
+        var onSaveAs: () -> Void
         var onClear: () -> Void
         var onPlayToggled: (Bool) -> Void
         var dirLightCreate: () -> Void
@@ -98,9 +98,16 @@
 
         var centeredButtons: some View {
             HStack(spacing: 12) {
-                ToolbarButton(iconName: "clear.fill", action: onClear, tooltip: "Clear Scene")
-
-                ToolbarButton(iconName: "square.and.arrow.down", action: onLoad, tooltip: "Import JSON Scene")
+                Button(action: onClear) {
+                    Text("Clear")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(Color.red.opacity(0.8))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
 
                 Button(action: {
                     isPlaying.toggle()
@@ -118,50 +125,26 @@
                 }
                 .buttonStyle(.plain)
 
-                ToolbarButton(iconName: "square.and.arrow.up", action: onSave, tooltip: "Export JSON Scene")
+                Menu {
+                    Button("Save", systemImage: "square.and.arrow.down.on.square", action: onSave)
+                    Button("Save As…", systemImage: "square.and.arrow.down", action: onSaveAs)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.down.on.square")
+                        Text("Save")
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(Color.gray.opacity(0.8))
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                .menuStyle(.borderlessButton)
             }
         }
 
         var leftSection: some View {
             HStack(spacing: 8) {
-                // Primitives Section
-                Text("Primitives:")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-
-                Button(action: onCreateCube) {
-                    Image(systemName: "cube.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white)
-                }
-                .padding(2)
-                .background(Color.gray.opacity(0.8))
-                .cornerRadius(6)
-                .buttonStyle(.plain)
-                .help("Add Cube")
-
-                Button(action: onCreateSphere) {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white)
-                }
-                .padding(2)
-                .background(Color.gray.opacity(0.8))
-                .cornerRadius(6)
-                .buttonStyle(.plain)
-                .help("Add Sphere")
-
-                Button(action: onCreatePlane) {
-                    Image(systemName: "rectangle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white)
-                }
-                .padding(2)
-                .background(Color.gray.opacity(0.8))
-                .cornerRadius(6)
-                .buttonStyle(.plain)
-                .help("Add Plane")
-
 //                Button(action: onCreateCylinder) {
 //                    Image(systemName: "cylinder.fill")
 //                        .font(.system(size: 14))
@@ -186,63 +169,24 @@
 
                 Divider().frame(height: 24)
 
-                Text("Scripts:")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-
-                // New Script
-                Button(action: {
-                    guard ensureAssetBasePath() else { return }
-                    showingNewScriptDialog = true
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("New")
-                    }
-                    .font(.system(size: 12))
-                    .foregroundColor(.white)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 8)
-                    .background(Color.green)
-                    .cornerRadius(5)
-                }
-                .buttonStyle(.plain)
-
-                // Open in Xcode
-                Button(action: {
-                    guard ensureAssetBasePath() else { return }
-                    openInXcode()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "hammer.circle.fill")
-                        Text("Open in Xcode")
-                    }
-                    .font(.system(size: 12))
-                    .foregroundColor(.white)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 8)
-                    .background(Color.blue)
-                    .cornerRadius(5)
-                }
-                .buttonStyle(.plain)
-
-                // Open in-app script editor
+                // Scripts cluster: primary editor button + overflow menu
                 Button(action: {
                     guard ensureAssetBasePath() else { return }
                     toggleScriptEditorWindow()
                 }) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Image(systemName: "chevron.left.forwardslash.chevron.right")
                         Text("Script Editor")
                     }
-                    .font(.system(size: 12))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 8)
-                    .background(Color.gray.opacity(0.9))
-                    .cornerRadius(5)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(Color.blue)
+                    .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
+
             }
         }
 

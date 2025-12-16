@@ -11,12 +11,25 @@ public struct Asset: Identifiable {
 }
 
 public struct EditorView: View {
+    enum InspectorTab: String, CaseIterable, Hashable {
+        case inspector = "Inspector"
+        case environment = "Environment"
+        case effects = "Effects"
+    }
+
     @State private var editor_entities: [EntityID] = getAllGameEntities()
     @StateObject private var selectionManager = SelectionManager()
     @StateObject private var sceneGraphModel = SceneGraphModel()
     @State private var assets: [String: [Asset]] = [:]
     @State private var selectedAsset: Asset? = nil
     @State private var isPlaying = false
+    @State private var inspectorTab: InspectorTab = .inspector
+    @State private var showSaveNamePrompt = false
+    @State private var pendingSceneName: String = "untitled"
+    @State private var showOverwriteAlert = false
+    @State private var pendingTargetURL: URL?
+    @State private var isSaveAs = false
+    @State private var showSaveBasePathAlert = false
 
     var renderer: UntoldRenderer?
 
@@ -40,8 +53,8 @@ public struct EditorView: View {
     public var body: some View {
         VStack {
             ToolbarView(
-                selectionManager: selectionManager, onSave: editor_handleSave,
-                onLoad: editor_handleLoad, onClear: editor_clearScene,
+                selectionManager: selectionManager, onSave: editor_handleSave, onSaveAs: editor_handleSaveAs,
+                onClear: editor_clearScene,
                 onPlayToggled: { isPlaying in editor_handlePlayToggle(isPlaying) },
                 dirLightCreate: editor_createDirLight,
                 pointLightCreate: editor_createPointLight,
@@ -56,7 +69,20 @@ public struct EditorView: View {
             Divider()
             HStack {
                 VStack {
-                    SceneHierarchyView(selectionManager: selectionManager, sceneGraphModel: sceneGraphModel, entityList: editor_entities, onAddEntity_Editor: editor_addNewEntity, onRemoveEntity_Editor: editor_removeEntity)
+                    SceneHierarchyView(
+                        selectionManager: selectionManager,
+                        sceneGraphModel: sceneGraphModel,
+                        entityList: editor_entities,
+                        onAddEntity_Editor: editor_addNewEntity,
+                        onRemoveEntity_Editor: editor_removeEntity,
+                        onAddCube: editor_createCube,
+                        onAddSphere: editor_createSphere,
+                        onAddPlane: editor_createPlane,
+                        onAddDirLight: editor_createDirLight,
+                        onAddPointLight: editor_createPointLight,
+                        onAddSpotLight: editor_createSpotLight,
+                        onAddAreaLight: editor_createAreaLight
+                    )
                 }
 
                 VStack(spacing: 0) {
@@ -82,23 +108,39 @@ public struct EditorView: View {
                     // .clipped()
                 }
 
-                TabView {
-                    EnvironmentView(selectedAsset: $selectedAsset)
-                        .tabItem {
-                            Label("Environment", systemImage: "sun.max")
+                VStack(spacing: 8) {
+                    Picker("", selection: $inspectorTab) {
+                        ForEach(InspectorTab.allCases, id: \.self) { tab in
+                            Text(tab.rawValue).tag(tab)
                         }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 4)
 
-                    PostProcessingEditorView()
-                        .tabItem {
-                            Label("Effects", systemImage: "cube")
-                        }
+                    Divider()
 
-                    InspectorView(selectionManager: selectionManager, sceneGraphModel: sceneGraphModel, onAddName_Editor: editor_addName, selectedAsset: $selectedAsset)
-                        .tabItem {
-                            Label("Inspector", systemImage: "cube")
+                    Group {
+                        switch inspectorTab {
+                        case .inspector:
+                            InspectorView(
+                                selectionManager: selectionManager,
+                                sceneGraphModel: sceneGraphModel,
+                                onAddName_Editor: editor_addName,
+                                selectedAsset: $selectedAsset
+                            )
+                        case .environment:
+                            ScrollView { EnvironmentView(selectedAsset: $selectedAsset) }
+                        case .effects:
+                            ScrollView { PostProcessingEditorView() }
                         }
+                    }
                 }
-                .frame(minWidth: 200, maxWidth: 250)
+                .onChange(of: selectionManager.selectedEntity) { _, newValue in
+                    if let entity = newValue, entity != .invalid {
+                        inspectorTab = .inspector
+                    }
+                }
+                .frame(minWidth: 240, maxWidth: 320)
             }
         }
         .background(
@@ -106,11 +148,125 @@ public struct EditorView: View {
         .onAppear {
             sceneGraphModel.refreshHierarchy()
         }
+        .sheet(isPresented: $showSaveNamePrompt) {
+            VStack(spacing: 12) {
+                Text("Save Scene")
+                    .font(.headline)
+                Text("Scenes are saved to the Scenes folder in your Asset Folder.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                TextField("Scene name", text: $pendingSceneName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .onSubmit { confirmSaveSceneName() }
+
+                HStack {
+                    Button("Cancel") { showSaveNamePrompt = false }
+                    Spacer()
+                    Button("Save") { confirmSaveSceneName() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(pendingSceneName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding()
+            .frame(width: 320)
+        }
+        .alert("Overwrite Scene?", isPresented: $showOverwriteAlert) {
+            Button("Cancel", role: .cancel) {
+                showSaveNamePrompt = false
+            }
+            Button("Overwrite", role: .destructive) {
+                finalizeSceneSave(targetURL: pendingTargetURL, overwrite: true)
+            }
+        } message: {
+            Text("A scene with that name already exists. Overwrite it?")
+        }
+        .alert("Set Asset Folder First", isPresented: $showSaveBasePathAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Please set the Asset Folder in the Asset Browser before saving scenes.")
+        }
     }
 
     private func editor_handleSave() {
+        guard assetBasePath != nil else {
+            showSaveBasePathAlert = true
+            return
+        }
+        // If we have a current scene path, save immediately
+        if let sceneURL = editorController?.currentSceneURL {
+            let sceneData: SceneData = serializeScene()
+            saveSceneDirect(sceneData: sceneData, to: sceneURL)
+            return
+        }
+
+        // Otherwise prompt for a name
+        isSaveAs = false
+        pendingSceneName = "untitled"
+        showSaveNamePrompt = true
+    }
+
+    private func editor_handleSaveAs() {
+        guard assetBasePath != nil else {
+            showSaveBasePathAlert = true
+            return
+        }
+        isSaveAs = true
+        if let current = editorController?.currentSceneURL {
+            pendingSceneName = current.deletingPathExtension().lastPathComponent
+        } else {
+            pendingSceneName = "untitled"
+        }
+        showSaveNamePrompt = true
+    }
+
+    private func confirmSaveSceneName() {
+        let name = pendingSceneName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.isEmpty == false else { return }
+
+        guard let basePath = assetBasePath else {
+            showSaveNamePrompt = false
+            print("❌ Cannot save scene: Asset Folder not set.")
+            return
+        }
+
+        let scenesFolder = basePath.appendingPathComponent("Scenes", isDirectory: true)
+        try? FileManager.default.createDirectory(at: scenesFolder, withIntermediateDirectories: true)
+
+        let targetURL = scenesFolder.appendingPathComponent(name).appendingPathExtension("json")
+        pendingTargetURL = targetURL
+
+        if FileManager.default.fileExists(atPath: targetURL.path) {
+            showOverwriteAlert = true
+            return
+        }
+
+        finalizeSceneSave(targetURL: targetURL, overwrite: false)
+    }
+
+    private func finalizeSceneSave(targetURL: URL? = nil, overwrite: Bool = false) {
         let sceneData: SceneData = serializeScene()
-        saveScene(sceneData: sceneData)
+
+        let destinationURL: URL
+        if let targetURL {
+            destinationURL = targetURL
+        } else if let existing = editorController?.currentSceneURL {
+            destinationURL = existing
+        } else {
+            showSaveNamePrompt = true
+            return
+        }
+
+        if FileManager.default.fileExists(atPath: destinationURL.path) && !overwrite {
+            showOverwriteAlert = true
+            return
+        }
+
+        saveSceneDirect(sceneData: sceneData, to: destinationURL)
+        editorController?.currentSceneURL = destinationURL
+        showSaveNamePrompt = false
+        showOverwriteAlert = false
+        isSaveAs = false
     }
 
     private func editor_handleLoad() {
@@ -133,6 +289,7 @@ public struct EditorView: View {
             removeGizmo()
             EditorComponentsState.shared.clear()
             deserializeScene(sceneData: sceneData)
+            editorController?.currentSceneURL = nil
             editor_entities = getAllGameEntities()
             selectionManager.selectedEntity = nil
             activeEntity = .invalid

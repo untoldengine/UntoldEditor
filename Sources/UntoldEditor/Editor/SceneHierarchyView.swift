@@ -15,6 +15,13 @@ struct SceneHierarchyView: View {
     var entityList: [EntityID]
     var onAddEntity_Editor: () -> Void
     var onRemoveEntity_Editor: () -> Void
+    var onAddCube: () -> Void
+    var onAddSphere: () -> Void
+    var onAddPlane: () -> Void
+    var onAddDirLight: () -> Void
+    var onAddPointLight: () -> Void
+    var onAddSpotLight: () -> Void
+    var onAddAreaLight: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -30,13 +37,28 @@ struct SceneHierarchyView: View {
 
                 Spacer()
 
-                // Add Entity Button
-                Button(action: onAddEntity_Editor) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.blue)
-                        .font(.system(size: 18))
+                // Add Entity Menu
+                Menu {
+                    Button("Empty Entity", systemImage: "plus") { onAddEntity_Editor() }
+                    Divider()
+                    Button("Cube", systemImage: "cube.fill") { onAddCube() }
+                    Button("Sphere", systemImage: "circle.fill") { onAddSphere() }
+                    Button("Plane", systemImage: "rectangle.fill") { onAddPlane() }
+                    Divider()
+                    Button("Directional Light", systemImage: "sun.max") { onAddDirLight() }
+                    Button("Point Light", systemImage: "lightbulb") { onAddPointLight() }
+                    Button("Spot Light", systemImage: "flashlight.on.fill") { onAddSpotLight() }
+                    Button("Area Light", systemImage: "square") { onAddAreaLight() }
+                } label: {
+                    Image(systemName: "plus")
+                        .foregroundColor(.white)
+                        .font(.system(size: 14, weight: .bold))
+                        .padding(8)
+                        .background(Color.blue)
+                        .clipShape(Circle())
                 }
-                .buttonStyle(PlainButtonStyle())
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .help("Add Entity")
 
                 // Remove Entity Button
