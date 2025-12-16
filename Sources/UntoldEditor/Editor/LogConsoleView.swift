@@ -17,7 +17,6 @@ struct LogConsoleView: View {
     @State private var search = ""
     @State private var autoScroll = true
     @State private var clearLog = false
-    @State private var showControls = false
 
     private func passes(_ e: LogEvent) -> Bool {
         (selectedLevel == nil || e.level == selectedLevel!) &&
@@ -33,27 +32,25 @@ struct LogConsoleView: View {
                     .font(.title3)
                     .bold()
                     .foregroundColor(.primary)
+//                Spacer().frame(width: 16)
+//                Picker("Level", selection: $selectedLevel) {
+//                    Text("All").tag(LogLevel?.none)
+//                    Text("Error").tag(LogLevel?.some(.error))
+//                    Text("Warning").tag(LogLevel?.some(.warning))
+//                    Text("Info").tag(LogLevel?.some(.info))
+//                    Text("Debug").tag(LogLevel?.some(.debug))
+//                    Text("Test").tag(LogLevel?.some(.test))
+//                }
+//                .pickerStyle(.segmented)
+//                .frame(width: 360)
+//                .accentColor(.gray)
                 Spacer()
-                if showControls {
-                    TextField("Search…", text: $search)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 200)
-                }
+                TextField("Search…", text: $search)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
 
-                if showControls {
-                    Toggle("Auto‑scroll", isOn: $autoScroll)
-                        .toggleStyle(.checkbox)
-                }
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        showControls.toggle()
-                    }
-                } label: {
-                    Image(systemName: showControls ? "chevron.down" : "ellipsis.circle")
-                        .foregroundColor(.primary)
-                }
-                .buttonStyle(.plain)
+                Toggle("Auto‑scroll", isOn: $autoScroll)
+                    .toggleStyle(.checkbox)
 
                 Button(action: {
                     LogStore.shared.clear()
@@ -77,6 +74,7 @@ struct LogConsoleView: View {
 
                         Text(e.message)
                             .font(.system(.body, design: .monospaced))
+                            .foregroundColor(colorForLevel(e.level))
                             .textSelection(.enabled)
                             .lineLimit(4)
                     }
@@ -95,6 +93,17 @@ struct LogConsoleView: View {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss.SSS"
         return f.string(from: d)
+    }
+
+    private func colorForLevel(_ level: LogLevel) -> Color {
+        switch level {
+        case .error: return .red
+        case .warning: return .yellow
+        case .info: return .primary
+        case .debug: return .gray
+        case .test: return Color.editorAccent
+        case .none: return .primary
+        }
     }
 
     private func tag(for level: LogLevel) -> String {
