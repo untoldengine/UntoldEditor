@@ -91,6 +91,9 @@ func createAccelerationStructures(_: Bool) {
 
     // Iterate over the entities found by the component query
     for (i, entityId) in entities.enumerated() {
+        // Skip entities pending destroy
+        if scene.mask(for: entityId) == nil { continue }
+
         guard let renderComponent = scene.get(component: RenderComponent.self, for: entityId) else {
             handleError(.noRenderComponent, entityId)
             continue
