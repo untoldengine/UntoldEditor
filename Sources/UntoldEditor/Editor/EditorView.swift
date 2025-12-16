@@ -154,7 +154,12 @@ public struct EditorView: View {
             }
         }
         .background(
-            Color.editorBackground.ignoresSafeArea())
+            LinearGradient(
+                colors: [Color.editorBackground, Color.editorPanelBackground.opacity(0.95)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea())
         .onAppear {
             sceneGraphModel.refreshHierarchy()
         }

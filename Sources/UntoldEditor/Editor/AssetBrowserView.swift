@@ -73,7 +73,7 @@ struct AssetBrowserView: View {
                     Text("Assets")
                         .font(.title3)
                         .bold()
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
 
                     Button(action: importAsset) {
                         HStack(spacing: 6) {
@@ -83,8 +83,8 @@ struct AssetBrowserView: View {
                         }
                         .padding(.vertical, 6)
                         .padding(.horizontal, 12)
-                        .background(Color.gray)
-                        .foregroundColor(.white)
+                        .background(Color.editorAccent)
+                        .foregroundColor(.black.opacity(0.9))
                         .cornerRadius(8)
                         .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                     }
@@ -118,7 +118,7 @@ struct AssetBrowserView: View {
                         }
                         .padding(.vertical, 6)
                         .padding(.horizontal, 12)
-                        .background(Color.gray)
+                        .background(Color.editorSurface)
                         .foregroundColor(.white)
                         .cornerRadius(8)
                         .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
@@ -127,7 +127,7 @@ struct AssetBrowserView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color.secondary.opacity(0.1))
+                .background(Color.editorPanelBackground.opacity(0.9))
                 .cornerRadius(8)
 
                 // MARK: - Path Indicator
@@ -135,7 +135,7 @@ struct AssetBrowserView: View {
                 if let resourceDir = editorBaseAssetPath.basePath {
                     Text("Current Path: \(resourceDir.lastPathComponent)")
                         .font(.caption)
-                        .foregroundColor(.green)
+                        .foregroundColor(Color.editorAccent)
                         .padding(.horizontal, 10)
                         .padding(.bottom, 5)
                 } else {
@@ -167,17 +167,23 @@ struct AssetBrowserView: View {
 
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: compactMode ? 4 : 8) {
+                            Text("Categories")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.bottom, 2)
+
                             ForEach(AssetCategory.allCases, id: \.self) { category in
                                 HStack {
                                     Image(systemName: selectedCategory == category.rawValue ? "folder.fill" : "folder")
-                                        .foregroundColor(selectedCategory == category.rawValue ? .blue : .gray)
+                                        .foregroundColor(selectedCategory == category.rawValue ? Color.editorAccent : .gray)
                                     Text(category.rawValue)
                                         .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                        .foregroundColor(selectedCategory == category.rawValue ? .blue : .primary)
+                                        .foregroundColor(selectedCategory == category.rawValue ? .white : .primary)
                                 }
                                 .padding(.vertical, compactMode ? 4 : 6)
                                 .padding(.horizontal, 8)
-                                .background(selectedCategory == category.rawValue ? Color.blue.opacity(0.1) : Color.clear)
+                                .background(selectedCategory == category.rawValue ? Color.editorAccentSoft : Color.clear)
                                 .cornerRadius(6)
                                 .onTapGesture {
                                     // If reselecting the same category, force a reload
@@ -202,7 +208,7 @@ struct AssetBrowserView: View {
                     // MARK: - Asset List
 
                     ScrollView(.vertical, showsIndicators: true) {
-                        VStack(alignment: .leading, spacing: compactMode ? 6 : 8) {
+                        VStack(alignment: .leading, spacing: compactMode ? 6 : 10) {
                             if let selectedCategory {
                                 // Scripts: flat, no breadcrumbs or folders
                                 let isScripts = (selectedCategory == AssetCategory.scripts.rawValue)
@@ -263,7 +269,7 @@ struct AssetBrowserView: View {
                         .padding(.horizontal, 8)
                     }
                     .frame(maxHeight: 300)
-                    .background(Color.secondary.opacity(0.05))
+                    .background(Color.editorSurface.opacity(0.7))
                     .cornerRadius(8)
                 }
                 .frame(maxHeight: 300)

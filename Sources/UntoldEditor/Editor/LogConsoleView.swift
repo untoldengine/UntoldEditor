@@ -65,7 +65,7 @@ struct LogConsoleView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color.secondary.opacity(0.1))
+            .background(Color.editorPanelBackground.opacity(0.8))
             .cornerRadius(8)
 
             ScrollViewReader { proxy in

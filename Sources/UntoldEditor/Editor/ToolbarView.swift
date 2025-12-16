@@ -50,11 +50,15 @@
             .padding(.horizontal, 20)
             .padding(.vertical, 6)
             .background(
-                Color.secondary.opacity(0.1)
-                    .ignoresSafeArea()
+                LinearGradient(
+                    colors: [Color.editorPanelBackground.opacity(0.95), Color.editorPanelBackground.opacity(0.85)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
             )
             .cornerRadius(8)
-            .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 1)
+            .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
             .sheet(isPresented: $showBuildSettings) {
                 BuildSettingsView()
             }
@@ -86,8 +90,8 @@
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 12)
-                    .background(Color.green)
-                    .foregroundColor(.white)
+                    .background(Color.editorAccent)
+                    .foregroundColor(.black.opacity(0.9))
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
@@ -98,16 +102,7 @@
 
         var centeredButtons: some View {
             HStack(spacing: 12) {
-                Button(action: onClear) {
-                    Text("Clear")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(Color.red.opacity(0.8))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
+                ToolbarButton(iconName: "gobackward", action: onClear, tooltip: "Clear Scene")
 
                 Button(action: {
                     isPlaying.toggle()
@@ -179,10 +174,10 @@
                         Text("Script Editor")
                     }
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.black.opacity(0.9))
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(Color.blue)
+                    .background(Color.editorAccent)
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
@@ -384,6 +379,8 @@
             buildLog
         }
         .frame(minWidth: 600, idealWidth: 1100, minHeight: 500, idealHeight: 800)
+        .background(Color.editorBackground)
+        .accentColor(Color.editorAccent)
         .onAppear {
             prepareScripts()
             installControlCopyPasteShortcuts()
@@ -442,12 +439,6 @@
                 .buttonStyle(.borderedProminent)
                 .disabled(isBuilding)
 
-                Button("New Script") {
-                    showingNewScriptDialogInSheet = true
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-
                 Button("Save") {
                     saveCurrentScript()
                 }
@@ -463,26 +454,32 @@
 //                }
 //                .disabled(undoStack.isEmpty)
 
-                Button("Delete") {
-                    showDeleteConfirm = true
-                }
-                .disabled(selectedFile == nil || isProtectedFile(selectedFile))
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .confirmationDialog(
-                    "Delete script?",
-                    isPresented: $showDeleteConfirm,
-                    titleVisibility: .visible
-                ) {
-                    Button("Delete", role: .destructive) {
-                        deleteSelectedScript()
-                    }
-                    Button("Cancel", role: .cancel) { showDeleteConfirm = false }
-                } message: {
-                    if let selectedFile {
-                        Text("Are you sure you want to delete \(selectedFile.lastPathComponent)? This cannot be undone.")
-                    }
-                }
+//                Button("New Script") {
+//                    showingNewScriptDialogInSheet = true
+//                }
+//                .buttonStyle(.borderedProminent)
+//                .tint(.green)
+
+//                Button("Delete") {
+//                    showDeleteConfirm = true
+//                }
+//                .disabled(selectedFile == nil || isProtectedFile(selectedFile))
+//                .buttonStyle(.borderedProminent)
+//                .tint(.red)
+//                .confirmationDialog(
+//                    "Delete script?",
+//                    isPresented: $showDeleteConfirm,
+//                    titleVisibility: .visible
+//                ) {
+//                    Button("Delete", role: .destructive) {
+//                        deleteSelectedScript()
+//                    }
+//                    Button("Cancel", role: .cancel) { showDeleteConfirm = false }
+//                } message: {
+//                    if let selectedFile {
+//                        Text("Are you sure you want to delete \(selectedFile.lastPathComponent)? This cannot be undone.")
+//                    }
+//                }
 
                 Button("Close") {
                     if isDirty {
@@ -497,13 +494,64 @@
         }
 
         private var scriptList: some View {
-            List(selection: $selectedFile) {
-                ForEach(scriptFiles, id: \.self) { url in
-                    Text(url.lastPathComponent)
-                        .lineLimit(1)
-                        .tag(Optional(url))
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Scripts")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button {
+                        showingNewScriptDialogInSheet = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(Color.editorAccent)
+                    }
+                    .buttonStyle(.plain)
+                    .help("New Script")
+                    Button {
+                        showDeleteConfirm = true
+                    } label: {
+                        Image(systemName: "trash.fill")
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedFile == nil || isProtectedFile(selectedFile))
+                    .help("Delete Script")
+                    .confirmationDialog(
+                        "Delete script?",
+                        isPresented: $showDeleteConfirm,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete", role: .destructive) {
+                            deleteSelectedScript()
+                        }
+                        Button("Cancel", role: .cancel) { showDeleteConfirm = false }
+                    } message: {
+                        if let selectedFile {
+                            Text("Are you sure you want to delete \(selectedFile.lastPathComponent)? This cannot be undone.")
+                        }
+                    }
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.editorSurface)
+
+                Divider()
+                    .background(Color.editorDivider)
+
+                List(selection: $selectedFile) {
+                    ForEach(scriptFiles, id: \.self) { url in
+                        Text(url.lastPathComponent)
+                            .lineLimit(1)
+                            .foregroundColor(.primary)
+                            .tag(Optional(url))
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
+            .background(Color.editorPanelBackground)
+            .cornerRadius(8)
             .frame(minWidth: 180, idealWidth: 220, maxWidth: 260, maxHeight: .infinity)
             .onChange(of: selectedFile) { newSelection in
                 handleSelectionChange(newSelection)
@@ -527,7 +575,7 @@
                         colorScheme == .dark ? Theme.defaultDark : Theme.defaultLight
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(NSColor.textBackgroundColor))
+                    .background(Color.editorSurface)
                     .cornerRadius(6)
                 } else {
                     VStack {
@@ -551,16 +599,53 @@
                         ProgressView()
                             .progressViewStyle(.circular)
                     }
+                    Spacer()
+                    Button {
+                        let output = buildOutput
+                        #if os(macOS)
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(output, forType: .string)
+                        #endif
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .help("Copy build output")
+                    .disabled(buildOutput.isEmpty)
+
+                    Button {
+                        buildOutput = ""
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .help("Clear build output")
+                    .disabled(buildOutput.isEmpty)
                 }
-                ScrollView {
-                    Text(buildOutput.isEmpty ? "No builds yet." : buildOutput)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(4)
+                .padding(.horizontal, 4)
+
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        Text(buildOutput.isEmpty ? "No builds yet." : buildOutput)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(4)
+                            .id("buildOutputText")
+                            .textSelection(.enabled)
+                    }
+                    .onChange(of: buildOutput) { _ in
+                        withAnimation {
+                            proxy.scrollTo("buildOutputText", anchor: .bottom)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity)
             }
             .padding()
+            .background(Color.editorPanelBackground)
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.editorDivider, lineWidth: 1)
+            )
             .frame(minHeight: 160, maxHeight: 200)
         }
 
