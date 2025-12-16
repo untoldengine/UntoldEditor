@@ -80,6 +80,17 @@ struct LogConsoleView: View {
                     }
                     .id(e.id)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .listRowBackground(Color.clear)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.editorSurface.opacity(0.9))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.editorDivider, lineWidth: 1)
+                )
                 .onChange(of: store.entries.last?.id) { _, last in
                     if autoScroll, let last { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
                 }

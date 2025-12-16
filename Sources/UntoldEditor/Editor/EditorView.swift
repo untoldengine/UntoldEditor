@@ -320,6 +320,7 @@ public struct EditorView: View {
         window.minSize = NSSize(width: 620, height: 420)
         window.level = .floating // keep above editor while arranging assets
         window.isReleasedWhenClosed = false
+        window.alphaValue = 0.9
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
