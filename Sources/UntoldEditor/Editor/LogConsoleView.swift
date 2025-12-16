@@ -17,6 +17,7 @@ struct LogConsoleView: View {
     @State private var search = ""
     @State private var autoScroll = true
     @State private var clearLog = false
+    @State private var showControls = false
 
     private func passes(_ e: LogEvent) -> Bool {
         (selectedLevel == nil || e.level == selectedLevel!) &&
@@ -33,21 +34,34 @@ struct LogConsoleView: View {
                     .bold()
                     .foregroundColor(.primary)
                 Spacer()
-                TextField("Search…", text: $search)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 200)
+                if showControls {
+                    TextField("Search…", text: $search)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 200)
+                }
 
-                Toggle("Auto‑scroll", isOn: $autoScroll)
-                    .toggleStyle(.checkbox)
+                if showControls {
+                    Toggle("Auto‑scroll", isOn: $autoScroll)
+                        .toggleStyle(.checkbox)
+                }
 
-                Toggle("Clear", isOn: $clearLog)
-                    .toggleStyle(.checkbox)
-                    .onChange(of: clearLog) { _, newValue in
-                        if newValue {
-                            LogStore.shared.clear()
-                            clearLog = false
-                        }
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        showControls.toggle()
                     }
+                } label: {
+                    Image(systemName: showControls ? "chevron.down" : "ellipsis.circle")
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {
+                    LogStore.shared.clear()
+                }) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(BorderlessButtonStyle())
+                .help("Clear console")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -61,16 +75,6 @@ struct LogConsoleView: View {
                             .font(.caption).foregroundColor(.secondary)
                             .frame(width: 84, alignment: .leading)
 
-//                        Text("[\(e.category)]")
-//                            .font(.caption).foregroundColor(.secondary)
-//                            .frame(width: 120, alignment: .leading)
-//
-//                        Text(tag(for: e.level))
-//                            .font(.caption2)
-//                            .padding(.horizontal, 6).padding(.vertical, 2)
-//                            .background(badgeColor(for: e.level).opacity(0.15))
-//                            .clipShape(RoundedRectangle(cornerRadius: 6))
-
                         Text(e.message)
                             .font(.system(.body, design: .monospaced))
                             .textSelection(.enabled)
@@ -82,44 +86,8 @@ struct LogConsoleView: View {
                     if autoScroll, let last { withAnimation { proxy.scrollTo(last, anchor: .bottom) } }
                 }
             }
-
-            /*
-             HStack {
-                 Picker("Level", selection: $selectedLevel) {
-                     Text("All").tag(LogLevel?.none)
-                     Text("Error").tag(LogLevel?.some(.error))
-                     Text("Warning").tag(LogLevel?.some(.warning))
-                     Text("Info").tag(LogLevel?.some(.info))
-                     Text("Debug").tag(LogLevel?.some(.debug))
-                     Text("Test").tag(LogLevel?.some(.test))
-                 }
-                 .pickerStyle(.segmented)
-
-                  //Disabling Buttons for now
-                                 Spacer()
-
-                                 Button("Copy") {
-                                     let text = store.entries.filter(passes).map {
-                                         "[\($0.level)] \($0.message)"
-                                     }.joined(separator: "\n")
-                                     #if os(macOS)
-                                     NSPasteboard.general.clearContents()
-                                     NSPasteboard.general.setString(text, forType: .string)
-                                     #endif
-                                 }
-
-                                 Button("Export") {
-                                     //exportLog(store.entries.filter(passes))
-                                 }
-
-                                 Button("Clear") {
-                                     // optional: expose a clear API on Logger/LogStore if you want
-                                 }
-
-             }
-             .padding(.horizontal, 8)
-             */
         }
+        .frame(minHeight: 140)
         .padding(10)
     }
 

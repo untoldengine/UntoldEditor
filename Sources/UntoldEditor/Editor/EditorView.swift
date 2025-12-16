@@ -30,6 +30,7 @@ public struct EditorView: View {
     @State private var pendingTargetURL: URL?
     @State private var isSaveAs = false
     @State private var showSaveBasePathAlert = false
+    @State private var assetPaneWidth: Double = 400
 
     var renderer: UntoldRenderer?
 
@@ -90,22 +91,32 @@ public struct EditorView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     TransformManipulationToolbar(controller: editorController!)
                         .frame(height: 40)
-                    HStack(spacing: 0) {
-                        AssetBrowserView(
-                            assets: $assets,
-                            selectedAsset: $selectedAsset,
-                            selectionManager: selectionManager,
-                            sceneGraphModel: sceneGraphModel,
-                            editor_addEntityWithAsset: editor_addEntityWithAsset
-                        )
-                        .frame(width: 400)
-                        // .tabItem { Label("Assets", systemImage: "shippingbox") }
-                        Divider()
-                        LogConsoleView()
-                            .tabItem { Label("Console", systemImage: "terminal") }
+                    GeometryReader { geo in
+                        HStack(alignment: .top, spacing: 0) {
+                            AssetBrowserView(
+                                assets: $assets,
+                                selectedAsset: $selectedAsset,
+                                selectionManager: selectionManager,
+                                sceneGraphModel: sceneGraphModel,
+                                editor_addEntityWithAsset: editor_addEntityWithAsset
+                            )
+                            .frame(width: max(240, min(Double(assetPaneWidth), geo.size.width - 200)))
+
+                            Divider()
+                                .frame(width: 4)
+                                .background(Color.secondary.opacity(0.2))
+                                .gesture(
+                                    DragGesture(minimumDistance: 1).onChanged { value in
+                                        let newWidth = assetPaneWidth + value.translation.width
+                                        assetPaneWidth = max(240, min(Double(newWidth), geo.size.width - 200))
+                                    }
+                                )
+
+                            LogConsoleView()
+                                .tabItem { Label("Console", systemImage: "terminal") }
+                        }
                     }
-                    .frame(height: 200)
-                    // .clipped()
+                    .frame(height: 260)
                 }
 
                 VStack(spacing: 8) {
