@@ -316,8 +316,9 @@ public struct EditorView: View {
         let window = NSWindow(contentViewController: hosting)
         window.title = "Assets Library"
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-        window.setContentSize(NSSize(width: 900, height: 600))
-        window.minSize = NSSize(width: 700, height: 500)
+        window.setContentSize(NSSize(width: 760, height: 520))
+        window.minSize = NSSize(width: 620, height: 420)
+        window.level = .floating // keep above editor while arranging assets
         window.isReleasedWhenClosed = false
         window.center()
         window.makeKeyAndOrderFront(nil)
