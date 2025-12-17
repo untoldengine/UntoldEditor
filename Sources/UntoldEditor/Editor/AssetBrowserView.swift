@@ -57,6 +57,7 @@ struct AssetBrowserView: View {
     @State private var statusMessage: String?
     @State private var statusIsError = false
     @State private var compactMode = false
+    @State private var targetEntityName: String = "None"
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
         folderPathStack.last
@@ -139,14 +140,27 @@ struct AssetBrowserView: View {
                         .padding(.horizontal, 10)
                         .padding(.bottom, 5)
                 } else {
-                    Text("No Path Selected")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 5)
-                }
+                Text("No Path Selected")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 5)
+            }
 
-                // MARK: - Search
+            HStack {
+                Text("Target Entity:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(targetEntityName)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 2)
+
+            // MARK: - Search
                 HStack {
                     Image(systemName: "magnifyingglass")
                     TextField("Filter assets", text: $searchQuery)
@@ -277,7 +291,14 @@ struct AssetBrowserView: View {
             .padding(10)
         }
         .frame(maxHeight: .infinity)
-        .onAppear(perform: loadAssets)
+        .onAppear {
+            loadAssets()
+            updateTargetEntityName(for: selectionManager.selectedEntity)
+        }
+        // Keep the target label in sync with editor selection changes.
+        .onReceive(selectionManager.$selectedEntity) { entityId in
+            updateTargetEntityName(for: entityId)
+        }
         .onChange(of: editorBaseAssetPath.basePath) {
             loadAssets()
         }
@@ -670,6 +691,7 @@ struct AssetBrowserView: View {
     private func selectAsset(_ asset: Asset) {
         selectedAsset = asset
         selectedAssetName = asset.name
+        updateTargetEntityName(for: selectionManager.selectedEntity)
     }
 
     // MARK: - Delete Asset
@@ -730,6 +752,8 @@ struct AssetBrowserView: View {
 
             // Select the newly created entity in the editor
             selectionManager.selectedEntity = entityId
+
+            showStatus("Added model \(uniqueName)")
         }
         // Handle Gaussian files (ply)
         else if asset.category == AssetCategory.gaussians.rawValue,
@@ -750,6 +774,8 @@ struct AssetBrowserView: View {
 
             // Select the newly created entity in the editor
             selectionManager.selectedEntity = entityId
+
+            showStatus("Added Gaussian \(uniqueName)")
         }
         // Handle Animation files (usdz in Animations category)
         else if asset.category == AssetCategory.animations.rawValue,
@@ -760,6 +786,7 @@ struct AssetBrowserView: View {
                   entityId != .invalid
             else {
                 print("⚠️ Please select an entity first to add animation")
+                showStatus("Select an entity before adding animation", isError: true)
                 return
             }
 
@@ -778,6 +805,7 @@ struct AssetBrowserView: View {
 
             // Refresh view
             selectionManager.objectWillChange.send()
+            showStatus("Animation linked to \(targetEntityName)", isError: false)
         }
         // Handle Script files (uscript)
         else if asset.category == AssetCategory.scripts.rawValue,
@@ -788,6 +816,7 @@ struct AssetBrowserView: View {
                   entityId != .invalid
             else {
                 print("⚠️ Please select an entity first to add script")
+                showStatus("Select an entity before adding script", isError: true)
                 return
             }
 
@@ -820,6 +849,7 @@ struct AssetBrowserView: View {
 
                 // Refresh view
                 selectionManager.objectWillChange.send()
+                showStatus("Script linked to \(targetEntityName)", isError: false)
             } catch {
                 print("❌ Failed to load script: \(error.localizedDescription)")
             }
@@ -843,7 +873,17 @@ struct AssetBrowserView: View {
             generateHDR(filename, from: directoryURL)
 
             print("✅ HDR environment loaded: \(filename)")
+            showStatus("HDR loaded: \(filename)")
         }
+    }
+
+    private func updateTargetEntityName(for entityId: EntityID?) {
+        guard let entityId, entityId != .invalid else {
+            targetEntityName = "None"
+            return
+        }
+        let name = getEntityName(entityId: entityId)
+        targetEntityName = name.isEmpty ? "Entity \(entityId)" : name
     }
 
     // MARK: - Load Scene Helper

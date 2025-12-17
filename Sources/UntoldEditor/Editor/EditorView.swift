@@ -161,7 +161,7 @@ public struct EditorView: View {
                         inspectorTab = .inspector
                     }
                 }
-                .frame(minWidth: 240, maxWidth: 320)
+                .frame(minWidth: 216, maxWidth: 288)
             }
         }
         .background(
