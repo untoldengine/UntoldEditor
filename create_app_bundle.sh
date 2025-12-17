@@ -8,7 +8,23 @@ echo "🔨 Building UntoldEditor app bundle..."
 APP_NAME="Untold Engine Studio"
 EXECUTABLE_NAME="UntoldEditor"
 BUNDLE_ID="com.untoldengine.studio"
-VERSION="0.2.0"
+
+# Determine version (env -> release/* branch -> latest tag vX.Y.Z -> fallback)
+detect_version() {
+    if [ -n "${VERSION:-}" ]; then
+        echo "$VERSION"; return
+    fi
+    branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    if [[ "$branch" == release/* ]]; then
+        echo "${branch#release/}"; return
+    fi
+    tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+    if [[ "$tag" == v* ]]; then
+        echo "${tag#v}"; return
+    fi
+    echo "0.0.0-dev"
+}
+VERSION="$(detect_version)"
 BUILD_DIR=".build/arm64-apple-macosx/release"
 APP_BUNDLE="$APP_NAME.app"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
