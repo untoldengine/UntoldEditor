@@ -283,7 +283,7 @@ public struct EditorView: View {
             return
         }
 
-        if FileManager.default.fileExists(atPath: destinationURL.path) && !overwrite {
+        if FileManager.default.fileExists(atPath: destinationURL.path), !overwrite {
             showOverwriteAlert = true
             return
         }
@@ -325,10 +325,10 @@ public struct EditorView: View {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        let delegate = AssetWindowDelegate { 
+        let delegate = AssetWindowDelegate {
             // Window is closing — clear our references
-            self.assetWindow = nil
-            self.assetWindowDelegate = nil
+            assetWindow = nil
+            assetWindowDelegate = nil
         }
         window.delegate = delegate
         assetWindowDelegate = delegate

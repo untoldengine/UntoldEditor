@@ -140,27 +140,28 @@ struct AssetBrowserView: View {
                         .padding(.horizontal, 10)
                         .padding(.bottom, 5)
                 } else {
-                Text("No Path Selected")
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 5)
-            }
+                    Text("No Path Selected")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 5)
+                }
 
-            HStack {
-                Text("Target Entity:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(targetEntityName)
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 2)
+                HStack {
+                    Text("Target Entity:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(targetEntityName)
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 2)
 
-            // MARK: - Search
+                // MARK: - Search
+
                 HStack {
                     Image(systemName: "magnifyingglass")
                     TextField("Filter assets", text: $searchQuery)
@@ -254,7 +255,7 @@ struct AssetBrowserView: View {
                                 if let currentFolderPath, !isScripts {
                                     folderContentsView(for: currentFolderPath, selectionManager: selectionManager)
                                 } else {
-                                if let categoryAssets = assets[selectedCategory] {
+                                    if let categoryAssets = assets[selectedCategory] {
                                         ForEach(categoryAssets.filter { matchesSearch($0) }) { asset in
                                             // For Scripts, we never navigate into folders (we won't list folders anyway)
                                             assetRow(asset)
@@ -409,7 +410,7 @@ struct AssetBrowserView: View {
         let fm = FileManager.default
         let categoryRoot = basePath.appendingPathComponent(selectedCategory!, isDirectory: true)
         // Ensure category folder exists (e.g., <Base>/Models)
-            try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
 
         if openPanel.runModal() == .OK {
             for sourceURL in openPanel.urls {

@@ -29,12 +29,14 @@ final class AssetBrowserViewTests: XCTestCase {
     private func makeView(assets: Binding<[String: [Asset]]>,
                           selectedAsset: Binding<Asset?>,
                           selectionManager: SelectionManager = SelectionManager(),
+                          sceneGraphModel: SceneGraphModel = SceneGraphModel(),
                           editor_addEntityWithAsset: @escaping () -> Void = {}) -> AssetBrowserView
     {
         AssetBrowserView(
             assets: assets,
             selectedAsset: selectedAsset,
             selectionManager: selectionManager,
+            sceneGraphModel: sceneGraphModel,
             editor_addEntityWithAsset: editor_addEntityWithAsset
         )
     }

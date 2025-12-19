@@ -27,7 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
 
-        window.title = "Untold Engine Editor v0.2"
+        window.title = "Untold Engine Editor v0.1.0"
         window.center()
 
         let hostingView = NSHostingView(rootView: EditorView())

@@ -220,7 +220,7 @@ class ScriptProjectManager {
             // Preserve existing indentation from the anchor line
             let lineStart = contents[..<range.lowerBound].lastIndex(of: "\n") ?? contents.startIndex
             let indentStart = contents.index(after: lineStart)
-            let indent = String(contents[indentStart..<range.lowerBound])
+            let indent = String(contents[indentStart ..< range.lowerBound])
 
             let insertion = "\(indent)\(callLine)\n\n\(indent)\(anchor)"
             contents.replaceSubrange(range, with: insertion)
@@ -307,7 +307,7 @@ class ScriptProjectManager {
         import Foundation
         import UntoldEngine
         import simd
-        
+
         // To view the Untold Engine API click here: https://untoldengine.github.io/UntoldEngine/docs/Scripting/usc-scripting-api
 
         extension GenerateScripts {

@@ -19,8 +19,9 @@ import XCTest
         private func makeSUT(
             selectionManager: SelectionManager = SelectionManager(),
             onSaveCalled: UnsafeMutablePointer<Bool>,
-            onLoadCalled: UnsafeMutablePointer<Bool>,
+            onSaveAsCalled: UnsafeMutablePointer<Bool>,
             onClearCalled: UnsafeMutablePointer<Bool>,
+            onShowAssetsCalled: UnsafeMutablePointer<Bool>,
             onCameraSaveCalled _: UnsafeMutablePointer<Bool>,
             onPlayToggledValues: UnsafeMutablePointer<[Bool]>,
             onDirLightCalled: UnsafeMutablePointer<Bool>,
@@ -36,9 +37,10 @@ import XCTest
             ToolbarView(
                 selectionManager: selectionManager,
                 onSave: { onSaveCalled.pointee = true },
-                onLoad: { onLoadCalled.pointee = true },
+                onSaveAs: { onSaveAsCalled.pointee = true },
                 onClear: { onClearCalled.pointee = true },
                 onPlayToggled: { value in onPlayToggledValues.pointee.append(value) },
+                onShowAssets: { onShowAssetsCalled.pointee = true },
                 dirLightCreate: { onDirLightCalled.pointee = true },
                 pointLightCreate: { onPointLightCalled.pointee = true },
                 spotLightCreate: { onSpotLightCalled.pointee = true },
@@ -53,8 +55,9 @@ import XCTest
 
         func test_actionsAreWired_up() {
             var onSave = false
-            var onLoad = false
+            var onSaveAs = false
             var onClear = false
+            var onShowAssets = false
             var onCameraSave = false
             var playValues: [Bool] = []
             var onDir = false
@@ -69,8 +72,9 @@ import XCTest
 
             let sut = makeSUT(
                 onSaveCalled: &onSave,
-                onLoadCalled: &onLoad,
+                onSaveAsCalled: &onSaveAs,
                 onClearCalled: &onClear,
+                onShowAssetsCalled: &onShowAssets,
                 onCameraSaveCalled: &onCameraSave,
                 onPlayToggledValues: &playValues,
                 onDirLightCalled: &onDir,
@@ -87,8 +91,9 @@ import XCTest
             // We cannot programmatically tap SwiftUI Buttons without a host and introspection.
             // Instead, assert that injected closures can be called and flip their flags.
             sut.onSave()
-            sut.onLoad()
+            sut.onSaveAs()
             sut.onClear()
+            sut.onShowAssets()
             sut.dirLightCreate()
             sut.pointLightCreate()
             sut.spotLightCreate()
@@ -100,8 +105,9 @@ import XCTest
             sut.onCreateCone()
 
             XCTAssertTrue(onSave, "onSave should be wired.")
-            XCTAssertTrue(onLoad, "onLoad should be wired.")
+            XCTAssertTrue(onSaveAs, "onSaveAs should be wired.")
             XCTAssertTrue(onClear, "onClear should be wired.")
+            XCTAssertTrue(onShowAssets, "onShowAssets should be wired.")
             XCTAssertTrue(onDir, "dirLightCreate should be wired.")
             XCTAssertTrue(onPoint, "pointLightCreate should be wired.")
             XCTAssertTrue(onSpot, "spotLightCreate should be wired.")
@@ -127,9 +133,10 @@ import XCTest
             let sut = ToolbarView(
                 selectionManager: selection,
                 onSave: {},
-                onLoad: {},
+                onSaveAs: {},
                 onClear: {},
                 onPlayToggled: { playValues.append($0) },
+                onShowAssets: {},
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},
@@ -161,9 +168,10 @@ import XCTest
             let sut = ToolbarView(
                 selectionManager: SelectionManager(),
                 onSave: {},
-                onLoad: {},
+                onSaveAs: {},
                 onClear: {},
                 onPlayToggled: { _ in },
+                onShowAssets: {},
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},
@@ -196,9 +204,10 @@ import XCTest
             let sut = ToolbarView(
                 selectionManager: SelectionManager(),
                 onSave: {},
-                onLoad: {},
+                onSaveAs: {},
                 onClear: {},
                 onPlayToggled: { _ in },
+                onShowAssets: {},
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},
@@ -228,9 +237,10 @@ import XCTest
             let sut = ToolbarView(
                 selectionManager: SelectionManager(),
                 onSave: {},
-                onLoad: {},
+                onSaveAs: {},
                 onClear: {},
                 onPlayToggled: { _ in },
+                onShowAssets: {},
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},

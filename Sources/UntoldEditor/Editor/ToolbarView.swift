@@ -7,8 +7,8 @@
 //  See the LICENSE file or <https://www.gnu.org/licenses/> for details.
 //
 #if canImport(AppKit)
-    import SwiftUI
     import AppKit
+    import SwiftUI
 
     struct ToolbarView: View {
         @ObservedObject var selectionManager: SelectionManager
@@ -207,7 +207,6 @@
                 }
                 .buttonStyle(.plain)
                 .help("Open Scripts project in Xcode")
-
             }
         }
 

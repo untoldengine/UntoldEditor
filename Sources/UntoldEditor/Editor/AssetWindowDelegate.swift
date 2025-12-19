@@ -7,7 +7,7 @@ final class AssetWindowDelegate: NSObject, NSWindowDelegate {
         self.onClose = onClose
     }
 
-    func windowWillClose(_ notification: Notification) {
+    func windowWillClose(_: Notification) {
         onClose()
     }
 }

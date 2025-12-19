@@ -10,19 +10,16 @@ let package = Package(
         .executable(name: "UntoldEditor", targets: ["UntoldEditor"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/mchakravarty/CodeEditorView.git", branch: "main"),
         // Use a branch during active development:
         // .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
         // Or pin to a release:
-        .package(url: "https://github.com/untoldengine/UntoldEngine.git", exact: "0.6.0"),
+        .package(url: "https://github.com/untoldengine/UntoldEngine.git", exact: "0.6.1"),
     ],
     targets: [
         .executableTarget(
             name: "UntoldEditor",
             dependencies: [
                 .product(name: "UntoldEngine", package: "UntoldEngine"),
-                .product(name: "CodeEditorView", package: "CodeEditorView"),
-                .product(name: "LanguageSupport", package: "CodeEditorView"),
             ],
             path: "Sources/UntoldEditor",
             resources: [
