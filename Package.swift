@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -25,6 +25,9 @@ let package = Package(
             resources: [
                 // .process("Resources")
             ],
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("Metal"),
@@ -39,7 +42,8 @@ let package = Package(
             dependencies: ["UntoldEditor"],
             path: "Tests/UntoldEditorTests",
             resources: [
-            ]
+            ],
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
 )
