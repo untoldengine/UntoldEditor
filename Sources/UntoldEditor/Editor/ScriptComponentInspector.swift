@@ -22,6 +22,8 @@ struct ScriptComponentInspector: View {
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
     @State private var showBasePathAlert: Bool = false
+    @State private var statusMessage: String?
+    @State private var statusIsError = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -93,6 +95,19 @@ struct ScriptComponentInspector: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Please set the Asset Folder in the Asset Browser before loading or creating scripts.")
+        }
+        .overlay(alignment: .bottom) {
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(statusIsError ? Color.red.opacity(0.85) : Color.green.opacity(0.85))
+                    .cornerRadius(8)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
     }
 
@@ -265,6 +280,7 @@ struct ScriptComponentInspector: View {
             showError = false
             refreshView()
 
+            showStatus("Script reloaded: \(reloaded.name)")
             print("[USC] Script reloaded: \(reloaded.name) from \(url.lastPathComponent)")
         } catch {
             showErrorMessage("Failed to reload script: \(error.localizedDescription)")
@@ -297,6 +313,17 @@ struct ScriptComponentInspector: View {
         // Auto-hide after 5 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             showError = false
+        }
+    }
+
+    private func showStatus(_ message: String, isError: Bool = false) {
+        statusMessage = message
+        statusIsError = isError
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            if statusMessage == message {
+                statusMessage = nil
+            }
         }
     }
 
