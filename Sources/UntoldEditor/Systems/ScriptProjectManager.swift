@@ -308,7 +308,7 @@ class ScriptProjectManager {
         import UntoldEngine
         import simd
 
-        // To view the Untold Engine API click here: https://untoldengine.github.io/UntoldEngine/docs/Scripting/usc-scripting-api
+        // To view the Untold Engine API click here: https://untoldengine.github.io/UntoldEngine/docs/Game%20Development/USC/usc-scripting-introducction
 
         extension GenerateScripts {
             static func generate\(name)(to dir: URL) {
