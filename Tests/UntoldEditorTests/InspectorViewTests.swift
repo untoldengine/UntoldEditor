@@ -262,14 +262,14 @@ final class InspectorViewTests: XCTestCase {
         // Act: Add GaussianComponent through the inspector
         sut.addComponentToEntity_Editor(componentType: GaussianComponent.self)
 
-        // Assert: Component should be added to entity
-        XCTAssertTrue(hasComponent(entityId: e, componentType: GaussianComponent.self),
-                      "GaussianComponent should be present after adding.")
-
         // Assert: Component should be in editor state
         let key = ObjectIdentifier(GaussianComponent.self)
         XCTAssertNotNil(EditorComponentsState.shared.components[e]?[key],
                         "GaussianComponent should be in editor state after adding.")
+
+        // Assert: Component is not added to the engine until a Gaussian asset is assigned
+        XCTAssertFalse(hasComponent(entityId: e, componentType: GaussianComponent.self),
+                       "GaussianComponent should not be registered in the engine just by adding it to the inspector.")
     }
 
     func test_removeComponent_removesGaussianComponent() {
@@ -281,6 +281,7 @@ final class InspectorViewTests: XCTestCase {
 
         // Add GaussianComponent
         sut.addComponentToEntity_Editor(componentType: GaussianComponent.self)
+        registerComponent(entityId: e, componentType: GaussianComponent.self)
 
         // Precondition: Verify component exists
         XCTAssertTrue(hasComponent(entityId: e, componentType: GaussianComponent.self),
