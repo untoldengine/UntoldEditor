@@ -58,7 +58,7 @@ struct EnvironmentView: View {
                 }
                 .padding(.vertical, 4)
                 .padding(.horizontal, 8)
-                .background(Color.gray)
+                .background(Color.editorAccent)
                 .foregroundColor(.white)
                 .cornerRadius(6)
             }

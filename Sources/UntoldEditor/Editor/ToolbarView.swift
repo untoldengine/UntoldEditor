@@ -87,11 +87,12 @@
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 12)
-                    .background(Color.editorAccent)
-                    .foregroundColor(.black.opacity(0.9))
+                    .background(Color.editorSurface)
+                    .foregroundColor(.white)
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 Divider().frame(height: 24)
             }
@@ -111,11 +112,12 @@
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 12)
-                    .background(isPlaying ? Color.red : Color.blue)
+                    .background(isPlaying ? Color.editorSecondaryAccent : Color.editorAccent)
                     .foregroundColor(.white)
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 Menu {
                     Button("Save", systemImage: "square.and.arrow.down.on.square", action: onSave)
@@ -127,11 +129,12 @@
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(Color.gray.opacity(0.8))
+                    .background(Color.editorAccent)
                     .foregroundColor(.white)
                     .cornerRadius(8)
                 }
                 .menuStyle(.borderlessButton)
+                .focusable(false)
             }
         }
 
@@ -173,10 +176,11 @@
                     .foregroundColor(.white)
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(Color.green.opacity(0.85))
+                    .background(Color.editorSurface)
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
                 .help("Create a new script in the Scripts project")
 
                 Button(action: openInXcode) {
@@ -188,10 +192,11 @@
                     .foregroundColor(.white)
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(Color.blue.opacity(0.85))
+                    .background(Color.editorSurface)
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
                 .help("Open Scripts project in Xcode")
             }
         }
@@ -278,11 +283,12 @@
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
                     .padding(6)
-                    .background(Color.gray)
+                    .background(Color.editorSurface)
                     .cornerRadius(6)
                     .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
             }
             .buttonStyle(PlainButtonStyle())
+            .focusable(false)
             .help(tooltip)
         }
     }

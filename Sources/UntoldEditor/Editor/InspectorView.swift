@@ -441,7 +441,7 @@ struct RenderingEditorView: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(Color.gray)
+                .background(Color.editorAccent)
                 .foregroundColor(.white)
                 .cornerRadius(8)
                 .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
@@ -721,7 +721,7 @@ struct AnimationEditorView: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(Color.gray)
+                .background(Color.editorAccent)
                 .foregroundColor(.white)
                 .cornerRadius(8)
                 .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
@@ -994,7 +994,7 @@ struct GaussianEditorView: View {
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
-                .background(Color.gray)
+                .background(Color.editorAccent)
                 .foregroundColor(.white)
                 .cornerRadius(8)
                 .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
