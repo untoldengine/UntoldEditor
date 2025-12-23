@@ -21,7 +21,6 @@ import XCTest
             onSaveCalled: UnsafeMutablePointer<Bool>,
             onSaveAsCalled: UnsafeMutablePointer<Bool>,
             onClearCalled: UnsafeMutablePointer<Bool>,
-            onShowAssetsCalled: UnsafeMutablePointer<Bool>,
             onCameraSaveCalled _: UnsafeMutablePointer<Bool>,
             onPlayToggledValues: UnsafeMutablePointer<[Bool]>,
             onDirLightCalled: UnsafeMutablePointer<Bool>,
@@ -40,7 +39,6 @@ import XCTest
                 onSaveAs: { onSaveAsCalled.pointee = true },
                 onClear: { onClearCalled.pointee = true },
                 onPlayToggled: { value in onPlayToggledValues.pointee.append(value) },
-                onShowAssets: { onShowAssetsCalled.pointee = true },
                 dirLightCreate: { onDirLightCalled.pointee = true },
                 pointLightCreate: { onPointLightCalled.pointee = true },
                 spotLightCreate: { onSpotLightCalled.pointee = true },
@@ -57,7 +55,6 @@ import XCTest
             var onSave = false
             var onSaveAs = false
             var onClear = false
-            var onShowAssets = false
             var onCameraSave = false
             var playValues: [Bool] = []
             var onDir = false
@@ -74,7 +71,6 @@ import XCTest
                 onSaveCalled: &onSave,
                 onSaveAsCalled: &onSaveAs,
                 onClearCalled: &onClear,
-                onShowAssetsCalled: &onShowAssets,
                 onCameraSaveCalled: &onCameraSave,
                 onPlayToggledValues: &playValues,
                 onDirLightCalled: &onDir,
@@ -93,7 +89,6 @@ import XCTest
             sut.onSave()
             sut.onSaveAs()
             sut.onClear()
-            sut.onShowAssets()
             sut.dirLightCreate()
             sut.pointLightCreate()
             sut.spotLightCreate()
@@ -107,7 +102,6 @@ import XCTest
             XCTAssertTrue(onSave, "onSave should be wired.")
             XCTAssertTrue(onSaveAs, "onSaveAs should be wired.")
             XCTAssertTrue(onClear, "onClear should be wired.")
-            XCTAssertTrue(onShowAssets, "onShowAssets should be wired.")
             XCTAssertTrue(onDir, "dirLightCreate should be wired.")
             XCTAssertTrue(onPoint, "pointLightCreate should be wired.")
             XCTAssertTrue(onSpot, "spotLightCreate should be wired.")
@@ -136,7 +130,6 @@ import XCTest
                 onSaveAs: {},
                 onClear: {},
                 onPlayToggled: { playValues.append($0) },
-                onShowAssets: {},
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},
@@ -171,7 +164,6 @@ import XCTest
                 onSaveAs: {},
                 onClear: {},
                 onPlayToggled: { _ in },
-                onShowAssets: {},
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},
@@ -207,7 +199,6 @@ import XCTest
                 onSaveAs: {},
                 onClear: {},
                 onPlayToggled: { _ in },
-                onShowAssets: {},
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},
@@ -240,7 +231,6 @@ import XCTest
                 onSaveAs: {},
                 onClear: {},
                 onPlayToggled: { _ in },
-                onShowAssets: {},
                 dirLightCreate: {},
                 pointLightCreate: {},
                 spotLightCreate: {},

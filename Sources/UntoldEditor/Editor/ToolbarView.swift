@@ -17,7 +17,6 @@
         var onSaveAs: () -> Void
         var onClear: () -> Void
         var onPlayToggled: (Bool) -> Void
-        var onShowAssets: () -> Void
         var dirLightCreate: () -> Void
         var pointLightCreate: () -> Void
         var spotLightCreate: () -> Void
@@ -81,19 +80,6 @@
 
         var rightSection: some View {
             HStack(spacing: 12) {
-                Button(action: onShowAssets) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "shippingbox.fill")
-                        Text("Assets Library")
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
-                    .background(Color.editorSurface)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-
                 Button(action: { showBuildSettings = true }) {
                     HStack(spacing: 6) {
                         Image(systemName: "hammer.fill")

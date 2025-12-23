@@ -56,7 +56,6 @@ struct AssetBrowserView: View {
     @State private var searchQuery: String = ""
     @State private var statusMessage: String?
     @State private var statusIsError = false
-    @State private var compactMode = false
     @State private var targetEntityName: String = "None"
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
@@ -107,6 +106,13 @@ struct AssetBrowserView: View {
                     .buttonStyle(PlainButtonStyle())
                     .disabled(selectedAsset == nil)
 
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                        TextField("Filter assets", text: $searchQuery)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
+                    .frame(maxWidth: 240)
+
                     Spacer()
 
                     // Set Base Path Button
@@ -133,21 +139,19 @@ struct AssetBrowserView: View {
 
                 // MARK: - Path Indicator
 
-                if let resourceDir = editorBaseAssetPath.basePath {
-                    Text("Current Path: \(resourceDir.lastPathComponent)")
-                        .font(.caption)
-                        .foregroundColor(Color.editorAccent)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 5)
-                } else {
-                    Text("No Path Selected")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 5)
-                }
+                HStack(spacing: 12) {
+                    if let resourceDir = editorBaseAssetPath.basePath {
+                        Text("Current Path: \(resourceDir.lastPathComponent)")
+                            .font(.caption)
+                            .foregroundColor(Color.editorAccent)
+                    } else {
+                        Text("No Path Selected")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
 
-                HStack {
+                    Spacer()
+
                     Text("Target Entity:")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -155,25 +159,9 @@ struct AssetBrowserView: View {
                         .font(.caption)
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Spacer()
                 }
                 .padding(.horizontal, 10)
-                .padding(.bottom, 2)
-
-                // MARK: - Search
-
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                    TextField("Filter assets", text: $searchQuery)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                    Spacer()
-                    Toggle("Compact", isOn: $compactMode)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .help("Toggle compact list spacing")
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 4)
+                .padding(.bottom, 5)
 
                 // MARK: - Sidebar and Asset List Layout
 
@@ -181,7 +169,7 @@ struct AssetBrowserView: View {
                     // MARK: - Sidebar
 
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: compactMode ? 4 : 8) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("Categories")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -196,7 +184,7 @@ struct AssetBrowserView: View {
                                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                                         .foregroundColor(selectedCategory == category.rawValue ? .white : .primary)
                                 }
-                                .padding(.vertical, compactMode ? 4 : 6)
+                                .padding(.vertical, 6)
                                 .padding(.horizontal, 8)
                                 .background(selectedCategory == category.rawValue ? Color.editorAccentSoft : Color.clear)
                                 .cornerRadius(6)
@@ -216,14 +204,14 @@ struct AssetBrowserView: View {
                         .padding(8)
                     }
 
-                    .frame(width: compactMode ? 110 : 140)
+                    .frame(width: 140)
                     .background(Color.secondary.opacity(0.05))
                     .cornerRadius(8)
 
                     // MARK: - Asset List
 
                     ScrollView(.vertical, showsIndicators: true) {
-                        VStack(alignment: .leading, spacing: compactMode ? 6 : 10) {
+                        VStack(alignment: .leading, spacing: 10) {
                             if let selectedCategory {
                                 // Scripts: flat, no breadcrumbs or folders
                                 let isScripts = (selectedCategory == AssetCategory.scripts.rawValue)

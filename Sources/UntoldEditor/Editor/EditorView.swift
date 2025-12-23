@@ -11,28 +11,18 @@ public struct Asset: Identifiable {
 }
 
 public struct EditorView: View {
-    enum InspectorTab: String, CaseIterable, Hashable {
-        case inspector = "Inspector"
-        case environment = "Environment"
-        case effects = "Effects"
-    }
-
     @State private var editor_entities: [EntityID] = getAllGameEntities()
     @StateObject private var selectionManager = SelectionManager()
     @StateObject private var sceneGraphModel = SceneGraphModel()
     @State private var assets: [String: [Asset]] = [:]
     @State private var selectedAsset: Asset? = nil
     @State private var isPlaying = false
-    @State private var inspectorTab: InspectorTab = .inspector
     @State private var showSaveNamePrompt = false
     @State private var pendingSceneName: String = "untitled"
     @State private var showOverwriteAlert = false
     @State private var pendingTargetURL: URL?
     @State private var isSaveAs = false
     @State private var showSaveBasePathAlert = false
-    @State private var showAssetLibrary = false
-    @State private var assetWindow: NSWindow?
-    @State private var assetWindowDelegate: AssetWindowDelegate?
 
     var renderer: UntoldRenderer?
 
@@ -63,9 +53,6 @@ public struct EditorView: View {
                 onPlayToggled: { isPlaying in
                     editor_handlePlayToggle(isPlaying)
                 },
-                onShowAssets: {
-                    openAssetWindow()
-                },
                 dirLightCreate: editor_createDirLight,
                 pointLightCreate: editor_createPointLight,
                 spotLightCreate: editor_createSpotLight,
@@ -76,31 +63,6 @@ public struct EditorView: View {
                 onCreateCylinder: editor_createCylinder,
                 onCreateCone: editor_createCone
             )
-            .popover(isPresented: $showAssetLibrary, arrowEdge: .bottom) {
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("Assets Library")
-                            .font(.headline)
-                        Spacer()
-                        Button("Close") { showAssetLibrary = false }
-                            .keyboardShortcut(.cancelAction)
-                    }
-                    .padding()
-                    .background(Color.editorPanelBackground.opacity(0.9))
-
-                    Divider()
-
-                    AssetBrowserView(
-                        assets: $assets,
-                        selectedAsset: $selectedAsset,
-                        selectionManager: selectionManager,
-                        sceneGraphModel: sceneGraphModel,
-                        editor_addEntityWithAsset: editor_addEntityWithAsset
-                    )
-                    .frame(minWidth: 700, minHeight: 500)
-                }
-                .frame(minWidth: 720, minHeight: 540)
-            }
             Divider()
             HStack {
                 VStack {
@@ -125,43 +87,45 @@ public struct EditorView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     TransformManipulationToolbar(controller: editorController!)
                         .frame(height: 40)
-                    LogConsoleView()
-                        .frame(height: 260)
+                    TabView {
+                        AssetBrowserView(
+                            assets: $assets,
+                            selectedAsset: $selectedAsset,
+                            selectionManager: selectionManager,
+                            sceneGraphModel: sceneGraphModel,
+                            editor_addEntityWithAsset: editor_addEntityWithAsset
+                        )
+                        .tabItem { Label("Assets", systemImage: "shippingbox") }
+
+                        LogConsoleView()
+                            .tabItem { Label("Console", systemImage: "terminal") }
+                    }
+                    .frame(height: 200)
+                    .clipped()
                 }
 
-                VStack(spacing: 8) {
-                    Picker("", selection: $inspectorTab) {
-                        ForEach(InspectorTab.allCases, id: \.self) { tab in
-                            Text(tab.rawValue).tag(tab)
+                TabView {
+                    EnvironmentView(selectedAsset: $selectedAsset)
+                        .tabItem {
+                            Label("Environment", systemImage: "sun.max")
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 4)
 
-                    Divider()
-
-                    Group {
-                        switch inspectorTab {
-                        case .inspector:
-                            InspectorView(
-                                selectionManager: selectionManager,
-                                sceneGraphModel: sceneGraphModel,
-                                onAddName_Editor: editor_addName,
-                                selectedAsset: $selectedAsset
-                            )
-                        case .environment:
-                            ScrollView { EnvironmentView(selectedAsset: $selectedAsset) }
-                        case .effects:
-                            ScrollView { PostProcessingEditorView() }
+                    PostProcessingEditorView()
+                        .tabItem {
+                            Label("Effects", systemImage: "cube")
                         }
+
+                    InspectorView(
+                        selectionManager: selectionManager,
+                        sceneGraphModel: sceneGraphModel,
+                        onAddName_Editor: editor_addName,
+                        selectedAsset: $selectedAsset
+                    )
+                    .tabItem {
+                        Label("Inspector", systemImage: "cube")
                     }
                 }
-                .onChange(of: selectionManager.selectedEntity) { _, newValue in
-                    if let entity = newValue, entity != .invalid {
-                        inspectorTab = .inspector
-                    }
-                }
-                .frame(minWidth: 216, maxWidth: 288)
+                .frame(minWidth: 200, maxWidth: 250)
             }
         }
         .background(
@@ -293,47 +257,6 @@ public struct EditorView: View {
         showSaveNamePrompt = false
         showOverwriteAlert = false
         isSaveAs = false
-    }
-
-    // MARK: - Asset Library Window
-
-    private func openAssetWindow() {
-        if let existing = assetWindow {
-            existing.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        let content = AssetBrowserView(
-            assets: $assets,
-            selectedAsset: $selectedAsset,
-            selectionManager: selectionManager,
-            sceneGraphModel: sceneGraphModel,
-            editor_addEntityWithAsset: editor_addEntityWithAsset
-        )
-
-        let hosting = NSHostingController(rootView: content)
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "Assets Library"
-        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-        window.setContentSize(NSSize(width: 760, height: 520))
-        window.minSize = NSSize(width: 620, height: 420)
-        window.level = .floating // keep above editor while arranging assets
-        window.isReleasedWhenClosed = false
-        window.alphaValue = 1.0
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-
-        let delegate = AssetWindowDelegate {
-            // Window is closing — clear our references
-            assetWindow = nil
-            assetWindowDelegate = nil
-        }
-        window.delegate = delegate
-        assetWindowDelegate = delegate
-
-        assetWindow = window
     }
 
     private func editor_handleLoad() {
