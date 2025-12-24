@@ -474,7 +474,7 @@ struct AssetBrowserView: View {
             }
 
             loadAssets()
-            showStatus("Imported \(openPanel.urls.count) item(s)")
+            showStatus("Queued import of \(openPanel.urls.count) item(s) (see Console)")
         }
     }
 
@@ -706,10 +706,10 @@ struct AssetBrowserView: View {
                 selectedAssetName = nil
             }
             loadAssets()
-            showStatus("Deleted \(asset.name)")
+            showStatus("Queued delete: \(asset.name) (see Console)")
         } catch {
             print("❌ Failed to delete asset \(asset.name): \(error)")
-            showStatus("Failed to delete \(asset.name)", isError: true)
+            showStatus("Delete failed for \(asset.name) (see Console)", isError: true)
         }
     }
 
@@ -742,7 +742,7 @@ struct AssetBrowserView: View {
             // Select the newly created entity in the editor
             selectionManager.selectedEntity = entityId
 
-            showStatus("Added model \(uniqueName)")
+            showStatus("Queued model import: \(uniqueName) (see Console)")
         }
         // Handle Gaussian files (ply)
         else if asset.category == AssetCategory.gaussians.rawValue,
@@ -764,7 +764,7 @@ struct AssetBrowserView: View {
             // Select the newly created entity in the editor
             selectionManager.selectedEntity = entityId
 
-            showStatus("Added Gaussian \(uniqueName)")
+            showStatus("Queued Gaussian import: \(uniqueName) (see Console)")
         }
         // Handle Animation files (usdz in Animations category)
         else if asset.category == AssetCategory.animations.rawValue,
@@ -794,7 +794,7 @@ struct AssetBrowserView: View {
 
             // Refresh view
             selectionManager.objectWillChange.send()
-            showStatus("Animation linked to \(targetEntityName)", isError: false)
+            showStatus("Queued animation link to \(targetEntityName) (see Console)")
         }
         // Handle Script files (uscript)
         else if asset.category == AssetCategory.scripts.rawValue,
@@ -838,7 +838,7 @@ struct AssetBrowserView: View {
 
                 // Refresh view
                 selectionManager.objectWillChange.send()
-                showStatus("Script linked to \(targetEntityName)", isError: false)
+                showStatus("Queued script link to \(targetEntityName) (see Console)")
             } catch {
                 print("❌ Failed to load script: \(error.localizedDescription)")
             }
@@ -862,7 +862,7 @@ struct AssetBrowserView: View {
             generateHDR(filename, from: directoryURL)
 
             print("✅ HDR environment loaded: \(filename)")
-            showStatus("HDR loaded: \(filename)")
+            showStatus("Queued HDR load: \(filename) (see Console)")
         }
     }
 
