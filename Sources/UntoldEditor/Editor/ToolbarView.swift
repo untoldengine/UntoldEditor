@@ -17,6 +17,7 @@
         var onSaveAs: () -> Void
         var onClear: () -> Void
         var onPlayToggled: (Bool) -> Void
+        @Binding var useSceneCameraDuringPlay: Bool
         var dirLightCreate: () -> Void
         var pointLightCreate: () -> Void
         var spotLightCreate: () -> Void
@@ -118,6 +119,14 @@
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+
+                Toggle(isOn: $useSceneCameraDuringPlay) {
+                    Text("Scene Cam")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .toggleStyle(.switch)
+                .scaleEffect(0.85)
+                .frame(height: 20)
 
                 Menu {
                     Button("Save", systemImage: "square.and.arrow.down.on.square", action: onSave)

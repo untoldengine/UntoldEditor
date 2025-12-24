@@ -23,6 +23,7 @@ public struct EditorView: View {
     @State private var pendingTargetURL: URL?
     @State private var isSaveAs = false
     @State private var showSaveBasePathAlert = false
+    @State private var useSceneCameraDuringPlay = false
 
     var renderer: UntoldRenderer?
 
@@ -53,6 +54,7 @@ public struct EditorView: View {
                 onPlayToggled: { isPlaying in
                     editor_handlePlayToggle(isPlaying)
                 },
+                useSceneCameraDuringPlay: $useSceneCameraDuringPlay,
                 dirLightCreate: editor_createDirLight,
                 pointLightCreate: editor_createPointLight,
                 spotLightCreate: editor_createSpotLight,
@@ -137,6 +139,9 @@ public struct EditorView: View {
             .ignoresSafeArea())
         .onAppear {
             sceneGraphModel.refreshHierarchy()
+        }
+        .onChange(of: useSceneCameraDuringPlay) { _, _ in
+            updateActiveCameraForPlayMode()
         }
         .sheet(isPresented: $showSaveNamePrompt) {
             VStack(spacing: 12) {
@@ -395,8 +400,7 @@ public struct EditorView: View {
     private func editor_handlePlayToggle(_ isPlaying: Bool) {
         self.isPlaying = isPlaying
         gameMode = !gameMode
-        // For now, during "play" mode, the camera will keep being the scene camera
-        CameraSystem.shared.activeCamera = gameMode ? findGameCamera() : findSceneCamera()
+        updateActiveCameraForPlayMode()
         AnimationSystem.shared.isEnabled = isPlaying
 
         // Start/stop USC System
@@ -404,6 +408,14 @@ public struct EditorView: View {
             USCSystem.shared.startPlayMode()
         } else {
             USCSystem.shared.stopPlayMode()
+        }
+    }
+
+    private func updateActiveCameraForPlayMode() {
+        if gameMode {
+            CameraSystem.shared.activeCamera = useSceneCameraDuringPlay ? findSceneCamera() : findGameCamera()
+        } else {
+            CameraSystem.shared.activeCamera = findSceneCamera()
         }
     }
 

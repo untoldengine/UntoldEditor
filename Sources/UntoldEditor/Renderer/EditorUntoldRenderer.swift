@@ -12,8 +12,8 @@ import UntoldEngine
 
 extension UntoldRenderer {
     func handleSceneInput() {
-        // Game mode blocks editor + camera input entirely
-        if gameMode { return }
+        // Block editor + camera input during play unless the scene camera is active
+        if gameMode, CameraSystem.shared.activeCamera != findSceneCamera() { return }
 
         // Always allow camera WASDQE input, regardless of editor state
         let input = (
