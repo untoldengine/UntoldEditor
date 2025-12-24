@@ -45,98 +45,104 @@ public struct EditorView: View {
     }
 
     public var body: some View {
-        VStack {
-            ToolbarView(
-                selectionManager: selectionManager,
-                onSave: editor_handleSave,
-                onSaveAs: editor_handleSaveAs,
-                onClear: editor_clearScene,
-                onPlayToggled: { isPlaying in
-                    editor_handlePlayToggle(isPlaying)
-                },
-                useSceneCameraDuringPlay: $useSceneCameraDuringPlay,
-                dirLightCreate: editor_createDirLight,
-                pointLightCreate: editor_createPointLight,
-                spotLightCreate: editor_createSpotLight,
-                areaLightCreate: editor_createAreaLight,
-                onCreateCube: editor_createCube,
-                onCreateSphere: editor_createSphere,
-                onCreatePlane: editor_createPlane,
-                onCreateCylinder: editor_createCylinder,
-                onCreateCone: editor_createCone
-            )
-            Divider()
-            HStack {
-                VStack {
-                    SceneHierarchyView(
-                        selectionManager: selectionManager,
-                        sceneGraphModel: sceneGraphModel,
-                        entityList: editor_entities,
-                        onAddEntity_Editor: editor_addNewEntity,
-                        onRemoveEntity_Editor: editor_removeEntity,
-                        onAddCube: editor_createCube,
-                        onAddSphere: editor_createSphere,
-                        onAddPlane: editor_createPlane,
-                        onAddDirLight: editor_createDirLight,
-                        onAddPointLight: editor_createPointLight,
-                        onAddSpotLight: editor_createSpotLight,
-                        onAddAreaLight: editor_createAreaLight
-                    )
-                }
-
-                VStack(spacing: 0) {
-                    EditorSceneView(renderer: renderer!)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    TransformManipulationToolbar(controller: editorController!)
-                        .frame(height: 40)
-                    TabView {
-                        AssetBrowserView(
-                            assets: $assets,
-                            selectedAsset: $selectedAsset,
+        ZStack {
+            VStack {
+                ToolbarView(
+                    selectionManager: selectionManager,
+                    onSave: editor_handleSave,
+                    onSaveAs: editor_handleSaveAs,
+                    onClear: editor_clearScene,
+                    onPlayToggled: { isPlaying in
+                        editor_handlePlayToggle(isPlaying)
+                    },
+                    useSceneCameraDuringPlay: $useSceneCameraDuringPlay,
+                    dirLightCreate: editor_createDirLight,
+                    pointLightCreate: editor_createPointLight,
+                    spotLightCreate: editor_createSpotLight,
+                    areaLightCreate: editor_createAreaLight,
+                    onCreateCube: editor_createCube,
+                    onCreateSphere: editor_createSphere,
+                    onCreatePlane: editor_createPlane,
+                    onCreateCylinder: editor_createCylinder,
+                    onCreateCone: editor_createCone
+                )
+                Divider()
+                HStack {
+                    VStack {
+                        SceneHierarchyView(
                             selectionManager: selectionManager,
                             sceneGraphModel: sceneGraphModel,
-                            editor_addEntityWithAsset: editor_addEntityWithAsset
+                            entityList: editor_entities,
+                            onAddEntity_Editor: editor_addNewEntity,
+                            onRemoveEntity_Editor: editor_removeEntity,
+                            onAddCube: editor_createCube,
+                            onAddSphere: editor_createSphere,
+                            onAddPlane: editor_createPlane,
+                            onAddDirLight: editor_createDirLight,
+                            onAddPointLight: editor_createPointLight,
+                            onAddSpotLight: editor_createSpotLight,
+                            onAddAreaLight: editor_createAreaLight
                         )
-                        .tabItem { Label("Assets", systemImage: "shippingbox") }
-
-                        LogConsoleView()
-                            .tabItem { Label("Console", systemImage: "terminal") }
                     }
-                    .frame(height: 200)
-                    .clipped()
-                }
 
-                TabView {
-                    EnvironmentView(selectedAsset: $selectedAsset)
-                        .tabItem {
-                            Label("Environment", systemImage: "sun.max")
+                    VStack(spacing: 0) {
+                        EditorSceneView(renderer: renderer!)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        TransformManipulationToolbar(controller: editorController!)
+                            .frame(height: 40)
+                        TabView {
+                            AssetBrowserView(
+                                assets: $assets,
+                                selectedAsset: $selectedAsset,
+                                selectionManager: selectionManager,
+                                sceneGraphModel: sceneGraphModel,
+                                editor_addEntityWithAsset: editor_addEntityWithAsset
+                            )
+                            .tabItem { Label("Assets", systemImage: "shippingbox") }
+
+                            LogConsoleView()
+                                .tabItem { Label("Console", systemImage: "terminal") }
                         }
-
-                    PostProcessingEditorView()
-                        .tabItem {
-                            Label("Effects", systemImage: "cube")
-                        }
-
-                    InspectorView(
-                        selectionManager: selectionManager,
-                        sceneGraphModel: sceneGraphModel,
-                        onAddName_Editor: editor_addName,
-                        selectedAsset: $selectedAsset
-                    )
-                    .tabItem {
-                        Label("Inspector", systemImage: "cube")
+                        .frame(height: 200)
+                        .clipped()
                     }
+
+                    TabView {
+                        EnvironmentView(selectedAsset: $selectedAsset)
+                            .tabItem {
+                                Label("Environment", systemImage: "sun.max")
+                            }
+
+                        PostProcessingEditorView()
+                            .tabItem {
+                                Label("Effects", systemImage: "cube")
+                            }
+
+                        InspectorView(
+                            selectionManager: selectionManager,
+                            sceneGraphModel: sceneGraphModel,
+                            onAddName_Editor: editor_addName,
+                            selectedAsset: $selectedAsset
+                        )
+                        .tabItem {
+                            Label("Inspector", systemImage: "cube")
+                        }
+                    }
+                    .frame(minWidth: 200, maxWidth: 250)
                 }
-                .frame(minWidth: 200, maxWidth: 250)
             }
+            .background(
+                LinearGradient(
+                    colors: [Color.editorBackground, Color.editorPanelBackground.opacity(0.95)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea())
+
+            // Loading indicator overlay
+            LoadingIndicatorView()
+                .allowsHitTesting(false)
         }
-        .background(
-            LinearGradient(
-                colors: [Color.editorBackground, Color.editorPanelBackground.opacity(0.95)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea())
         .onAppear {
             sceneGraphModel.refreshHierarchy()
         }
@@ -476,7 +482,18 @@ public struct EditorView: View {
 
         let filename = selectedAsset?.path.deletingPathExtension().lastPathComponent
         let withExtension = selectedAsset?.path.pathExtension
-        setEntityMesh(entityId: selectionManager.selectedEntity!, filename: filename!, withExtension: withExtension!)
+
+        guard let entityId = selectionManager.selectedEntity,
+              let fname = filename,
+              let ext = withExtension else { return }
+
+        setEntityMeshAsync(entityId: entityId, filename: fname, withExtension: ext) { success in
+            if success {
+                print("✅ Asset loaded: \(fname).\(ext)")
+            } else {
+                print("⚠️ Failed to load asset, using fallback: \(fname).\(ext)")
+            }
+        }
 
         guard let camera = CameraSystem.shared.activeCamera, let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
             handleError(.noActiveCamera)

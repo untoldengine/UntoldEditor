@@ -733,16 +733,21 @@ struct AssetBrowserView: View {
             let uniqueName = generateEntityName()
             setEntityName(entityId: entityId, name: uniqueName)
 
-            // Add mesh to entity
-            setEntityMesh(entityId: entityId, filename: filename, withExtension: withExtension)
-
-            // Refresh the scene hierarchy to show the new entity
-            sceneGraphModel.refreshHierarchy()
+            // Add mesh to entity asynchronously
+            setEntityMeshAsync(entityId: entityId, filename: filename, withExtension: withExtension) { success in
+                if success {
+                    print("✅ Model imported: \(uniqueName)")
+                } else {
+                    print("⚠️ Failed to load model, using fallback: \(uniqueName)")
+                }
+                // Refresh scene hierarchy after loading completes
+                sceneGraphModel.refreshHierarchy()
+            }
 
             // Select the newly created entity in the editor
             selectionManager.selectedEntity = entityId
 
-            showStatus("Queued model import: \(uniqueName) (see Console)")
+            showStatus("Importing model: \(uniqueName)...")
         }
         // Handle Gaussian files (ply)
         else if asset.category == AssetCategory.gaussians.rawValue,

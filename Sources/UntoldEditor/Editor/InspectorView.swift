@@ -39,7 +39,13 @@ private func onAddMesh_Editor(entityId: EntityID, url: URL) {
     let filename = url.deletingPathExtension().lastPathComponent
     let withExtension = url.pathExtension
 
-    setEntityMesh(entityId: entityId, filename: filename, withExtension: withExtension)
+    setEntityMeshAsync(entityId: entityId, filename: filename, withExtension: withExtension) { success in
+        if success {
+            print("✅ Mesh loaded: \(filename).\(withExtension)")
+        } else {
+            print("⚠️ Failed to load mesh, using fallback: \(filename).\(withExtension)")
+        }
+    }
 }
 
 private func onAddAnimation_Editor(entityId: EntityID, url: URL) {
