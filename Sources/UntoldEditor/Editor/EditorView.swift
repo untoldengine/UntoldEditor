@@ -145,6 +145,16 @@ public struct EditorView: View {
         }
         .onAppear {
             sceneGraphModel.refreshHierarchy()
+
+            // Listen for asset instance loading completion
+            NotificationCenter.default.addObserver(
+                forName: .assetInstanceDidLoad,
+                object: nil,
+                queue: .main
+            ) { _ in
+                // Refresh hierarchy when async asset instances finish loading
+                sceneGraphModel.refreshHierarchy()
+            }
         }
         .onChange(of: useSceneCameraDuringPlay) { _, _ in
             updateActiveCameraForPlayMode()
