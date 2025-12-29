@@ -861,13 +861,27 @@ struct AssetBrowserView: View {
         else if asset.category == AssetCategory.hdr.rawValue,
                 withExtension.lowercased() == "hdr"
         {
+            // Verify HDR file exists before attempting to load
+            guard FileManager.default.fileExists(atPath: asset.path.path) else {
+                Logger.log(message: "⚠️ HDR file not found: \(asset.path.path)")
+                showStatus("HDR file not found", isError: true)
+                return
+            }
+
             // Load HDR as environment IBL
             let filename = asset.path.lastPathComponent
             let directoryURL = asset.path.deletingLastPathComponent()
             generateHDR(filename, from: directoryURL)
 
-            print("✅ HDR environment loaded: \(filename)")
-            showStatus("Queued HDR load: \(filename) (see Console)")
+            // Only enable IBL if HDR was successfully loaded
+            if iblSuccessful {
+                applyIBL = true
+                print("✅ HDR environment loaded and IBL enabled: \(filename)")
+                showStatus("HDR loaded and IBL enabled: \(filename)")
+            } else {
+                print("⚠️ Failed to load HDR: \(filename)")
+                showStatus("Failed to load HDR: \(filename)", isError: true)
+            }
         }
     }
 

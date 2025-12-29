@@ -17,7 +17,23 @@ func addIBL(asset: Asset?) {
     if let asset, selectedCategory.rawValue == asset.category {
         let filename = asset.path.lastPathComponent
         let directoryURL = asset.path.deletingLastPathComponent()
+
+        // Verify HDR file exists before attempting to load
+        let hdrPath = directoryURL.appendingPathComponent(filename)
+        guard FileManager.default.fileExists(atPath: hdrPath.path) else {
+            Logger.log(message: "⚠️ HDR file not found: \(hdrPath.path)")
+            return
+        }
+
         generateHDR(filename, from: directoryURL)
+
+        // Only enable IBL if HDR was successfully loaded
+        if iblSuccessful {
+            applyIBL = true
+            Logger.log(message: "✅ IBL enabled with HDR: \(filename)")
+        } else {
+            Logger.log(message: "⚠️ Failed to enable IBL - HDR loading failed")
+        }
     }
 }
 
