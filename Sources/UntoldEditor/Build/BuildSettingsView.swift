@@ -32,7 +32,7 @@ struct BuildSettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private let targets = ["macOS", "iOS", "visionOS"]
+    private let targets = ["macOS", "iOS", "iOS AR", "visionOS"]
     private let macOSVersions = ["13.0", "14.0", "15.0"]
     private let optimizationLevels = ["None", "Speed", "Size"]
 
@@ -287,6 +287,8 @@ struct BuildSettingsView: View {
 
     private func createBuildSettings() -> BuildSettings {
         let target: BuildTarget
+        let isIOSAR = (selectedTarget == 2) // iOS AR
+        
         switch selectedTarget {
         case 0: // macOS
             let version: MacOSVersion
@@ -299,8 +301,10 @@ struct BuildSettingsView: View {
             target = .macOS(deployment: version)
         case 1: // iOS
             target = .iOS(deployment: .v17)
-        case 2: // visionOS
-            target = .visionOS(deployment: .v1)
+        case 2: // iOS AR
+            target = .iOS(deployment: .v17)
+        case 3: // visionOS
+            target = .visionOS(deployment: .v26)
         default:
             target = .macOS(deployment: .v15)
         }
@@ -321,7 +325,8 @@ struct BuildSettingsView: View {
             scenes: [], // Will be populated by BuildSystem
             includeDebugInfo: includeDebugInfo,
             optimizationLevel: optimization,
-            teamID: teamID.isEmpty ? nil : teamID
+            teamID: teamID.isEmpty ? nil : teamID,
+            isIOSAR: isIOSAR
         )
     }
 
