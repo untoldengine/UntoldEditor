@@ -36,15 +36,18 @@
 
         var body: some View {
             HStack {
-                leftSection
-
+                if EditorFeatureFlags.enableScriptButtons {
+                    leftSection
+                }
+                
                 Spacer()
-
-                rightSection
-            }
-            .overlay(
                 centeredButtons
-            )
+                Spacer()
+                
+                if EditorFeatureFlags.enableBuildButton {
+                    rightSection
+                }
+            }
             .padding(.horizontal, 20)
             .padding(.vertical, 6)
             .background(
@@ -98,7 +101,7 @@
                 Divider().frame(height: 24)
             }
         }
-
+        
         var centeredButtons: some View {
             HStack(spacing: 12) {
                 ToolbarButton(iconName: "gobackward", action: onClear, tooltip: "Clear Scene")
@@ -146,31 +149,9 @@
                 .focusable(false)
             }
         }
-
+        
         var leftSection: some View {
             HStack(spacing: 8) {
-//                Button(action: onCreateCylinder) {
-//                    Image(systemName: "cylinder.fill")
-//                        .font(.system(size: 14))
-//                        .foregroundColor(.white)
-//                }
-//                .padding(6)
-//                .background(Color.blue.opacity(0.8))
-//                .cornerRadius(6)
-//                .buttonStyle(.plain)
-//                .help("Add Cylinder")
-//
-//                Button(action: onCreateCone) {
-//                    Image(systemName: "cone.fill")
-//                        .font(.system(size: 14))
-//                        .foregroundColor(.white)
-//                }
-//                .padding(6)
-//                .background(Color.blue.opacity(0.8))
-//                .cornerRadius(6)
-//                .buttonStyle(.plain)
-//                .help("Add Cone")
-
                 Divider().frame(height: 24)
 
                 Button(action: {
@@ -209,7 +190,7 @@
                 .help("Open Scripts project in Xcode")
             }
         }
-
+        
         // MARK: - Script Management Functions
 
         private func createNewScript() {
@@ -277,29 +258,7 @@
             }
             return true
         }
-    }
 
-    // MARK: - Toolbar Button Component
-
-    struct ToolbarButton: View {
-        let iconName: String
-        let action: () -> Void
-        let tooltip: String
-
-        var body: some View {
-            Button(action: action) {
-                Image(systemName: iconName)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(6)
-                    .background(Color.editorSurface)
-                    .cornerRadius(6)
-                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .focusable(false)
-            .help(tooltip)
-        }
     }
 
     // MARK: - New Script Dialog
@@ -339,5 +298,29 @@
             .frame(width: 400)
         }
     }
+    
+    // MARK: - Toolbar Button Component
+
+    struct ToolbarButton: View {
+        let iconName: String
+        let action: () -> Void
+        let tooltip: String
+
+        var body: some View {
+            Button(action: action) {
+                Image(systemName: iconName)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(6)
+                    .background(Color.editorSurface)
+                    .cornerRadius(6)
+                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .focusable(false)
+            .help(tooltip)
+        }
+    }
+
 
 #endif

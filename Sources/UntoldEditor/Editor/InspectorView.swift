@@ -159,16 +159,18 @@ var availableComponents_Editor: [ComponentOption_Editor] = [
             }
         )
     }),
-    ComponentOption_Editor(id: getComponentId(for: ScriptComponent.self), name: "Script Component", type: ScriptComponent.self, view: { selectedId, asset, refreshView in
-        AnyView(
-            Group {
-                if let entityId = selectedId {
-                    ScriptComponentInspector(entityId: entityId, asset: asset, refreshView: refreshView)
-                }
-            }
-        )
-    }),
 ]
+
+// Script Component - controlled by feature flag
+var scriptComponent_Editor: ComponentOption_Editor = ComponentOption_Editor(id: getComponentId(for: ScriptComponent.self), name: "Script Component", type: ScriptComponent.self, view: { selectedId, asset, refreshView in
+    AnyView(
+        Group {
+            if let entityId = selectedId {
+                ScriptComponentInspector(entityId: entityId, asset: asset, refreshView: refreshView)
+            }
+        }
+    )
+})
 
 func mergeEntityComponents(
     selectedEntity: EntityID?,
@@ -179,8 +181,14 @@ func mergeEntityComponents(
     var mergedComponents = EditorComponentsState.shared.components[entityId] ?? [:]
 
     let existingComponentIDs: [Int] = getAllEntityComponentsIds(entityId: entityId)
+    
+    // Include script component if feature flag is enabled
+    var allComponents = editor_availableComponents
+    if EditorFeatureFlags.enableScriptComponent {
+        allComponents.append(scriptComponent_Editor)
+    }
 
-    let matchingComponents = editor_availableComponents.filter { existingComponentIDs.contains($0.id) }
+    let matchingComponents = allComponents.filter { existingComponentIDs.contains($0.id) }
 
     for match in matchingComponents {
         let key = ObjectIdentifier(match.type)
@@ -310,7 +318,7 @@ struct InspectorView: View {
                     .font(.headline)
                     .padding()
 
-                List(availableComponents_Editor, id: \.id) { component in
+                List(availableComponentsWithFlags(), id: \.id) { component in
                     Button(action: {
                         addComponentToEntity_Editor(componentType: component.type)
                         showComponentSelection = false
@@ -407,6 +415,14 @@ struct InspectorView: View {
     private func refreshView() {
         selectionManager.objectWillChange.send()
         sceneGraphModel.refreshHierarchy()
+    }
+    
+    private func availableComponentsWithFlags() -> [ComponentOption_Editor] {
+        var components = availableComponents_Editor
+        if EditorFeatureFlags.enableScriptComponent {
+            components.append(scriptComponent_Editor)
+        }
+        return components
     }
 }
 
