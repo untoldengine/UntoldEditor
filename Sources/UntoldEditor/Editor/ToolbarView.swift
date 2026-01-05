@@ -52,17 +52,6 @@
                 if EditorFeatureFlags.enableScriptButtons {
                     rightSection
                 }
-                
-                // Show project name on far right if a project is loaded
-                if let projectName = editorBasePath.projectName {
-                    Text(projectName)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.editorAccent.opacity(0.3))
-                        .cornerRadius(6)
-                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 6)
@@ -91,10 +80,10 @@
                     }
                 )
             }
-            .alert("Set Asset Folder First", isPresented: $showBasePathAlert) {
+            .alert("No Project Loaded", isPresented: $showBasePathAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Please set the Asset Folder in the Asset Browser before creating or editing scripts.")
+                Text("Please create a new project or open an existing project before working with scripts.")
             }
             .alert("Invalid Project", isPresented: $showInvalidProjectAlert) {
                 Button("OK", role: .cancel) {}
@@ -167,12 +156,12 @@
                 .frame(height: 20)
 
                 Menu {
-                    Button("Save", systemImage: "square.and.arrow.down.on.square", action: onSave)
-                    Button("Save As…", systemImage: "square.and.arrow.down", action: onSaveAs)
+                    Button("Save Scene", systemImage: "square.and.arrow.down.on.square", action: onSave)
+                    Button("Save Scene As…", systemImage: "square.and.arrow.down", action: onSaveAs)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "square.and.arrow.down.on.square")
-                        Text("Save")
+                        Text("Save Scene")
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
@@ -189,40 +178,42 @@
             HStack(spacing: 8) {
                 Divider().frame(height: 24)
 
-                Button(action: {
-                    guard ensureAssetBasePath() else { return }
-                    showingNewScriptDialog = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                        Text("New Script")
+                // Consolidated Script menu (matches Save menu pattern)
+                Menu {
+                    Button("New Script", systemImage: "plus.circle.fill") {
+                        guard ensureAssetBasePath() else { return }
+                        showingNewScriptDialog = true
                     }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
+                    Button("Script in Xcode", systemImage: "hammer.fill", action: openInXcode)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "doc.text.fill")
+                        Text("Script")
+                        // Experimental indicator
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.orange)
+                    }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 10)
-                    .background(Color.editorSurface)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help("Create a new script in the Scripts project")
-
-                Button(action: openInXcode) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "hammer.fill")
-                        Text("Open in Xcode")
-                    }
-                    .font(.system(size: 12, weight: .semibold))
+                    .background(Color.editorAccent)
                     .foregroundColor(.white)
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
-                    .background(Color.editorSurface)
                     .cornerRadius(8)
                 }
-                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton)
                 .focusable(false)
-                .help("Open Scripts project in Xcode")
+                .help("USC Scripts (Experimental) - API subject to change")
+                
+                // Show project name if loaded
+                if let projectName = editorBasePath.projectName {
+                    Text(projectName)
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.editorAccent.opacity(0.3))
+                        .cornerRadius(6)
+                }
             }
         }
         

@@ -114,23 +114,6 @@ struct AssetBrowserView: View {
                     .frame(maxWidth: 240)
 
                     Spacer()
-
-                    // Set Base Path Button
-                    Button(action: selectResourceDirectory) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "externaldrive.fill.badge.plus")
-                                .foregroundColor(.white)
-                            Text("Asset Folder")
-                                .fontWeight(.semibold)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(Color.editorSurface)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                    }
-                    .buttonStyle(PlainButtonStyle())
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -302,10 +285,10 @@ struct AssetBrowserView: View {
         } message: {
             Text("Loading a new scene will replace the current scene. Any unsaved changes will be lost.")
         }
-        .alert("Set Asset Folder First", isPresented: $showBasePathAlert) {
+        .alert("No Project Loaded", isPresented: $showBasePathAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Please set the Asset Folder in the Asset Browser before importing assets.")
+            Text("Please create a new project or open an existing project before importing assets.")
         }
         .alert("Delete Asset?", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {
@@ -334,32 +317,6 @@ struct AssetBrowserView: View {
                     .padding(.bottom, 8)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-        }
-    }
-
-    // MARK: - Select Resource Directory
-
-    private func selectResourceDirectory() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
-
-        if panel.runModal() == .OK, let selectedURL = panel.urls.first {
-            // Create the required folder structure if it doesn't exist
-            let fm = FileManager.default
-            let requiredFolders = ["Models", "Animations", "HDR", "Gaussians", "Materials", "Scenes", "Scripts"]
-
-            for folder in requiredFolders {
-                let folderURL = selectedURL.appendingPathComponent(folder, isDirectory: true)
-                if !fm.fileExists(atPath: folderURL.path) {
-                    try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true, attributes: nil)
-                }
-            }
-
-            assetBasePath = selectedURL
-            EditorAssetBasePath.shared.basePath = assetBasePath
         }
     }
 

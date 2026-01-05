@@ -22,11 +22,11 @@ struct EditorFeatureFlags {
     
     /// Enable script creation and management buttons in the toolbar
     /// When disabled, users manage Swift code directly in their game project
-    static let enableScriptButtons: Bool = false
+    static let enableScriptButtons: Bool = true
     
     /// Enable the Script Component in the Inspector
     /// When disabled, users write game logic in Swift within their game project
-    static let enableScriptComponent: Bool = false
+    static let enableScriptComponent: Bool = true
     
     // MARK: - Future Use Cases
     

@@ -192,10 +192,10 @@ public struct EditorView: View {
         } message: {
             Text("A scene with that name already exists. Overwrite it?")
         }
-        .alert("Set Asset Folder First", isPresented: $showSaveBasePathAlert) {
+        .alert("No Project Loaded", isPresented: $showSaveBasePathAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Please set the Asset Folder in the Asset Browser before saving scenes.")
+            Text("Please create a new project or open an existing project before saving scenes.")
         }
     }
 
