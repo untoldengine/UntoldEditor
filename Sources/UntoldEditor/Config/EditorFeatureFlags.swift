@@ -16,7 +16,7 @@ struct EditorFeatureFlags {
     
     /// Enable the Build button in the toolbar
     /// When disabled, users should use the `untoldengine-create` CLI tool instead
-    static let enableBuildButton: Bool = false
+    static let enableBuildButton: Bool = true
     
     // MARK: - Script Management Features
     

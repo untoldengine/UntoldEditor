@@ -1,5 +1,5 @@
 //
-//  BuildSettingsView.swift
+//  CreateProjectView.swift
 //  UntoldEditor
 //
 //  Copyright (C) Untold Engine Studios
@@ -10,7 +10,7 @@
 import SwiftUI
 import UntoldEngine
 
-struct BuildSettingsView: View {
+struct CreateProjectView: View {
     @State private var projectName: String = "MyGame"
     @State private var bundleIdentifier: String = "com.yourcompany.mygame"
     @State private var selectedTarget: Int = 0
@@ -25,9 +25,6 @@ struct BuildSettingsView: View {
     @State private var showBuildResult: Bool = false
     @State private var buildResultMessage: String = ""
     @State private var buildSucceeded: Bool = false
-    @State private var showBasePathAlert: Bool = false
-    @State private var projectExists: Bool = false
-    @State private var showProjectExistsChoice: Bool = false
     @State private var resultProjectPath: URL?
 
     @Environment(\.dismiss) private var dismiss
@@ -40,7 +37,7 @@ struct BuildSettingsView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("Build Settings")
+                Text("Create New Project")
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
@@ -122,16 +119,11 @@ struct BuildSettingsView: View {
                 .background(Color(NSColor.controlBackgroundColor))
             }
 
-            // Build Button
+            // Create Button
             HStack {
                 Spacer()
-                Button(projectExists ? "Continue" : "Build") {
-                    guard ensureAssetBasePath() else { return }
-                    if projectExists {
-                        showProjectExistsChoice = true
-                    } else {
-                        startBuild()
-                    }
+                Button("Create") {
+                    startBuild()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isBuilding || projectName.isEmpty || bundleIdentifier.isEmpty || outputPath.isEmpty)
@@ -140,45 +132,29 @@ struct BuildSettingsView: View {
             .background(Color(NSColor.controlBackgroundColor))
         }
         .frame(width: 600, height: 550)
-        .alert("Build Complete", isPresented: $showBuildResult) {
+        .alert("Project Created", isPresented: $showBuildResult) {
             if buildSucceeded {
                 Button("Open in Finder") {
                     openBuildOutput()
+                    dismiss()
                 }
                 Button("Open in Xcode") {
                     openInXcode()
+                    dismiss()
                 }
-                Button("OK", role: .cancel) {}
+                Button("OK", role: .cancel) {
+                    dismiss()
+                }
             } else {
-                Button("OK", role: .cancel) {}
+                Button("OK", role: .cancel) {
+                    dismiss()
+                }
             }
         } message: {
             Text(buildResultMessage)
         }
-        .alert("Set Asset Folder First", isPresented: $showBasePathAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Please set the Asset Folder in the Asset Browser before building.")
-        }
-        .alert("Project Already Exists", isPresented: $showProjectExistsChoice) {
-            Button("Cancel", role: .cancel) {}
-            Button("Update Game Data") {
-                startUpdateGameData()
-            }
-            Button("Rebuild Project", role: .destructive) {
-                startBuild()
-            }
-        } message: {
-            Text("A project named '\(projectName)' already exists at this location.\n\nUpdate Game Data: Updates only scenes, scripts, and assets (preserves your code)\n\nRebuild Project: Regenerates the entire project (WARNING: deletes all custom code)")
-        }
         .onAppear {
             loadDefaultSettings()
-        }
-        .onChange(of: projectName) {
-            checkProjectExists()
-        }
-        .onChange(of: outputPath) {
-            checkProjectExists()
         }
     }
 
@@ -187,12 +163,6 @@ struct BuildSettingsView: View {
         if let homeDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             outputPath = homeDir.appendingPathComponent("UntoldEngineBuilds").path
         }
-        checkProjectExists()
-    }
-
-    private func checkProjectExists() {
-        let settings = createBuildSettings()
-        projectExists = BuildSystem.shared.projectExists(settings: settings)
     }
 
     private func chooseOutputPath() {
@@ -201,7 +171,7 @@ struct BuildSettingsView: View {
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
-        panel.message = "Choose build output directory"
+        panel.message = "Choose project output directory"
 
         if panel.runModal() == .OK {
             outputPath = panel.url?.path ?? outputPath
@@ -210,7 +180,7 @@ struct BuildSettingsView: View {
 
     private func startBuild() {
         isBuilding = true
-        buildProgress = "Preparing build..."
+        buildProgress = "Creating project..."
 
         Task {
             do {
@@ -227,58 +197,31 @@ struct BuildSettingsView: View {
                     buildSucceeded = true
                     resultProjectPath = result.xcodeProjectPath.deletingLastPathComponent()
                     buildResultMessage = """
-                    Build completed successfully in \(String(format: "%.2f", result.buildTime))s
+                    Project created successfully in \(String(format: "%.2f", result.buildTime))s
 
-                    Project: \(result.xcodeProjectPath.path)
+                    Location: \(result.xcodeProjectPath.path)
                     Assets: \(result.bundledAssets.count) files
                     """
                     showBuildResult = true
-                    checkProjectExists() // Update project existence state
+                    
+                    // Set assetBasePath to the newly created GameData folder
+                    // This allows the editor to immediately save scenes to the correct location
+                    let projectDir = result.xcodeProjectPath.deletingLastPathComponent()
+                    let gameDataPath = projectDir
+                        .appendingPathComponent("Sources")
+                        .appendingPathComponent(settings.projectName)
+                        .appendingPathComponent("GameData")
+                    
+                    assetBasePath = gameDataPath
+                    EditorAssetBasePath.shared.basePath = gameDataPath
+                    Logger.log(message: "📁 Asset base path set to: \(gameDataPath.path)")
                 }
 
             } catch {
                 await MainActor.run {
                     isBuilding = false
                     buildSucceeded = false
-                    buildResultMessage = "Build failed: \(error.localizedDescription)"
-                    showBuildResult = true
-                }
-            }
-        }
-    }
-
-    private func startUpdateGameData() {
-        isBuilding = true
-        buildProgress = "Updating game data..."
-
-        Task {
-            do {
-                let settings = createBuildSettings()
-
-                let result = try await BuildSystem.shared.updateGameData(settings: settings) { progress in
-                    Task { @MainActor in
-                        buildProgress = progress
-                    }
-                }
-
-                await MainActor.run {
-                    isBuilding = false
-                    buildSucceeded = true
-                    resultProjectPath = result.projectPath
-                    buildResultMessage = """
-                    Game data updated successfully in \(String(format: "%.2f", result.updateTime))s
-
-                    Project: \(result.projectPath.path)
-                    Updated Assets: \(result.updatedAssets.count) files
-                    """
-                    showBuildResult = true
-                }
-
-            } catch {
-                await MainActor.run {
-                    isBuilding = false
-                    buildSucceeded = false
-                    buildResultMessage = "Update failed: \(error.localizedDescription)"
+                    buildResultMessage = "Project creation failed: \(error.localizedDescription)"
                     showBuildResult = true
                 }
             }
@@ -346,16 +289,8 @@ struct BuildSettingsView: View {
 
         NSWorkspace.shared.open(xcodeProjectPath)
     }
-
-    private func ensureAssetBasePath() -> Bool {
-        guard EditorAssetBasePath.shared.basePath != nil else {
-            showBasePathAlert = true
-            return false
-        }
-        return true
-    }
 }
 
 #Preview {
-    BuildSettingsView()
+    CreateProjectView()
 }

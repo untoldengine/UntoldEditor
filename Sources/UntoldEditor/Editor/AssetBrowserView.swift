@@ -137,21 +137,9 @@ struct AssetBrowserView: View {
                 .background(Color.editorPanelBackground.opacity(0.9))
                 .cornerRadius(8)
 
-                // MARK: - Path Indicator
+                // MARK: - Target Entity Indicator
 
                 HStack(spacing: 12) {
-                    if let resourceDir = editorBaseAssetPath.basePath {
-                        Text("Current Path: \(resourceDir.lastPathComponent)")
-                            .font(.caption)
-                            .foregroundColor(Color.editorAccent)
-                    } else {
-                        Text("No Path Selected")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-
-                    Spacer()
-
                     Text("Target Entity:")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -159,6 +147,8 @@ struct AssetBrowserView: View {
                         .font(.caption)
                         .foregroundColor(.white)
                         .lineLimit(1)
+                    
+                    Spacer()
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 5)

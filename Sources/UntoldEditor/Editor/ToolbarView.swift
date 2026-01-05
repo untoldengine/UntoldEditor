@@ -9,9 +9,11 @@
 #if canImport(AppKit)
     import AppKit
     import SwiftUI
+    import UntoldEngine
 
     struct ToolbarView: View {
         @ObservedObject var selectionManager: SelectionManager
+        @ObservedObject var editorBasePath = EditorAssetBasePath.shared
 
         var onSave: () -> Void
         var onSaveAs: () -> Void
@@ -29,23 +31,37 @@
         var onCreateCone: () -> Void
 
         @State private var isPlaying = false
-        @State private var showBuildSettings = false
+        @State private var showCreateProject = false
         @State private var showingNewScriptDialog = false
         @State private var newScriptName = ""
         @State private var showBasePathAlert = false
+        @State private var showInvalidProjectAlert = false
+        @State private var invalidProjectMessage = ""
 
         var body: some View {
             HStack {
-                if EditorFeatureFlags.enableScriptButtons {
+                
+                if EditorFeatureFlags.enableBuildButton {
                     leftSection
                 }
-                
+               
                 Spacer()
                 centeredButtons
                 Spacer()
                 
-                if EditorFeatureFlags.enableBuildButton {
+                if EditorFeatureFlags.enableScriptButtons {
                     rightSection
+                }
+                
+                // Show project name on far right if a project is loaded
+                if let projectName = editorBasePath.projectName {
+                    Text(projectName)
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.editorAccent.opacity(0.3))
+                        .cornerRadius(6)
                 }
             }
             .padding(.horizontal, 20)
@@ -60,8 +76,8 @@
             )
             .cornerRadius(8)
             .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-            .sheet(isPresented: $showBuildSettings) {
-                BuildSettingsView()
+            .sheet(isPresented: $showCreateProject) {
+                CreateProjectView()
             }
             .sheet(isPresented: $showingNewScriptDialog) {
                 NewScriptDialog(
@@ -80,14 +96,33 @@
             } message: {
                 Text("Please set the Asset Folder in the Asset Browser before creating or editing scripts.")
             }
+            .alert("Invalid Project", isPresented: $showInvalidProjectAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(invalidProjectMessage)
+            }
         }
 
-        var rightSection: some View {
+        var leftSection: some View {
             HStack(spacing: 12) {
-                Button(action: { showBuildSettings = true }) {
+                Button(action: { showCreateProject = true }) {
                     HStack(spacing: 6) {
                         Image(systemName: "hammer.fill")
-                        Text("Build")
+                        Text("New")
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(Color.editorSurface)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                
+                Button(action: openExistingProject) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder.fill")
+                        Text("Open")
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 12)
@@ -150,7 +185,7 @@
             }
         }
         
-        var leftSection: some View {
+        var rightSection: some View {
             HStack(spacing: 8) {
                 Divider().frame(height: 24)
 
@@ -251,6 +286,66 @@
             print("✅ Opening Scripts project in Xcode")
         }
 
+        private func openExistingProject() {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.canCreateDirectories = false
+            panel.message = "Select the UntoldEngine project folder (the folder containing the .xcodeproj file)"
+            panel.prompt = "Open Project"
+            
+            guard panel.runModal() == .OK, let projectURL = panel.url else {
+                return
+            }
+            
+            // Validate project structure
+            let fm = FileManager.default
+            let projectName = projectURL.lastPathComponent
+            
+            // Check for .xcodeproj
+            let xcodeProjectPath = projectURL.appendingPathComponent("\(projectName).xcodeproj")
+            guard fm.fileExists(atPath: xcodeProjectPath.path) else {
+                invalidProjectMessage = "This doesn't appear to be a valid UntoldEngine project.\n\nExpected to find: \(projectName).xcodeproj"
+                showInvalidProjectAlert = true
+                return
+            }
+            
+            // Build the GameData path
+            let gameDataPath = projectURL
+                .appendingPathComponent("Sources")
+                .appendingPathComponent(projectName)
+                .appendingPathComponent("GameData")
+            
+            // Check if GameData exists, create if not
+            if !fm.fileExists(atPath: gameDataPath.path) {
+                do {
+                    try fm.createDirectory(at: gameDataPath, withIntermediateDirectories: true)
+                    print("📁 Created missing GameData folder structure")
+                } catch {
+                    invalidProjectMessage = "Failed to create GameData folder structure:\n\n\(error.localizedDescription)"
+                    showInvalidProjectAlert = true
+                    return
+                }
+            }
+            
+            // Create standard asset subfolders if they don't exist
+            let assetFolders = ["Models", "Animations", "Scenes", "Scripts", "Gaussians", "Materials", "HDR", "Shaders"]
+            for folder in assetFolders {
+                let folderURL = gameDataPath.appendingPathComponent(folder, isDirectory: true)
+                if !fm.fileExists(atPath: folderURL.path) {
+                    try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                }
+            }
+            
+            // Set the asset base path
+            assetBasePath = gameDataPath
+            EditorAssetBasePath.shared.basePath = gameDataPath
+            
+            print("✅ Opened project: \(projectName)")
+            print("📁 Asset base path set to: \(gameDataPath.path)")
+        }
+        
         private func ensureAssetBasePath() -> Bool {
             guard EditorAssetBasePath.shared.basePath != nil else {
                 showBasePathAlert = true

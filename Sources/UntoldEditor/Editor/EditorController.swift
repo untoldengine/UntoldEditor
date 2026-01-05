@@ -40,23 +40,27 @@ public class EditorAssetBasePath: ObservableObject {
             assetBasePath = basePath
         }
     }
+    
+    // Extract project name from the GameData path
+    // e.g., /path/to/MyGame/Sources/MyGame/GameData -> "MyGame"
+    public var projectName: String? {
+        guard let basePath = basePath else { return nil }
+        
+        // GameData is at: ProjectRoot/Sources/ProjectName/GameData
+        // So we go up 3 levels to get ProjectRoot
+        let projectRoot = basePath.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return projectRoot.lastPathComponent
+    }
 
     init() {
-        // Load persisted path from UserDefaults on startup
-        if let savedPath = UserDefaults.standard.string(forKey: userDefaultsKey) {
-            let url = URL(fileURLWithPath: savedPath)
-            // Verify the directory still exists
-            if FileManager.default.fileExists(atPath: url.path) {
-                basePath = url
-                assetBasePath = url
-            } else {
-                // Path no longer exists, clear it
-                UserDefaults.standard.removeObject(forKey: userDefaultsKey)
-                basePath = nil
-            }
-        } else {
-            basePath = assetBasePath
-        }
+        // With the new workflow, editor should start with no asset path
+        // The path will be set when user creates a new project via "New" button
+        // or manually sets it via "Asset Folder" button
+        basePath = nil
+        assetBasePath = nil
+        
+        // Clear any previously persisted path since we're changing the workflow
+        UserDefaults.standard.removeObject(forKey: userDefaultsKey)
     }
 }
 
