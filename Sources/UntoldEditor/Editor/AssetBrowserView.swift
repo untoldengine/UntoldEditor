@@ -130,7 +130,7 @@ struct AssetBrowserView: View {
                         .font(.caption)
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    
+
                     Spacer()
                 }
                 .padding(.horizontal, 10)

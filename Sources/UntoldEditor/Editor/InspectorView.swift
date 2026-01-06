@@ -162,7 +162,7 @@ var availableComponents_Editor: [ComponentOption_Editor] = [
 ]
 
 // Script Component - controlled by feature flag
-var scriptComponent_Editor: ComponentOption_Editor = ComponentOption_Editor(id: getComponentId(for: ScriptComponent.self), name: "Script Component", type: ScriptComponent.self, view: { selectedId, asset, refreshView in
+var scriptComponent_Editor: ComponentOption_Editor = .init(id: getComponentId(for: ScriptComponent.self), name: "Script Component", type: ScriptComponent.self, view: { selectedId, asset, refreshView in
     AnyView(
         Group {
             if let entityId = selectedId {
@@ -181,7 +181,7 @@ func mergeEntityComponents(
     var mergedComponents = EditorComponentsState.shared.components[entityId] ?? [:]
 
     let existingComponentIDs: [Int] = getAllEntityComponentsIds(entityId: entityId)
-    
+
     // Include script component if feature flag is enabled
     var allComponents = editor_availableComponents
     if EditorFeatureFlags.enableScriptComponent {
@@ -416,7 +416,7 @@ struct InspectorView: View {
         selectionManager.objectWillChange.send()
         sceneGraphModel.refreshHierarchy()
     }
-    
+
     private func availableComponentsWithFlags() -> [ComponentOption_Editor] {
         var components = availableComponents_Editor
         if EditorFeatureFlags.enableScriptComponent {

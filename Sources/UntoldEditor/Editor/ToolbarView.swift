@@ -40,15 +40,14 @@
 
         var body: some View {
             HStack {
-                
                 if EditorFeatureFlags.enableBuildButton {
                     leftSection
                 }
-               
+
                 Spacer()
                 centeredButtons
                 Spacer()
-                
+
                 if EditorFeatureFlags.enableScriptButtons {
                     rightSection
                 }
@@ -107,7 +106,7 @@
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
-                
+
                 Button(action: openExistingProject) {
                     HStack(spacing: 6) {
                         Image(systemName: "folder.fill")
@@ -125,7 +124,7 @@
                 Divider().frame(height: 24)
             }
         }
-        
+
         var centeredButtons: some View {
             HStack(spacing: 12) {
                 ToolbarButton(iconName: "gobackward", action: onClear, tooltip: "Clear Scene")
@@ -173,7 +172,7 @@
                 .focusable(false)
             }
         }
-        
+
         var rightSection: some View {
             HStack(spacing: 8) {
                 Divider().frame(height: 24)
@@ -203,7 +202,7 @@
                 .menuStyle(.borderlessButton)
                 .focusable(false)
                 .help("USC Scripts (Experimental) - API subject to change")
-                
+
                 // Show project name if loaded
                 if let projectName = editorBasePath.projectName {
                     Text(projectName)
@@ -216,7 +215,7 @@
                 }
             }
         }
-        
+
         // MARK: - Script Management Functions
 
         private func createNewScript() {
@@ -285,15 +284,15 @@
             panel.canCreateDirectories = false
             panel.message = "Select the UntoldEngine project folder (the folder containing the .xcodeproj file)"
             panel.prompt = "Open Project"
-            
+
             guard panel.runModal() == .OK, let projectURL = panel.url else {
                 return
             }
-            
+
             // Validate project structure
             let fm = FileManager.default
             let projectName = projectURL.lastPathComponent
-            
+
             // Check for .xcodeproj
             let xcodeProjectPath = projectURL.appendingPathComponent("\(projectName).xcodeproj")
             guard fm.fileExists(atPath: xcodeProjectPath.path) else {
@@ -301,13 +300,13 @@
                 showInvalidProjectAlert = true
                 return
             }
-            
+
             // Build the GameData path
             let gameDataPath = projectURL
                 .appendingPathComponent("Sources")
                 .appendingPathComponent(projectName)
                 .appendingPathComponent("GameData")
-            
+
             // Check if GameData exists, create if not
             if !fm.fileExists(atPath: gameDataPath.path) {
                 do {
@@ -319,7 +318,7 @@
                     return
                 }
             }
-            
+
             // Create standard asset subfolders if they don't exist
             let assetFolders = ["Models", "Animations", "Scenes", "Scripts", "Gaussians", "Materials", "HDR", "Shaders"]
             for folder in assetFolders {
@@ -328,15 +327,15 @@
                     try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
                 }
             }
-            
+
             // Set the asset base path
             assetBasePath = gameDataPath
             EditorAssetBasePath.shared.basePath = gameDataPath
-            
+
             print("✅ Opened project: \(projectName)")
             print("📁 Asset base path set to: \(gameDataPath.path)")
         }
-        
+
         private func ensureAssetBasePath() -> Bool {
             guard EditorAssetBasePath.shared.basePath != nil else {
                 showBasePathAlert = true
@@ -344,7 +343,6 @@
             }
             return true
         }
-
     }
 
     // MARK: - New Script Dialog
@@ -384,7 +382,7 @@
             .frame(width: 400)
         }
     }
-    
+
     // MARK: - Toolbar Button Component
 
     struct ToolbarButton: View {
@@ -407,6 +405,5 @@
             .help(tooltip)
         }
     }
-
 
 #endif

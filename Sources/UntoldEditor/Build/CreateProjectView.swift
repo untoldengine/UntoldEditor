@@ -203,7 +203,7 @@ struct CreateProjectView: View {
                     Assets: \(result.bundledAssets.count) files
                     """
                     showBuildResult = true
-                    
+
                     // Set assetBasePath to the newly created GameData folder
                     // This allows the editor to immediately save scenes to the correct location
                     let projectDir = result.xcodeProjectPath.deletingLastPathComponent()
@@ -211,7 +211,7 @@ struct CreateProjectView: View {
                         .appendingPathComponent("Sources")
                         .appendingPathComponent(settings.projectName)
                         .appendingPathComponent("GameData")
-                    
+
                     assetBasePath = gameDataPath
                     EditorAssetBasePath.shared.basePath = gameDataPath
                     Logger.log(message: "📁 Asset base path set to: \(gameDataPath.path)")
@@ -231,7 +231,7 @@ struct CreateProjectView: View {
     private func createBuildSettings() -> BuildSettings {
         let target: BuildTarget
         let isIOSAR = (selectedTarget == 2) // iOS AR
-        
+
         switch selectedTarget {
         case 0: // macOS
             let version: MacOSVersion

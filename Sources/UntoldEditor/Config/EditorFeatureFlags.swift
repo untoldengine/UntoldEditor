@@ -10,26 +10,25 @@
 import Foundation
 
 /// Feature flags for controlling experimental or deprecated features in the editor
-struct EditorFeatureFlags {
-    
+enum EditorFeatureFlags {
     // MARK: - Build System Features
-    
+
     /// Enable the Build button in the toolbar
     /// When disabled, users should use the `untoldengine-create` CLI tool instead
     static let enableBuildButton: Bool = true
-    
+
     // MARK: - Script Management Features
-    
+
     /// Enable script creation and management buttons in the toolbar
     /// When disabled, users manage Swift code directly in their game project
     static let enableScriptButtons: Bool = true
-    
+
     /// Enable the Script Component in the Inspector
     /// When disabled, users write game logic in Swift within their game project
     static let enableScriptComponent: Bool = true
-    
+
     // MARK: - Future Use Cases
-    
+
     // When these might be re-enabled:
     // - Build button: If we add specialized build configurations not available via CLI
     // - Script buttons: If we implement visual scripting / Blueprint-like system

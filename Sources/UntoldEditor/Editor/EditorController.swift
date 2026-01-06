@@ -40,12 +40,12 @@ public class EditorAssetBasePath: ObservableObject {
             assetBasePath = basePath
         }
     }
-    
+
     // Extract project name from the GameData path
     // e.g., /path/to/MyGame/Sources/MyGame/GameData -> "MyGame"
     public var projectName: String? {
-        guard let basePath = basePath else { return nil }
-        
+        guard let basePath else { return nil }
+
         // GameData is at: ProjectRoot/Sources/ProjectName/GameData
         // So we go up 3 levels to get ProjectRoot
         let projectRoot = basePath.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -58,7 +58,7 @@ public class EditorAssetBasePath: ObservableObject {
         // or manually sets it via "Asset Folder" button
         basePath = nil
         assetBasePath = nil
-        
+
         // Clear any previously persisted path since we're changing the workflow
         UserDefaults.standard.removeObject(forKey: userDefaultsKey)
     }
