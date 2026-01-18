@@ -14,6 +14,7 @@
     struct ToolbarView: View {
         @ObservedObject var selectionManager: SelectionManager
         @ObservedObject var editorBasePath = EditorAssetBasePath.shared
+        private let editorVersionLabel = "v0.7.1"
 
         var onSave: () -> Void
         var onSaveAs: () -> Void
@@ -213,6 +214,14 @@
                         .background(Color.editorAccent.opacity(0.3))
                         .cornerRadius(6)
                 }
+
+                Text(editorVersionLabel)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.editorSurface.opacity(0.6))
+                    .cornerRadius(6)
             }
         }
 
