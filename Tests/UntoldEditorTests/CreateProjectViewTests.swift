@@ -55,6 +55,15 @@ final class CreateProjectViewTests: XCTestCase {
             target = .iOS(deployment: .v17)
         case 3: // visionOS
             target = .visionOS(deployment: .v26)
+        case 4: // Multi-Platform
+            let version: MacOSVersion
+            switch macOSVersion {
+            case 0: version = .v13
+            case 1: version = .v14
+            case 2: version = .v15
+            default: version = .v15
+            }
+            target = .multi(macOS: version, iOS: .v17, visionOS: .v26)
         default:
             target = .macOS(deployment: .v15)
         }
@@ -333,7 +342,7 @@ final class CreateProjectViewTests: XCTestCase {
 
     // MARK: - Target Platform Tests
 
-    func test_targetPlatforms_arrayContainsFourOptions() {
+    func test_targetPlatforms_arrayContainsFiveOptions() {
         // Arrange
         let view = CreateProjectView()
         let mirror = Mirror(reflecting: view)
@@ -341,11 +350,12 @@ final class CreateProjectViewTests: XCTestCase {
         // Act: Get targets array
         if let targets = mirror.descendant("targets") as? [String] {
             // Assert
-            XCTAssertEqual(targets.count, 4, "Should have 4 platform options")
+            XCTAssertEqual(targets.count, 5, "Should have 5 platform options")
             XCTAssertEqual(targets[0], "macOS", "First target should be macOS")
             XCTAssertEqual(targets[1], "iOS", "Second target should be iOS")
             XCTAssertEqual(targets[2], "iOS AR", "Third target should be iOS AR")
             XCTAssertEqual(targets[3], "visionOS", "Fourth target should be visionOS")
+            XCTAssertEqual(targets[4], "Multi-Platform", "Fifth target should be Multi-Platform")
         }
     }
 
@@ -566,6 +576,25 @@ final class CreateProjectViewTests: XCTestCase {
         }
     }
 
+    func test_targetSwitch_multiPlatform_index4() {
+        // Arrange
+        let selectedTarget = 4
+
+        // Act
+        let target: BuildTarget
+        switch selectedTarget {
+        case 4: target = .multi(macOS: .v15, iOS: .v17, visionOS: .v26)
+        default: target = .macOS(deployment: .v15)
+        }
+
+        // Assert
+        if case .multi = target {
+            XCTAssertTrue(true, "Target 4 should map to Multi-Platform")
+        } else {
+            XCTFail("Target 4 should be Multi-Platform")
+        }
+    }
+
     func test_targetSwitch_defaultFallback() {
         // Arrange
         let selectedTarget = 999 // Invalid index
@@ -577,6 +606,7 @@ final class CreateProjectViewTests: XCTestCase {
         case 1: target = .iOS(deployment: .v17)
         case 2: target = .iOS(deployment: .v17)
         case 3: target = .visionOS(deployment: .v26)
+        case 4: target = .multi(macOS: .v15, iOS: .v17, visionOS: .v26)
         default: target = .macOS(deployment: .v15)
         }
 

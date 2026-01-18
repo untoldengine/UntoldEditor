@@ -29,7 +29,7 @@ struct CreateProjectView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private let targets = ["macOS", "iOS", "iOS AR", "visionOS"]
+    private let targets = ["macOS", "iOS", "iOS AR", "visionOS", "Multi-Platform"]
     private let macOSVersions = ["13.0", "14.0", "15.0"]
     private let optimizationLevels = ["None", "Speed", "Size"]
 
@@ -66,7 +66,7 @@ struct CreateProjectView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    if selectedTarget == 0 { // macOS
+                    if selectedTarget == 0 || selectedTarget == 4 { // macOS or Multi-Platform
                         Picker("macOS Version", selection: $macOSVersion) {
                             ForEach(0 ..< macOSVersions.count, id: \.self) { index in
                                 Text(macOSVersions[index]).tag(index)
@@ -248,6 +248,15 @@ struct CreateProjectView: View {
             target = .iOS(deployment: .v17)
         case 3: // visionOS
             target = .visionOS(deployment: .v26)
+        case 4: // Multi-Platform
+            let version: MacOSVersion
+            switch macOSVersion {
+            case 0: version = .v13
+            case 1: version = .v14
+            case 2: version = .v15
+            default: version = .v15
+            }
+            target = .multi(macOS: version, iOS: .v17, visionOS: .v26)
         default:
             target = .macOS(deployment: .v15)
         }
@@ -291,6 +300,6 @@ struct CreateProjectView: View {
     }
 }
 
-#Preview {
-    CreateProjectView()
-}
+// #Preview {
+//    CreateProjectView()
+// }
