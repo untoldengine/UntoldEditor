@@ -14,7 +14,7 @@
     struct ToolbarView: View {
         @ObservedObject var selectionManager: SelectionManager
         @ObservedObject var editorBasePath = EditorAssetBasePath.shared
-        private let editorVersionLabel = "v0.7.1"
+        private let editorVersionLabel = "v0.8.0"
 
         var onSave: () -> Void
         var onSaveAs: () -> Void
