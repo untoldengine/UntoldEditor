@@ -57,6 +57,7 @@ struct AssetBrowserView: View {
     @State private var statusMessage: String?
     @State private var statusIsError = false
     @State private var targetEntityName: String = "None"
+    @State private var showImportMenu = false
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
         folderPathStack.last
@@ -75,9 +76,18 @@ struct AssetBrowserView: View {
                         .bold()
                         .foregroundColor(.white)
 
-                    Button(action: importAsset) {
+                    Menu {
+                        ForEach(AssetCategory.allCases, id: \.self) { category in
+                            Button(action: { importAssetForCategory(category) }) {
+                                HStack {
+                                    Image(systemName: category.iconName)
+                                    Text("Import \(category.rawValue)")
+                                }
+                            }
+                        }
+                    } label: {
                         HStack(spacing: 6) {
-                            Text("Import Asset")
+                            Text("Import")
                             Image(systemName: "plus.circle")
                                 .foregroundColor(.white)
                         }
@@ -320,37 +330,49 @@ struct AssetBrowserView: View {
         }
     }
 
-    private func importAsset() {
+    private func importAssetForCategory(_ category: AssetCategory) {
         guard editorBaseAssetPath.basePath != nil else {
             showBasePathAlert = true
             return
         }
 
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [
-            UTType(filenameExtension: "usdz")!,
-            .png, .jpeg, .tiff,
-            UTType(filenameExtension: "hdr")!,
-            UTType(filenameExtension: "ply")!,
-            UTType(filenameExtension: "json")!,
-            UTType(filenameExtension: "uscript")!,
-        ]
-        openPanel.canChooseDirectories = (selectedCategory == "Materials")
+
+        // Set allowed file types based on category
+        switch category {
+        case .models:
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "usdz")!]
+        case .animations:
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "usdz")!]
+        case .scripts:
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "uscript")!]
+        case .scenes:
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "json")!]
+        case .gaussians:
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "ply")!]
+        case .materials:
+            openPanel.allowedContentTypes = [.png, .jpeg, .tiff]
+        case .hdr:
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "hdr")!]
+        }
+
+        openPanel.canChooseDirectories = (category == .materials)
         openPanel.allowsMultipleSelection = true
 
         guard let basePath = assetBasePath else { return }
-        // Supported categories must match your enum/string values
-        guard ["Models", "Animations", "HDR", "Materials", "Gaussians", "Scenes", "Scripts"].contains(selectedCategory) else { return }
+        let categoryString = category.rawValue
+        // Ensure category is valid
+        guard ["Models", "Animations", "HDR", "Materials", "Gaussians", "Scenes", "Scripts"].contains(categoryString) else { return }
 
         let fm = FileManager.default
-        let categoryRoot = basePath.appendingPathComponent(selectedCategory!, isDirectory: true)
+        let categoryRoot = basePath.appendingPathComponent(categoryString, isDirectory: true)
         // Ensure category folder exists (e.g., <Base>/Models)
         try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
 
         if openPanel.runModal() == .OK {
             for sourceURL in openPanel.urls {
                 do {
-                    switch selectedCategory {
+                    switch categoryString {
                     case "HDR":
                         // Copy .hdr directly into HDR folder
                         let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)

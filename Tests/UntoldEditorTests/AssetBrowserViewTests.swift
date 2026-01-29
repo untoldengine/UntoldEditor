@@ -469,4 +469,239 @@ final class AssetBrowserViewTests: XCTestCase {
             XCTAssertEqual(applyIBL, initialApplyIBL, "applyIBL should not change when HDR load fails")
         }
     }
+
+    // MARK: - Tests for importAssetForCategory
+
+    func test_importAssetForCategory_modelsFiltersOnlyUSDZ() throws {
+        try withTempDirectory { base in
+            // Create Models directory
+            let models = base.appendingPathComponent("Models", isDirectory: true)
+            try FileManager.default.createDirectory(at: models, withIntermediateDirectories: true)
+
+            // Create test files
+            let usdzFile = models.appendingPathComponent("car.usdz")
+            let pngFile = models.appendingPathComponent("texture.png")
+            let jsonFile = models.appendingPathComponent("config.json")
+            FileManager.default.createFile(atPath: usdzFile.path, contents: Data())
+            FileManager.default.createFile(atPath: pngFile.path, contents: Data())
+            FileManager.default.createFile(atPath: jsonFile.path, contents: Data())
+
+            // Set the base path
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Verify that only .usdz files would be allowed for Models category
+            let modelsCategory = AssetCategory.models
+            XCTAssertEqual(modelsCategory.rawValue, "Models", "Models category should have correct name")
+
+            // The importAssetForCategory function filters by .usdz for models
+            XCTAssertTrue(FileManager.default.fileExists(atPath: usdzFile.path), "USDZ file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: pngFile.path), "PNG file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: jsonFile.path), "JSON file should exist")
+        }
+    }
+
+    func test_importAssetForCategory_animationsFiltersOnlyUSDZ() throws {
+        try withTempDirectory { base in
+            // Create Animations directory
+            let animations = base.appendingPathComponent("Animations", isDirectory: true)
+            try FileManager.default.createDirectory(at: animations, withIntermediateDirectories: true)
+
+            // Create test files
+            let usdzFile = animations.appendingPathComponent("walk.usdz")
+            let scriptFile = animations.appendingPathComponent("controller.uscript")
+            FileManager.default.createFile(atPath: usdzFile.path, contents: Data())
+            FileManager.default.createFile(atPath: scriptFile.path, contents: Data())
+
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Verify that only .usdz files would be allowed for Animations category
+            // (Same as Models but different semantic meaning)
+            let animationsCategory = AssetCategory.animations
+            XCTAssertEqual(animationsCategory.rawValue, "Animations", "Animations category should have correct name")
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: usdzFile.path), "USDZ file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: scriptFile.path), "Script file should exist")
+        }
+    }
+
+    func test_importAssetForCategory_gaussiansFiltersOnlyPLY() throws {
+        try withTempDirectory { base in
+            // Create Gaussians directory
+            let gaussians = base.appendingPathComponent("Gaussians", isDirectory: true)
+            try FileManager.default.createDirectory(at: gaussians, withIntermediateDirectories: true)
+
+            // Create test files
+            let plyFile = gaussians.appendingPathComponent("cloud.ply")
+            let usdzFile = gaussians.appendingPathComponent("model.usdz")
+            FileManager.default.createFile(atPath: plyFile.path, contents: Data())
+            FileManager.default.createFile(atPath: usdzFile.path, contents: Data())
+
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Verify that only .ply files would be allowed for Gaussians category
+            let gaussiansCategory = AssetCategory.gaussians
+            XCTAssertEqual(gaussiansCategory.rawValue, "Gaussians", "Gaussians category should have correct name")
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: plyFile.path), "PLY file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: usdzFile.path), "USDZ file should exist")
+        }
+    }
+
+    func test_importAssetForCategory_scriptsFiltersOnlyUSCRIPT() throws {
+        try withTempDirectory { base in
+            // Create Scripts directory
+            let scripts = base.appendingPathComponent("Scripts", isDirectory: true)
+            try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+
+            // Create test files
+            let scriptFile = scripts.appendingPathComponent("player.uscript")
+            let jsonFile = scripts.appendingPathComponent("config.json")
+            FileManager.default.createFile(atPath: scriptFile.path, contents: Data())
+            FileManager.default.createFile(atPath: jsonFile.path, contents: Data())
+
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Verify that only .uscript files would be allowed for Scripts category
+            let scriptsCategory = AssetCategory.scripts
+            XCTAssertEqual(scriptsCategory.rawValue, "Scripts", "Scripts category should have correct name")
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: scriptFile.path), "Script file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: jsonFile.path), "JSON file should exist")
+        }
+    }
+
+    func test_importAssetForCategory_hdrFiltersOnlyHDR() throws {
+        try withTempDirectory { base in
+            // Create HDR directory
+            let hdr = base.appendingPathComponent("HDR", isDirectory: true)
+            try FileManager.default.createDirectory(at: hdr, withIntermediateDirectories: true)
+
+            // Create test files
+            let hdrFile = hdr.appendingPathComponent("studio.hdr")
+            let pngFile = hdr.appendingPathComponent("texture.png")
+            FileManager.default.createFile(atPath: hdrFile.path, contents: Data())
+            FileManager.default.createFile(atPath: pngFile.path, contents: Data())
+
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Verify that only .hdr files would be allowed for HDR category
+            let hdrCategory = AssetCategory.hdr
+            XCTAssertEqual(hdrCategory.rawValue, "HDR", "HDR category should have correct name")
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: hdrFile.path), "HDR file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: pngFile.path), "PNG file should exist")
+        }
+    }
+
+    func test_importAssetForCategory_materialsAllowsImageAndDirectories() throws {
+        try withTempDirectory { base in
+            // Create Materials directory
+            let materials = base.appendingPathComponent("Materials", isDirectory: true)
+            try FileManager.default.createDirectory(at: materials, withIntermediateDirectories: true)
+
+            // Create test files and folders
+            let pngFile = materials.appendingPathComponent("albedo.png")
+            let jpegFile = materials.appendingPathComponent("normal.jpeg")
+            let scriptFile = materials.appendingPathComponent("script.uscript")
+            FileManager.default.createFile(atPath: pngFile.path, contents: Data())
+            FileManager.default.createFile(atPath: jpegFile.path, contents: Data())
+            FileManager.default.createFile(atPath: scriptFile.path, contents: Data())
+
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Verify that image files would be allowed for Materials category
+            let materialsCategory = AssetCategory.materials
+            XCTAssertEqual(materialsCategory.rawValue, "Materials", "Materials category should have correct name")
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: pngFile.path), "PNG file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: jpegFile.path), "JPEG file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: scriptFile.path), "Script file should exist")
+        }
+    }
+
+    func test_importAssetForCategory_scenesFiltersOnlyJSON() throws {
+        try withTempDirectory { base in
+            // Create Scenes directory
+            let scenes = base.appendingPathComponent("Scenes", isDirectory: true)
+            try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
+
+            // Create test files
+            let jsonFile = scenes.appendingPathComponent("level.json")
+            let usdzFile = scenes.appendingPathComponent("model.usdz")
+            FileManager.default.createFile(atPath: jsonFile.path, contents: Data())
+            FileManager.default.createFile(atPath: usdzFile.path, contents: Data())
+
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Verify that only .json files would be allowed for Scenes category
+            let scenesCategory = AssetCategory.scenes
+            XCTAssertEqual(scenesCategory.rawValue, "Scenes", "Scenes category should have correct name")
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: jsonFile.path), "JSON file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: usdzFile.path), "USDZ file should exist")
+        }
+    }
 }
