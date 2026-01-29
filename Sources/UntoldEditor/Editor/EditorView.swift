@@ -81,7 +81,9 @@ public struct EditorView: View {
                             onAddDirLight: editor_createDirLight,
                             onAddPointLight: editor_createPointLight,
                             onAddSpotLight: editor_createSpotLight,
-                            onAddAreaLight: editor_createAreaLight
+                            onAddAreaLight: editor_createAreaLight,
+                            onParentEntity: editor_parentEntity,
+                            onUnparentEntity: editor_unparentEntity
                         )
                     }
 
@@ -574,5 +576,73 @@ public struct EditorView: View {
     private func editor_createCone() {
         let meshes = BasicPrimitives.createCone()
         editor_createPrimitive(name: "Cone", meshes: meshes)
+    }
+
+    // MARK: - Parenting Functions
+
+    private func editor_parentEntity(childId: EntityID, parentId: EntityID) {
+        // Ensure both entities exist and have ScenegraphComponent
+        guard hasComponent(entityId: childId, componentType: ScenegraphComponent.self),
+              hasComponent(entityId: parentId, componentType: ScenegraphComponent.self)
+        else {
+            print("⚠️ Cannot parent entity: missing ScenegraphComponent")
+            return
+        }
+
+        // Ensure child has LocalTransformComponent
+        guard hasComponent(entityId: childId, componentType: LocalTransformComponent.self) else {
+            print("⚠️ Cannot parent entity: child missing LocalTransformComponent")
+            return
+        }
+
+        // Ensure parent has LocalTransformComponent and WorldTransformComponent
+        guard hasComponent(entityId: parentId, componentType: LocalTransformComponent.self),
+              hasComponent(entityId: parentId, componentType: WorldTransformComponent.self)
+        else {
+            print("⚠️ Cannot parent entity: parent missing transform components")
+            return
+        }
+
+        // Use the engine's setParent function
+        setParent(childId: childId, parentId: parentId, offset: simd_float3(0, 0, 0))
+
+        // Refresh the scene hierarchy to reflect the change
+        sceneGraphModel.refreshHierarchy()
+
+        print("✅ Parented entity \(childId) to \(parentId)")
+    }
+
+    private func editor_unparentEntity(childId: EntityID) {
+        // Ensure entity has ScenegraphComponent
+        guard hasComponent(entityId: childId, componentType: ScenegraphComponent.self) else {
+            print("⚠️ Cannot unparent entity: missing ScenegraphComponent")
+            return
+        }
+
+        // Ensure entity has LocalTransformComponent
+        guard hasComponent(entityId: childId, componentType: LocalTransformComponent.self) else {
+            print("⚠️ Cannot unparent entity: missing LocalTransformComponent")
+            return
+        }
+
+        // Ensure entity has WorldTransformComponent
+        guard hasComponent(entityId: childId, componentType: WorldTransformComponent.self) else {
+            print("⚠️ Cannot unparent entity: missing WorldTransformComponent")
+            return
+        }
+
+        // Check if entity actually has a parent
+        guard let _ = getEntityParent(entityId: childId) else {
+            print("⚠️ Entity has no parent to remove")
+            return
+        }
+
+        // Use the engine's removeParent function
+        removeParent(childId: childId)
+
+        // Refresh the scene hierarchy to reflect the change
+        sceneGraphModel.refreshHierarchy()
+
+        print("✅ Unparented entity \(childId)")
     }
 }

@@ -22,6 +22,8 @@ struct SceneHierarchyView: View {
     var onAddPointLight: () -> Void
     var onAddSpotLight: () -> Void
     var onAddAreaLight: () -> Void
+    var onParentEntity: (EntityID, EntityID) -> Void = { _, _ in }
+    var onUnparentEntity: (EntityID) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -85,7 +87,9 @@ struct SceneHierarchyView: View {
                             entityName: getEntityName(entityId: entityId),
                             depth: 0,
                             sceneGraphModel: sceneGraphModel,
-                            selectionManager: selectionManager
+                            selectionManager: selectionManager,
+                            onParentEntity: onParentEntity,
+                            onUnparentEntity: onUnparentEntity
                         )
                     }
                 }
@@ -112,12 +116,23 @@ struct EntityRow: View {
     let entityid: EntityID
     let entityName: String
     @ObservedObject var selectionManager: SelectionManager
+    @State private var isDragOver = false
 
     private var isSelected: Bool {
         entityid == selectionManager.selectedEntity
     }
 
     var body: some View {
+        entityRowContent
+            .padding(8)
+            .background(
+                isSelected ? Color.gray.opacity(0.8) : Color.clear
+            )
+            .cornerRadius(6)
+            .draggable(String(entityid))
+    }
+
+    private var entityRowContent: some View {
         HStack(spacing: 8) {
             Image(systemName: "cube.fill")
                 .foregroundColor(isSelected ? .white : .gray)
@@ -128,9 +143,6 @@ struct EntityRow: View {
 
             Spacer()
         }
-        .padding(8)
-        .background(isSelected ? Color.gray.opacity(0.8) : Color.clear)
-        .cornerRadius(6)
     }
 }
 
@@ -140,8 +152,15 @@ struct HierarchyNode: View {
     let depth: Int
     @ObservedObject var sceneGraphModel: SceneGraphModel
     let selectionManager: SelectionManager
+    var onParentEntity: (EntityID, EntityID) -> Void = { _, _ in }
+    var onUnparentEntity: (EntityID) -> Void = { _ in }
+    @State private var isDragOver = false
 
     var body: some View {
+        nodeContent
+    }
+
+    private var nodeContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             EntityRow(
                 entityid: entityId,
@@ -153,6 +172,17 @@ struct HierarchyNode: View {
             .onTapGesture {
                 selectionManager.selectEntity(entityId: entityId)
             }
+            .contextMenu {
+                contextMenuContent
+            }
+            .onDrop(of: [.text], isTargeted: $isDragOver) { providers in
+                handleDrop(providers: providers)
+            }
+            .background(
+                isDragOver ?
+                    Color.blue.opacity(0.2) :
+                    Color.clear
+            )
 
             // Children
             ForEach(sceneGraphModel.getChildren(entityId: entityId), id: \.self) { childID in
@@ -161,8 +191,84 @@ struct HierarchyNode: View {
                     entityName: getEntityName(entityId: childID),
                     depth: depth + 1,
                     sceneGraphModel: sceneGraphModel,
-                    selectionManager: selectionManager
+                    selectionManager: selectionManager,
+                    onParentEntity: onParentEntity,
+                    onUnparentEntity: onUnparentEntity
                 )
+            }
+        }
+    }
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        provider.loadObject(ofClass: NSString.self) { object, _ in
+            if let draggedEntityIdString = object as? String,
+               let draggedValue = UInt64(draggedEntityIdString)
+            {
+                let draggedEntityId = EntityID(draggedValue)
+
+                // Don't allow parenting to self
+                if draggedEntityId == entityId {
+                    print("⚠️ Cannot parent entity to itself")
+                    return
+                }
+
+                // Check for circular dependency (if target is descendant of source)
+                if isDescendant(entityId: entityId, potentialDescendant: draggedEntityId) {
+                    print("⚠️ Cannot parent entity to its descendant")
+                    return
+                }
+
+                // Parent the entity
+                DispatchQueue.main.async {
+                    onParentEntity(draggedEntityId, entityId)
+                }
+            }
+        }
+
+        return true // Return true immediately, async callback will handle the actual parenting
+    }
+
+    // Check if an entity is a descendant of another entity
+    private func isDescendant(entityId: EntityID, potentialDescendant: EntityID) -> Bool {
+        let children = sceneGraphModel.getChildren(entityId: entityId)
+
+        for child in children {
+            if child == potentialDescendant {
+                return true
+            }
+            // Recursively check descendants
+            if isDescendant(entityId: child, potentialDescendant: potentialDescendant) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    // Check if entity has a parent
+    private var hasParent: Bool {
+        getEntityParent(entityId: entityId) != nil
+    }
+
+    // Context menu for entity row
+    private var contextMenuContent: some View {
+        VStack {
+            if hasParent {
+                Button(action: {
+                    DispatchQueue.main.async {
+                        onUnparentEntity(entityId)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.up.left")
+                        Text("Unparent")
+                    }
+                }
+            } else {
+                Text("No parent")
+                    .foregroundColor(.gray)
             }
         }
     }
