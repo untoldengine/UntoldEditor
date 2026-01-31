@@ -30,6 +30,7 @@
         var onCreatePlane: () -> Void
         var onCreateCylinder: () -> Void
         var onCreateCone: () -> Void
+        var onQuickPreview: () -> Void
 
         @State private var isPlaying = false
         @State private var showCreateProject = false
@@ -121,6 +122,21 @@
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+
+                Button(action: onQuickPreview) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "eye.fill")
+                        Text("Quick Preview")
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(Color.editorAccent)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .help("Preview a 3D file without creating a project")
 
                 Divider().frame(height: 24)
             }

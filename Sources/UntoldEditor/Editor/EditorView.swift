@@ -1,5 +1,6 @@
 import MetalKit
 import SwiftUI
+import UniformTypeIdentifiers
 import UntoldEngine
 
 public struct Asset: Identifiable {
@@ -24,6 +25,8 @@ public struct EditorView: View {
     @State private var isSaveAs = false
     @State private var showSaveBasePathAlert = false
     @State private var useSceneCameraDuringPlay = false
+    @State private var showQuickPreviewWarning = false
+    @State private var quickPreviewEntities: [(EntityID, String)] = []
 
     var renderer: UntoldRenderer?
 
@@ -64,7 +67,8 @@ public struct EditorView: View {
                     onCreateSphere: editor_createSphere,
                     onCreatePlane: editor_createPlane,
                     onCreateCylinder: editor_createCylinder,
-                    onCreateCone: editor_createCone
+                    onCreateCone: editor_createCone,
+                    onQuickPreview: editor_handleQuickPreview
                 )
                 Divider()
                 HStack {
@@ -199,6 +203,19 @@ public struct EditorView: View {
         } message: {
             Text("Please create a new project or open an existing project before saving scenes.")
         }
+        .alert("Quick Preview Entities Cannot Be Saved", isPresented: $showQuickPreviewWarning) {
+            Button("Cancel", role: .cancel) {
+                quickPreviewEntities = []
+            }
+            Button("Delete and Save", role: .destructive) {
+                deleteQuickPreviewEntitiesAndSave()
+            }
+        } message: {
+            let entityNames = quickPreviewEntities.map(\.1).joined(separator: ", ")
+            let count = quickPreviewEntities.count
+            let entityWord = count == 1 ? "entity" : "entities"
+            return Text("Your scene contains \(count) Quick Preview \(entityWord):\n\n\(entityNames)\n\nQuick Preview entities use absolute file paths and cannot be saved to scenes. To include these assets permanently, use the Import button in the Asset Browser to copy them into your project first.\n\nYou can delete the Quick Preview entities and save the rest of your scene, or cancel to keep working.")
+        }
     }
 
     private func editor_handleSave() {
@@ -206,6 +223,12 @@ public struct EditorView: View {
             showSaveBasePathAlert = true
             return
         }
+
+        // Check for Quick Preview entities before saving
+        if checkForQuickPreviewEntities() {
+            return
+        }
+
         // If we have a current scene path, save immediately
         if let sceneURL = editorController?.currentSceneURL {
             let sceneData: SceneData = serializeScene()
@@ -224,6 +247,12 @@ public struct EditorView: View {
             showSaveBasePathAlert = true
             return
         }
+
+        // Check for Quick Preview entities before saving
+        if checkForQuickPreviewEntities() {
+            return
+        }
+
         isSaveAs = true
         if let current = editorController?.currentSceneURL {
             pendingSceneName = current.deletingPathExtension().lastPathComponent
@@ -644,5 +673,136 @@ public struct EditorView: View {
         sceneGraphModel.refreshHierarchy()
 
         print("✅ Unparented entity \(childId)")
+    }
+
+    // MARK: - Quick Preview
+
+    private func editor_handleQuickPreview() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Quick Preview - Select 3D File"
+        openPanel.allowedContentTypes = [
+            UTType(filenameExtension: "usdz")!,
+            UTType(filenameExtension: "ply")!,
+        ]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.message = "Select a 3D file to preview (USDZ or PLY)"
+
+        guard openPanel.runModal() == .OK, let fileURL = openPanel.url else {
+            return
+        }
+
+        let fileExtension = fileURL.pathExtension.lowercased()
+        let absolutePath = fileURL.path
+
+        // Create a new entity for the preview
+        removeGizmo()
+        let entityId = createEntity()
+
+        let fileName = fileURL.deletingPathExtension().lastPathComponent
+        let uniqueName = "QuickPreview-\(fileName)-\(entityId)"
+        setEntityName(entityId: entityId, name: uniqueName)
+
+        // Mark this entity as a Quick Preview entity (cannot be saved)
+        if let quickPreviewComp = scene.assign(to: entityId, component: QuickPreviewComponent.self) {
+            quickPreviewComp.absoluteFilePath = absolutePath
+            quickPreviewComp.fileExtension = fileExtension
+            quickPreviewComp.originalFileName = fileName
+        }
+
+        if fileExtension == "usdz" {
+            // Load USDZ using absolute path
+            setEntityMeshAsync(entityId: entityId, filename: absolutePath, withExtension: fileExtension) { success in
+                if success {
+                    print("✅ Quick Preview loaded: \(fileName).\(fileExtension)")
+                } else {
+                    print("⚠️ Failed to load Quick Preview, using fallback: \(fileName).\(fileExtension)")
+                }
+            }
+        } else if fileExtension == "ply" {
+            // Load Gaussian PLY using absolute path
+            setEntityGaussian(entityId: entityId, filename: absolutePath, withExtension: fileExtension)
+            print("✅ Quick Preview Gaussian loaded: \(fileName).\(fileExtension)")
+        }
+
+        // Spawn in front of camera
+        guard let camera = CameraSystem.shared.activeCamera,
+              let cameraComponent = scene.get(component: CameraComponent.self, for: camera)
+        else {
+            handleError(.noActiveCamera)
+            return
+        }
+
+        var forward = forwardDirectionVector(from: cameraComponent.rotation)
+        forward *= -1.0
+        let camPosition = cameraComponent.localPosition
+        let spawnPosition = camPosition + forward * spawnDistance
+        translateTo(entityId: entityId, position: spawnPosition)
+
+        // Select and refresh
+        selectionManager.selectedEntity = entityId
+        editor_entities = getAllGameEntities()
+        sceneGraphModel.refreshHierarchy()
+
+        print("ℹ️ Quick Preview mode: File loaded with absolute path")
+        print("⚠️ Note: Quick Preview entities cannot be saved to scenes (absolute paths not serialized)")
+    }
+
+    // MARK: - Quick Preview Save Validation
+
+    /// Checks if the scene contains any Quick Preview entities.
+    /// Returns true if Quick Preview entities exist (and shows warning), false otherwise.
+    private func checkForQuickPreviewEntities() -> Bool {
+        var foundEntities: [(EntityID, String)] = []
+
+        // Scan all entities for QuickPreviewComponent
+        for entityId in getAllGameEntities() {
+            if hasComponent(entityId: entityId, componentType: QuickPreviewComponent.self) {
+                let entityName = getEntityName(entityId: entityId)
+                let displayName = entityName.isEmpty ? "Entity \(entityId)" : entityName
+                foundEntities.append((entityId, displayName))
+            }
+        }
+
+        if !foundEntities.isEmpty {
+            quickPreviewEntities = foundEntities
+            showQuickPreviewWarning = true
+            return true
+        }
+
+        return false
+    }
+
+    /// Deletes all Quick Preview entities and proceeds with save.
+    private func deleteQuickPreviewEntitiesAndSave() {
+        // Delete all Quick Preview entities
+        for (entityId, entityName) in quickPreviewEntities {
+            destroyEntity(entityId: entityId)
+            print("🗑️ Deleted Quick Preview entity: \(entityName)")
+        }
+
+        // Refresh UI
+        editor_entities = getAllGameEntities()
+        sceneGraphModel.refreshHierarchy()
+
+        // Clear selection if it was a Quick Preview entity
+        if let selectedId = selectionManager.selectedEntity,
+           quickPreviewEntities.contains(where: { $0.0 == selectedId })
+        {
+            selectionManager.selectedEntity = nil
+            activeEntity = .invalid
+            removeGizmo()
+        }
+
+        quickPreviewEntities = []
+
+        // Now proceed with the save
+        if isSaveAs {
+            // Re-trigger Save As flow
+            editor_handleSaveAs()
+        } else {
+            // Re-trigger Save flow
+            editor_handleSave()
+        }
     }
 }
