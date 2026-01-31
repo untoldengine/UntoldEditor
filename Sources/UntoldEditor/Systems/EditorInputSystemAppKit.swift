@@ -176,13 +176,18 @@
 
             if hit {
                 // If hit a child mesh, select the parent instead (except for gizmos)
+                // Unless shift is pressed, then select the child directly
                 var hitEntityId = entityId
                 if hasComponent(entityId: entityId, componentType: GizmoComponent.self) {
                     // Gizmo hit - select the gizmo directly
                     hitEntityId = entityId
                 } else if let parentId = getEntityParent(entityId: entityId) {
-                    // Non-gizmo child hit - select parent
-                    hitEntityId = parentId
+                    // If shift is pressed, select child; otherwise select parent
+                    if keyState.shiftPressed {
+                        hitEntityId = entityId // Select the child
+                    } else {
+                        hitEntityId = parentId // Select parent (current behavior)
+                    }
                 } else {
                     // Entity with no parent - select it directly
                     hitEntityId = entityId
