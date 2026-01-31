@@ -182,6 +182,11 @@ struct CreateProjectView: View {
         isBuilding = true
         buildProgress = "Creating project..."
 
+        // Clear the current project BEFORE building to prevent asset copying
+        NotificationCenter.default.post(name: .projectWillSwitch, object: nil)
+        assetBasePath = nil
+        EditorAssetBasePath.shared.basePath = nil
+
         Task {
             do {
                 let settings = createBuildSettings()

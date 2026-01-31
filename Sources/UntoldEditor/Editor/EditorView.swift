@@ -161,6 +161,15 @@ public struct EditorView: View {
                 // Refresh hierarchy when async asset instances finish loading
                 sceneGraphModel.refreshHierarchy()
             }
+
+            // Listen for project switching to clean up current scene
+            NotificationCenter.default.addObserver(
+                forName: .projectWillSwitch,
+                object: nil,
+                queue: .main
+            ) { _ in
+                cleanupForProjectSwitch()
+            }
         }
         .onChange(of: useSceneCameraDuringPlay) { _, _ in
             updateActiveCameraForPlayMode()
@@ -804,5 +813,27 @@ public struct EditorView: View {
             // Re-trigger Save flow
             editor_handleSave()
         }
+    }
+
+    // MARK: - Project Switching Cleanup
+
+    /// Cleans up the editor state when switching projects.
+    /// Clears all entities, resets cameras/lights, and prepares for new project.
+    private func cleanupForProjectSwitch() {
+        print("🧹 Cleaning up for project switch...")
+
+        // Reuse the existing clear scene logic (handles entities, cameras, lights, etc.)
+        editor_clearScene()
+
+        // Clear selected asset
+        selectedAsset = nil
+
+        // Clear assets dictionary (will be repopulated by Asset Browser)
+        assets = [:]
+
+        // Clear current scene URL
+        editorController?.currentSceneURL = nil
+
+        print("✅ Editor cleaned up for new project")
     }
 }

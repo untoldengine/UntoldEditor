@@ -353,6 +353,9 @@
                 }
             }
 
+            // Notify editor to clean up before switching projects
+            NotificationCenter.default.post(name: .projectWillSwitch, object: nil)
+
             // Set the asset base path
             assetBasePath = gameDataPath
             EditorAssetBasePath.shared.basePath = gameDataPath

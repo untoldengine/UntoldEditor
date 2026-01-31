@@ -97,6 +97,7 @@ class EditorController: SelectionDelegate, ObservableObject {
 // Notification to ask the Asset Browser to reload its listing
 extension Notification.Name {
     static let assetBrowserReload = Notification.Name("AssetBrowser.Reload")
+    static let projectWillSwitch = Notification.Name("Project.WillSwitch")
 }
 
 func saveScene(sceneData: SceneData) {
