@@ -48,7 +48,8 @@ import XCTest
                 onCreateSphere: { onCreateSphereCalled.pointee = true },
                 onCreatePlane: { onCreatePlaneCalled.pointee = true },
                 onCreateCylinder: { onCreateCylinderCalled.pointee = true },
-                onCreateCone: { onCreateConeCalled.pointee = true }
+                onCreateCone: { onCreateConeCalled.pointee = true },
+                onQuickPreview: {}
             )
         }
 
@@ -140,7 +141,8 @@ import XCTest
                 onCreateSphere: {},
                 onCreatePlane: {},
                 onCreateCylinder: {},
-                onCreateCone: {}
+                onCreateCone: {},
+                onQuickPreview: {}
             )
 
             // Wrap in a hosting controller to ensure SwiftUI can build the body.
@@ -175,7 +177,8 @@ import XCTest
                 onCreateSphere: { sphereCreated = true },
                 onCreatePlane: { planeCreated = true },
                 onCreateCylinder: { cylinderCreated = true },
-                onCreateCone: { coneCreated = true }
+                onCreateCone: { coneCreated = true },
+                onQuickPreview: {}
             )
 
             // When: Invoking the primitive creation closures
@@ -211,7 +214,8 @@ import XCTest
                 onCreateSphere: { callCount += 1 },
                 onCreatePlane: { callCount += 1 },
                 onCreateCylinder: {},
-                onCreateCone: {}
+                onCreateCone: {},
+                onQuickPreview: {}
             )
 
             // When: Calling the primitive closures
@@ -244,7 +248,8 @@ import XCTest
                 onCreateSphere: { sphereCount += 1 },
                 onCreatePlane: { planeCount += 1 },
                 onCreateCylinder: {},
-                onCreateCone: {}
+                onCreateCone: {},
+                onQuickPreview: {}
             )
 
             // When: Calling specific primitive closures multiple times
