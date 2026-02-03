@@ -159,6 +159,24 @@ var availableComponents_Editor: [ComponentOption_Editor] = [
             }
         )
     }),
+
+    ComponentOption_Editor(
+        id: getComponentId(for: LODComponent.self),
+        name: "LOD Component",
+        type: LODComponent.self,
+        view: { selectedId, asset, refreshView in
+            AnyView(
+                Group {
+                    if let entityId = selectedId {
+                        LODComponentEditorView(entityId: entityId, asset: asset, refreshView: refreshView)
+                    }
+                }
+            )
+        },
+        onAdd: { entityId in
+            setEntityLodComponent(entityId: entityId)
+        }
+    ),
 ]
 
 // Script Component - controlled by feature flag
@@ -407,6 +425,8 @@ struct InspectorView: View {
             scene.remove(component: GaussianComponent.self, from: entityId)
         } else if key == ObjectIdentifier(ScriptComponent.self) {
             scene.remove(component: ScriptComponent.self, from: entityId)
+        } else if key == ObjectIdentifier(LODComponent.self) {
+            scene.remove(component: LODComponent.self, from: entityId)
         }
 
         refreshView()
