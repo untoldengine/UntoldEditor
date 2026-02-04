@@ -60,16 +60,18 @@ final class BuildEditModeGraphTests: XCTestCase {
         XCTAssertEqual(finalID, "precomp")
 
         let expectedIDs: Set<String> = [
-            "environment", "shadow", "model", "lightPass",
+            "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
             "outline", "lightVisualPass", "gizmo", "precomp", "gaussian",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
         assertDeps(graph, "environment", [])
         assertDeps(graph, "shadow", ["environment"])
-        assertDeps(graph, "model", ["shadow"])
-        assertDeps(graph, "lightPass", ["model", "shadow"])
-        assertDeps(graph, "outline", ["model"])
+        assertDeps(graph, "batchedShadow", ["shadow"])
+        assertDeps(graph, "model", ["batchedShadow"])
+        assertDeps(graph, "batchedModel", ["model"])
+        assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "outline", ["batchedModel"])
         assertDeps(graph, "lightVisualPass", ["outline"])
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
@@ -89,16 +91,18 @@ final class BuildEditModeGraphTests: XCTestCase {
         XCTAssertEqual(finalID, "precomp")
 
         let expectedIDs: Set<String> = [
-            "grid", "shadow", "model", "lightPass",
+            "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
             "outline", "lightVisualPass", "gizmo", "precomp", "gaussian",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
         assertDeps(graph, "grid", [])
         assertDeps(graph, "shadow", ["grid"])
-        assertDeps(graph, "model", ["shadow"])
-        assertDeps(graph, "lightPass", ["model", "shadow"])
-        assertDeps(graph, "outline", ["model"])
+        assertDeps(graph, "batchedShadow", ["shadow"])
+        assertDeps(graph, "model", ["batchedShadow"])
+        assertDeps(graph, "batchedModel", ["model"])
+        assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "outline", ["batchedModel"])
         assertDeps(graph, "lightVisualPass", ["outline"])
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])

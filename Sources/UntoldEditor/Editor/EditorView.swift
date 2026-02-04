@@ -124,6 +124,11 @@ public struct EditorView: View {
                                 Label("Effects", systemImage: "cube")
                             }
 
+                        StaticBatchingView()
+                            .tabItem {
+                                Label("Batching", systemImage: "square.3.layers.3d")
+                            }
+
                         InspectorView(
                             selectionManager: selectionManager,
                             sceneGraphModel: sceneGraphModel,

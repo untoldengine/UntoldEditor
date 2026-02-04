@@ -67,7 +67,9 @@ final class EditorRenderingSystemTests: XCTestCase {
 
         // Verify essential passes exist
         XCTAssertNotNil(graph["shadow"], "Shadow pass should exist")
+        XCTAssertNotNil(graph["batchedShadow"], "Batched shadow pass should exist")
         XCTAssertNotNil(graph["model"], "Model pass should exist")
+        XCTAssertNotNil(graph["batchedModel"], "Batched model pass should exist")
         XCTAssertNotNil(graph["lightPass"], "Light pass should exist")
         XCTAssertNotNil(graph["outline"], "Highlight/outline pass should exist")
         XCTAssertNotNil(graph["lightVisualPass"], "Light visual pass should exist")
@@ -91,7 +93,9 @@ final class EditorRenderingSystemTests: XCTestCase {
 
         // Verify essential passes exist
         XCTAssertNotNil(graph["shadow"], "Shadow pass should exist")
+        XCTAssertNotNil(graph["batchedShadow"], "Batched shadow pass should exist")
         XCTAssertNotNil(graph["model"], "Model pass should exist")
+        XCTAssertNotNil(graph["batchedModel"], "Batched model pass should exist")
         XCTAssertNotNil(graph["lightPass"], "Light pass should exist")
         XCTAssertNotNil(graph["outline"], "Highlight/outline pass should exist")
         XCTAssertNotNil(graph["lightVisualPass"], "Light visual pass should exist")
@@ -112,10 +116,13 @@ final class EditorRenderingSystemTests: XCTestCase {
         // Assert - Verify dependency chain
         XCTAssertEqual(graph["grid"]?.dependencies.count, 0, "Grid pass should have no dependencies")
         XCTAssertEqual(graph["shadow"]?.dependencies, ["grid"], "Shadow should depend on grid")
-        XCTAssertEqual(graph["model"]?.dependencies, ["shadow"], "Model should depend on shadow")
+        XCTAssertEqual(graph["batchedShadow"]?.dependencies, ["shadow"], "Batched shadow should depend on shadow")
+        XCTAssertEqual(graph["model"]?.dependencies, ["batchedShadow"], "Model should depend on batchedShadow")
+        XCTAssertEqual(graph["batchedModel"]?.dependencies, ["model"], "Batched model should depend on model")
         XCTAssertTrue(graph["lightPass"]?.dependencies.contains("model") ?? false, "Light pass should depend on model")
         XCTAssertTrue(graph["lightPass"]?.dependencies.contains("shadow") ?? false, "Light pass should depend on shadow")
-        XCTAssertEqual(graph["outline"]?.dependencies, ["model"], "Outline should depend on model")
+        XCTAssertTrue(graph["lightPass"]?.dependencies.contains("batchedModel") ?? false, "Light pass should depend on batchedModel")
+        XCTAssertEqual(graph["outline"]?.dependencies, ["batchedModel"], "Outline should depend on batchedModel")
         XCTAssertEqual(graph["lightVisualPass"]?.dependencies, ["outline"], "Light visual pass should depend on outline")
         XCTAssertEqual(graph["gizmo"]?.dependencies, ["lightVisualPass"], "Gizmo should depend on light visual pass")
 
@@ -135,7 +142,9 @@ final class EditorRenderingSystemTests: XCTestCase {
         // Assert - Verify dependency chain
         XCTAssertEqual(graph["environment"]?.dependencies.count, 0, "Environment pass should have no dependencies")
         XCTAssertEqual(graph["shadow"]?.dependencies, ["environment"], "Shadow should depend on environment")
-        XCTAssertEqual(graph["model"]?.dependencies, ["shadow"], "Model should depend on shadow")
+        XCTAssertEqual(graph["batchedShadow"]?.dependencies, ["shadow"], "Batched shadow should depend on shadow")
+        XCTAssertEqual(graph["model"]?.dependencies, ["batchedShadow"], "Model should depend on batchedShadow")
+        XCTAssertEqual(graph["batchedModel"]?.dependencies, ["model"], "Batched model should depend on model")
     }
 
     func test_buildEditModeGraph_canBeTopologicallySorted() {
@@ -285,9 +294,10 @@ final class EditorRenderingSystemTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(lightPass.dependencies.count, 2, "Light pass should have exactly 2 dependencies")
+        XCTAssertEqual(lightPass.dependencies.count, 3, "Light pass should have exactly 3 dependencies")
         XCTAssertTrue(lightPass.dependencies.contains("model"), "Light pass should depend on model")
         XCTAssertTrue(lightPass.dependencies.contains("shadow"), "Light pass should depend on shadow")
+        XCTAssertTrue(lightPass.dependencies.contains("batchedModel"), "Light pass should depend on batchedModel")
     }
 
     // MARK: - Helper Methods

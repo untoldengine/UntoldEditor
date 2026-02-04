@@ -54,10 +54,22 @@ extension UntoldRenderer {
         @inline(__always)
         func refreshInspector() { editorController?.refreshInspector() }
 
+        // Remove static batching when entity is transformed via gizmo
+        @inline(__always)
+        func handleStaticBatchOnTransform(entityId: EntityID) {
+            if hasComponent(entityId: entityId, componentType: StaticBatchComponent.self) {
+                removeEntityStaticBatchComponent(entityId: entityId)
+                if isBatchingEnabled() {
+                    generateBatches()
+                }
+            }
+        }
+
         switch (editorController!.activeMode, editorController!.activeAxis) {
         // MARK: - Translate
 
         case (.translate, .x) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(1, 0, 0)
             let amt = computeAxisTranslationGizmo(
                 axisWorldDir: axis,
@@ -73,6 +85,7 @@ extension UntoldRenderer {
             refreshInspector()
 
         case (.translate, .y) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(0, 1, 0)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: getLocalPosition(entityId: activeEntity),
@@ -86,6 +99,7 @@ extension UntoldRenderer {
             refreshInspector()
 
         case (.translate, .z) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(0, 0, 1)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: getLocalPosition(entityId: activeEntity),
@@ -101,6 +115,7 @@ extension UntoldRenderer {
         // MARK: - Rotate
 
         case (.rotate, .x) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(1, 0, 0)
             let angle = computeRotationAngleFromGizmo(
                 axis: axis,
@@ -118,6 +133,7 @@ extension UntoldRenderer {
             refreshInspector()
 
         case (.rotate, .y) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(0, 1, 0)
             let angle = computeRotationAngleFromGizmo(
                 axis: axis,
@@ -135,6 +151,7 @@ extension UntoldRenderer {
             refreshInspector()
 
         case (.rotate, .z) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(0, 0, 1)
             let angle = computeRotationAngleFromGizmo(
                 axis: axis,
@@ -154,6 +171,7 @@ extension UntoldRenderer {
         // MARK: - Scale
 
         case (.scale, .x) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(1, 0, 0)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: getLocalPosition(entityId: activeEntity),
@@ -169,6 +187,7 @@ extension UntoldRenderer {
             refreshInspector()
 
         case (.scale, .y) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(0, 1, 0)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: getLocalPosition(entityId: activeEntity),
@@ -184,6 +203,7 @@ extension UntoldRenderer {
             refreshInspector()
 
         case (.scale, .z) where InputSystem.shared.mouseActive:
+            handleStaticBatchOnTransform(entityId: activeEntity)
             let axis = simd_float3(0, 0, 1)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: getLocalPosition(entityId: activeEntity),

@@ -82,16 +82,28 @@ func buildEditModeGraph() -> RenderGraphResult {
     )
     graph[shadowPass.id] = shadowPass
 
+    // Add batched shadow pass (runs after regular shadow pass)
+    let batchedShadowPass = RenderPass(
+        id: "batchedShadow", dependencies: [shadowPass.id], execute: RenderPasses.batchedShadowExecution
+    )
+    graph[batchedShadowPass.id] = batchedShadowPass
+
     let modelPass = RenderPass(
-        id: "model", dependencies: [shadowPass.id], execute: RenderPasses.modelExecution
+        id: "model", dependencies: [batchedShadowPass.id], execute: RenderPasses.modelExecution
     )
     graph[modelPass.id] = modelPass
 
-    let lightPass = RenderPass(id: "lightPass", dependencies: [modelPass.id, shadowPass.id], execute: RenderPasses.lightExecution)
+    // Add batched model pass (runs after regular model pass)
+    let batchedModelPass = RenderPass(
+        id: "batchedModel", dependencies: [modelPass.id], execute: RenderPasses.batchedModelExecution
+    )
+    graph[batchedModelPass.id] = batchedModelPass
+
+    let lightPass = RenderPass(id: "lightPass", dependencies: [batchedModelPass.id, modelPass.id, shadowPass.id], execute: RenderPasses.lightExecution)
     graph[lightPass.id] = lightPass
 
     let highlightPass = RenderPass(
-        id: "outline", dependencies: [modelPass.id], execute: RenderPasses.highlightExecution
+        id: "outline", dependencies: [batchedModelPass.id], execute: RenderPasses.highlightExecution
     )
     graph[highlightPass.id] = highlightPass
 
