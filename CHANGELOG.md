@@ -1,4 +1,8 @@
 # Changelog
+## v0.9.0 - 2026-02-04
+### 🚀 Features
+- [Feature] Adde LOD support (319502a…)
+- [Feature] Added Static Batching support (f70016f…)
 ## v0.8.2 - 2026-02-01
 ### 🐞 Fixes
 - [Patch] added a dropdown menu to import button (645a6e7…)
