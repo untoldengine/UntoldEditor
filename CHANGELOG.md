@@ -1,4 +1,9 @@
 # Changelog
+## v0.10.0 - 2026-02-10
+### 🐞 Fixes
+- [Feature] Added geometry streaming support (d78a58a…)
+- [Patch] Fixed flickering issue (16469ab…)
+- [Patch] Fixed input fields to go un-focus (6e533e1…)
 ## v0.9.0 - 2026-02-04
 ### 🚀 Features
 - [Feature] Adde LOD support (319502a…)
