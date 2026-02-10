@@ -10,7 +10,11 @@ import MetalKit
 import UntoldEngine
 
 func EditorUpdateRenderingSystem(in view: MTKView) {
+    // Limit in-flight command buffers so triple-buffered culling data isn't overwritten
+    commandBufferSemaphore.wait()
+
     if let commandBuffer = renderInfo.commandQueue.makeCommandBuffer() {
+        renderInfo.lastCommandBuffer = commandBuffer
         performFrustumCulling(commandBuffer: commandBuffer)
 
         executeGaussianDepth(commandBuffer)
@@ -49,13 +53,19 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
         }
 
         commandBuffer.addCompletedHandler { _ in
+            // Release the in-flight slot
+            commandBufferSemaphore.signal()
             DispatchQueue.main.async {
                 needsFinalizeDestroys = true
                 visibleEntityIds = tripleVisibleEntities.snapshotForRead(frame: cullFrameIndex)
+                
             }
         }
 
         commandBuffer.commit()
+    } else {
+        // Failed to create command buffer - release slot
+        commandBufferSemaphore.signal()
     }
 }
 
