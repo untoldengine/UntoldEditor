@@ -7,15 +7,139 @@
 //  See the LICENSE file or <https://www.gnu.org/licenses/> for details.
 //
 #if canImport(AppKit)
+    import AppKit
     import simd
     import SwiftUI
+
+    private struct CommitAndDefocusTextField: NSViewRepresentable {
+        @Binding var text: String
+        let onSubmit: () -> Void
+
+        func makeCoordinator() -> Coordinator {
+            Coordinator(text: $text, onSubmit: onSubmit)
+        }
+
+        func makeNSView(context: Context) -> NSTextField {
+            let textField = NSTextField(string: text)
+            textField.delegate = context.coordinator
+            textField.target = context.coordinator
+            textField.action = #selector(Coordinator.didSubmitFromAction(_:))
+            textField.isBordered = true
+            textField.isBezeled = true
+            textField.bezelStyle = .roundedBezel
+            textField.lineBreakMode = .byClipping
+            return textField
+        }
+
+        func updateNSView(_ nsView: NSTextField, context: Context) {
+            context.coordinator.onSubmit = onSubmit
+
+            if nsView.stringValue != text {
+                nsView.stringValue = text
+            }
+        }
+
+        final class Coordinator: NSObject, NSTextFieldDelegate {
+            private let text: Binding<String>
+            var onSubmit: () -> Void
+            private var suppressNextEndEditingCommit = false
+
+            init(text: Binding<String>, onSubmit: @escaping () -> Void) {
+                self.text = text
+                self.onSubmit = onSubmit
+            }
+
+            func controlTextDidChange(_ notification: Notification) {
+                guard let textField = notification.object as? NSTextField else {
+                    return
+                }
+
+                text.wrappedValue = textField.stringValue
+            }
+
+            func controlTextDidEndEditing(_: Notification) {
+                if suppressNextEndEditingCommit {
+                    suppressNextEndEditingCommit = false
+                    return
+                }
+
+                onSubmit()
+            }
+
+            @objc func didSubmitFromAction(_ sender: NSControl) {
+                suppressNextEndEditingCommit = true
+                onSubmit()
+                sender.window?.makeFirstResponder(nil)
+            }
+
+            func control(_ control: NSControl, textView _: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+                if commandSelector == #selector(NSResponder.insertNewline(_:))
+                    || commandSelector == #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:))
+                    || commandSelector == #selector(NSResponder.insertLineBreak(_:))
+                    || commandSelector == #selector(NSResponder.insertTab(_:))
+                    || commandSelector == #selector(NSResponder.insertBacktab(_:))
+                {
+                    suppressNextEndEditingCommit = true
+                    onSubmit()
+                    control.window?.makeFirstResponder(nil)
+                    return true
+                }
+
+                return false
+            }
+        }
+    }
+
+    public struct CommitAndDefocusFloatField: View {
+        @Binding var value: Float
+        @State private var tempValue = "0"
+
+        public init(value: Binding<Float>) {
+            _value = value
+        }
+
+        public var body: some View {
+            CommitAndDefocusTextField(text: $tempValue, onSubmit: {
+                if let parsed = Float(tempValue) {
+                    value = parsed
+                }
+            })
+            .onAppear {
+                tempValue = String(value)
+            }
+            .onChange(of: value) { _, newValue in
+                tempValue = String(newValue)
+            }
+        }
+    }
+
+    public struct CommitAndDefocusIntField: View {
+        @Binding var value: Int
+        @State private var tempValue = "0"
+
+        public init(value: Binding<Int>) {
+            _value = value
+        }
+
+        public var body: some View {
+            CommitAndDefocusTextField(text: $tempValue, onSubmit: {
+                if let parsed = Int(tempValue) {
+                    value = parsed
+                }
+            })
+            .onAppear {
+                tempValue = String(value)
+            }
+            .onChange(of: value) { _, newValue in
+                tempValue = String(newValue)
+            }
+        }
+    }
 
     public struct TextInputVectorView: View {
         let label: String
         @Binding var value: SIMD3<Float>
         @State private var tempValues: [String] = ["0", "0", "0"]
-        @FocusState private var focusedField: Int?
-        @State private var lastFocusedField: Int?
 
         public init(label: String, value: Binding<SIMD3<Float>>) {
             self.label = label
@@ -29,30 +153,17 @@
 
                 HStack {
                     ForEach(0 ..< 3, id: \.self) { index in
-                        TextField("", text: Binding(
+                        CommitAndDefocusTextField(text: Binding(
                             get: { tempValues[index] },
                             set: { tempValues[index] = $0 }
-                        ))
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .frame(width: 60)
-                        .focused($focusedField, equals: index)
-                        .onChange(of: value[index]) { _, newValue in
-                            tempValues[index] = String(newValue) // Update when entity changes
-                        }
-                        .onSubmit {
+                        ), onSubmit: {
                             if let newValue = Float(tempValues[index]) {
                                 value[index] = newValue
                             }
-                            focusedField = nil
-                        }
-                        .onChange(of: focusedField) { oldValue, newValue in
-                            // Commit when this field loses focus (e.g., via Tab)
-                            if oldValue == index, newValue != index {
-                                if let newValue = Float(tempValues[index]) {
-                                    value[index] = newValue
-                                }
-                            }
-                            lastFocusedField = newValue
+                        })
+                        .frame(width: 60)
+                        .onChange(of: value[index]) { _, newValue in
+                            tempValues[index] = String(newValue) // Update when entity changes
                         }
                     }
                 }
@@ -68,8 +179,6 @@
         let label: String
         @Binding var value: Float
         @State private var tempValues: String = "0"
-        @FocusState private var focusedField: Int?
-        @State private var wasFocused: Bool = false
 
         public init(label: String, value: Binding<Float>) {
             self.label = label
@@ -82,30 +191,17 @@
                     .font(.headline)
 
                 HStack {
-                    TextField("", text: Binding(
+                    CommitAndDefocusTextField(text: Binding(
                         get: { tempValues },
                         set: { tempValues = $0 }
-                    ))
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .frame(width: 60)
-                    .focused($focusedField, equals: 1)
-                    .onChange(of: value) { _, newValue in
-                        tempValues = String(newValue) // Update when entity changes
-                    }
-                    .onSubmit {
+                    ), onSubmit: {
                         if let newValue = Float(tempValues) {
                             value = newValue
                         }
-                        focusedField = nil
-                    }
-                    .onChange(of: focusedField) { _, newValue in
-                        // Commit when focus leaves (e.g., Tab)
-                        if wasFocused, newValue != 1 {
-                            if let newValue = Float(tempValues) {
-                                value = newValue
-                            }
-                        }
-                        wasFocused = (newValue == 1)
+                    })
+                    .frame(width: 60)
+                    .onChange(of: value) { _, newValue in
+                        tempValues = String(newValue) // Update when entity changes
                     }
                 }
             }

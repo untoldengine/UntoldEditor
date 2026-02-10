@@ -601,24 +601,21 @@ struct GeometryStreamingEditorView: View {
                         HStack {
                             Text("Streaming Radius:")
                                 .font(.caption)
-                            TextField("100.0", value: $streamingRadius, format: .number)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                            CommitAndDefocusFloatField(value: $streamingRadius)
                                 .frame(width: 80)
                         }
 
                         HStack {
                             Text("Unload Radius:")
                                 .font(.caption)
-                            TextField("150.0", value: $unloadRadius, format: .number)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                            CommitAndDefocusFloatField(value: $unloadRadius)
                                 .frame(width: 80)
                         }
 
                         HStack {
                             Text("Priority:")
                                 .font(.caption)
-                            TextField("0", value: $priority, format: .number)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                            CommitAndDefocusIntField(value: $priority)
                                 .frame(width: 80)
                         }
 

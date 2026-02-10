@@ -58,7 +58,6 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             DispatchQueue.main.async {
                 needsFinalizeDestroys = true
                 visibleEntityIds = tripleVisibleEntities.snapshotForRead(frame: cullFrameIndex)
-                
             }
         }
 
