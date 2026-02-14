@@ -75,9 +75,11 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNotNil(graph["lightVisualPass"], "Light visual pass should exist")
         XCTAssertNotNil(graph["gizmo"], "Gizmo pass should exist")
         XCTAssertNotNil(graph["precomp"], "Pre-composite pass should exist")
+        XCTAssertNotNil(graph["look"], "Look pass should exist")
+        XCTAssertNotNil(graph["outputTransform"], "Output transform pass should exist")
 
         // Verify final pass ID
-        XCTAssertEqual(finalPassID, "precomp", "Final pass ID should be precomp")
+        XCTAssertEqual(finalPassID, "outputTransform", "Final pass ID should be outputTransform")
     }
 
     func test_buildEditModeGraph_withEnvironmentMode_createsCorrectGraphStructure() {
@@ -101,9 +103,11 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNotNil(graph["lightVisualPass"], "Light visual pass should exist")
         XCTAssertNotNil(graph["gizmo"], "Gizmo pass should exist")
         XCTAssertNotNil(graph["precomp"], "Pre-composite pass should exist")
+        XCTAssertNotNil(graph["look"], "Look pass should exist")
+        XCTAssertNotNil(graph["outputTransform"], "Output transform pass should exist")
 
         // Verify final pass ID
-        XCTAssertEqual(finalPassID, "precomp", "Final pass ID should be precomp")
+        XCTAssertEqual(finalPassID, "outputTransform", "Final pass ID should be outputTransform")
     }
 
     func test_buildEditModeGraph_gridMode_hasCorrectDependencies() {
@@ -130,6 +134,9 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertTrue(precompDeps.contains("model"), "Precomp should depend on model")
         XCTAssertTrue(precompDeps.contains("gizmo"), "Precomp should depend on gizmo")
         XCTAssertTrue(precompDeps.contains("lightPass"), "Precomp should depend on light pass")
+
+        XCTAssertEqual(graph["look"]?.dependencies, ["precomp"], "Look should depend on precomp")
+        XCTAssertEqual(graph["outputTransform"]?.dependencies, ["look"], "Output transform should depend on look")
     }
 
     func test_buildEditModeGraph_environmentMode_hasCorrectDependencies() {
@@ -181,6 +188,8 @@ final class EditorRenderingSystemTests: XCTestCase {
             ("lightVisualPass", "gizmo"),
             ("gizmo", "precomp"),
             ("lightPass", "precomp"),
+            ("precomp", "look"),
+            ("look", "outputTransform"),
         ])
     }
 

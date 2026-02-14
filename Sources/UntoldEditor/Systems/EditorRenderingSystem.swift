@@ -133,5 +133,19 @@ func buildEditModeGraph() -> RenderGraphResult {
     )
     graph[preCompPass.id] = preCompPass
 
-    return (graph, preCompPass.id)
+    let lookPass = RenderPass(
+        id: "look",
+        dependencies: [preCompPass.id],
+        execute: lookRenderPass
+    )
+    graph[lookPass.id] = lookPass
+
+    let outputPass = RenderPass(
+        id: "outputTransform",
+        dependencies: [lookPass.id],
+        execute: outputTransformRenderPass
+    )
+    graph[outputPass.id] = outputPass
+
+    return (graph, outputPass.id)
 }

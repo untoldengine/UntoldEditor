@@ -38,12 +38,12 @@ let pipelineConfigs: [String: ShaderPipelineConfig] = [
         blendEnabled: false
     ),
 
-    "tonemapping": ShaderPipelineConfig(
-        pipelineName: "Tone-mapping Pipeline",
-        vertexFunctionName: "vertexTonemappingShader",
-        fragmentFunctionName: "fragmentTonemappingShader",
+    "look": ShaderPipelineConfig(
+        pipelineName: "Look Pipeline",
+        vertexFunctionName: "vertexLookShader",
+        fragmentFunctionName: "fragmentLookShader",
         vertexDescriptor: createPostProcessVertexDescriptor(),
-        colorPixelFormats: [renderInfo.colorPixelFormat, .rgba16Float, .rgba16Float],
+        colorPixelFormats: [renderInfo.colorPipeline.working.lookOutput],
         depthPixelFormat: renderInfo.depthPixelFormat,
         depthComparison: nil,
         depthEnabled: false,
@@ -63,13 +63,13 @@ let pipelineConfigs: [String: ShaderPipelineConfig] = [
         blendEnabled: false
     ),
 
-    "colorgrading": ShaderPipelineConfig(
-        pipelineName: "Color Grading Pipeline",
-        vertexFunctionName: "vertexColorGradingShader",
-        fragmentFunctionName: "fragmentColorGradingShader",
+    "outputTransform": ShaderPipelineConfig(
+        pipelineName: "Output Transform Pipeline",
+        vertexFunctionName: "vertexOutputTransformShader",
+        fragmentFunctionName: "fragmentOutputTransformShader",
         vertexDescriptor: createPostProcessVertexDescriptor(),
-        colorPixelFormats: [renderInfo.colorPixelFormat, .rgba16Float, .rgba16Float],
-        depthPixelFormat: renderInfo.depthPixelFormat,
+        colorPixelFormats: [renderInfo.presentColorPixelFormat],
+        depthPixelFormat: renderInfo.presentDepthPixelFormat,
         depthComparison: nil,
         depthEnabled: false,
         blendEnabled: false
@@ -128,7 +128,8 @@ func reloadPipeline(named pipelineName: String, with library: MTLLibrary) {
 
         // Update your pipeline storage
 
-        guard var pipe = PipelineManager.shared.renderPipelinesByType[.model] else {
+        let pipelineType = RenderPipelineType(pipelineName)
+        guard var pipe = PipelineManager.shared.renderPipelinesByType[pipelineType] else {
             print("Failed to get pipeline for: \(pipelineName)")
             return
         }
@@ -136,7 +137,7 @@ func reloadPipeline(named pipelineName: String, with library: MTLLibrary) {
         // TODO: Check if the value actually changes or becasue its a struct we are just copy by value and it's not changing at all so we had to re-assign the pipe to the manager
         pipe.pipelineState = newPipeline
         pipe.depthState = newDepthState
-        PipelineManager.shared.update(rendererPipeLine: pipe, forType: .model)
+        PipelineManager.shared.update(rendererPipeLine: pipe, forType: pipelineType)
         print("✅ Reloaded pipeline: \(pipelineName)")
     } catch {
         print("❌ Failed to create pipeline state: \(error)")

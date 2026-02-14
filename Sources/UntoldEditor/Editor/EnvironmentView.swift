@@ -142,6 +142,10 @@ struct ColorGradingEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $settings.enabled) {
+                Text("Enable Color Grading")
+            }
+
             Text("Exposure")
             Slider(value: $settings.exposure, in: -5.0 ... 5.0)
             Text(String(format: "%.2f", settings.exposure))

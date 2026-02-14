@@ -57,11 +57,11 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         let (graph, finalID) = buildEditModeGraph()
 
-        XCTAssertEqual(finalID, "precomp")
+        XCTAssertEqual(finalID, "outputTransform")
 
         let expectedIDs: Set<String> = [
             "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
-            "outline", "lightVisualPass", "gizmo", "precomp", "gaussian",
+            "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
@@ -76,6 +76,8 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
         assertDeps(graph, "precomp", ["model", "gizmo", "lightPass", "gaussian"])
+        assertDeps(graph, "look", ["precomp"])
+        assertDeps(graph, "outputTransform", ["look"])
 
         // Sanity: no cycles
         assertNoCycles(graph)
@@ -88,11 +90,11 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         let (graph, finalID) = buildEditModeGraph()
 
-        XCTAssertEqual(finalID, "precomp")
+        XCTAssertEqual(finalID, "outputTransform")
 
         let expectedIDs: Set<String> = [
             "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
-            "outline", "lightVisualPass", "gizmo", "precomp", "gaussian",
+            "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
@@ -107,6 +109,8 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
         assertDeps(graph, "precomp", ["model", "gizmo", "lightPass", "gaussian"])
+        assertDeps(graph, "look", ["precomp"])
+        assertDeps(graph, "outputTransform", ["look"])
 
         assertNoCycles(graph)
     }
