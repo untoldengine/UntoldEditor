@@ -11,6 +11,11 @@ import Foundation
 import simd
 import UntoldEngine
 
+private func applyDefaultGizmoOrientation(entityId: EntityID) {
+    // Keep gizmo axis meshes aligned with engine/world axes.
+    rotateTo(entityId: entityId, angle: -90.0, axis: simd_float3(1.0, 0.0, 0.0))
+}
+
 func createGizmo(name: String) {
     var gizmoName: String = name
 
@@ -32,6 +37,7 @@ func createGizmo(name: String) {
     registerComponent(entityId: parentEntityIdGizmo, componentType: GizmoComponent.self)
 
     setEntityMesh(entityId: parentEntityIdGizmo, filename: gizmoName, withExtension: "usdz")
+    applyDefaultGizmoOrientation(entityId: parentEntityIdGizmo)
 
     translateTo(entityId: parentEntityIdGizmo, position: getPosition(entityId: activeEntity))
     for child in getEntityChildren(parentId: parentEntityIdGizmo) {
