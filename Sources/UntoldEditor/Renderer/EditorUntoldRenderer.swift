@@ -221,7 +221,15 @@ extension UntoldRenderer {
         // MARK: - Light direction (view-plane drag)
 
         case (.lightRotate, .none) where InputSystem.shared.mouseActive:
-            let lightDirEntity = findEntity(name: "directionHandle")
+            let lightDirEntity: EntityID = {
+                if directionHandleEntityId != .invalid {
+                    return directionHandleEntityId
+                }
+                return findEntity(name: "directionHandle") ?? .invalid
+            }()
+            guard lightDirEntity != .invalid else {
+                break
+            }
 
             // Choose 2D plane aligned to camera forward
             let cameraForward = -cameraComponent.zAxis
@@ -247,10 +255,10 @@ extension UntoldRenderer {
                                                  viewportSize: renderInfo.viewPort)
 
             let t = axis1 * p1 + axis2 * p2
-            translateBy(entityId: lightDirEntity!, position: t)
+            translateBy(entityId: lightDirEntity, position: t)
 
             let lightPos = getPosition(entityId: parentEntityIdGizmo)
-            let gizmoPos = getPosition(entityId: lightDirEntity!)
+            let gizmoPos = getPosition(entityId: lightDirEntity)
             let zAxis = simd_normalize(gizmoPos - lightPos) * -1.0
 
             let worldUp = simd_float3(0, 1, 0)

@@ -20,8 +20,9 @@ var selectionDelegate: SelectionDelegate?
 var gizmoActive: Bool = false
 var activeHitGizmoEntity: EntityID = .invalid
 var parentEntityIdGizmo: EntityID = .invalid
+var directionHandleEntityId: EntityID = .invalid
 
-let gizmoDesiredScreenSize: Float = 500.0 // pixels
+let gizmoDesiredScreenSize: Float = 75.0 // pixels
 
 var spawnDistance: Float = 2.0
 

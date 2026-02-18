@@ -9,12 +9,28 @@
 
 import UntoldEngine
 
+private func makeSpotLightDebugMesh() -> [Mesh] {
+    BasicPrimitives.createCone(height: 1.0, radius: 0.5, segments: [24, 1])
+}
+
+private func makeAreaLightDebugMesh() -> [Mesh] {
+    BasicPrimitives.createPlane(width: 1.0, depth: 1.0, segments: [1, 1])
+}
+
+private func makePointLightDebugMesh() -> [Mesh] {
+    BasicPrimitives.createSphere(extent: 0.25, segments: [24, 12])
+}
+
+private func makeDirectionalLightDebugMesh() -> [Mesh] {
+    BasicPrimitives.createSphere(extent: 0.25, segments: [24, 12])
+}
+
 func loadLightDebugMeshes() {
-    spotLightDebugMesh = loadRawMesh(name: "spot_light_debug_mesh", filename: "spot_light_debug_mesh", withExtension: "usdz")
+    spotLightDebugMesh = makeSpotLightDebugMesh()
 
-    pointLightDebugMesh = loadRawMesh(name: "point_light_debug_mesh", filename: "point_light_debug_mesh", withExtension: "usdz")
+    pointLightDebugMesh = makePointLightDebugMesh()
 
-    areaLightDebugMesh = loadRawMesh(name: "area_light_debug_mesh", filename: "area_light_debug_mesh", withExtension: "usdz")
+    areaLightDebugMesh = makeAreaLightDebugMesh()
 
-    dirLightDebugMesh = loadRawMesh(name: "dir_light_debug_mesh", filename: "dir_light_debug_mesh", withExtension: "usdz")
+    dirLightDebugMesh = makeDirectionalLightDebugMesh()
 }

@@ -47,9 +47,9 @@ final class LightDebugMeshesTests: XCTestCase {
     func test_loadLightDebugMeshes_loadsCorrectNames() throws {
         loadLightDebugMeshes()
 
-        XCTAssertEqual(spotLightDebugMesh.first?.assetName, "spot_light_debug_mesh")
-        XCTAssertEqual(pointLightDebugMesh.first?.assetName, "point_light_debug_mesh")
-        XCTAssertEqual(areaLightDebugMesh.first?.assetName, "area_light_debug_mesh")
-        XCTAssertEqual(dirLightDebugMesh.first?.assetName, "dir_light_debug_mesh")
+        XCTAssertEqual(spotLightDebugMesh.first?.assetName, "Cone")
+        XCTAssertEqual(pointLightDebugMesh.first?.assetName, "Sphere")
+        XCTAssertEqual(areaLightDebugMesh.first?.assetName, "Plane")
+        XCTAssertEqual(dirLightDebugMesh.first?.assetName, "Sphere")
     }
 }

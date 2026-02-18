@@ -67,6 +67,27 @@ extension RenderPasses {
 
         let entities = queryEntitiesWithComponentIds([transformId, renderId, gizmoId], in: scene)
 
+        guard gizmoActive, parentEntityIdGizmo != .invalid else {
+            return
+        }
+
+        guard let gizmoRootWorldTransform = scene.get(component: WorldTransformComponent.self, for: parentEntityIdGizmo),
+              let gizmoRootLocalTransform = scene.get(component: LocalTransformComponent.self, for: parentEntityIdGizmo)
+        else {
+            return
+        }
+
+        // Keep gizmo size approximately constant in screen space by scaling the root only.
+        // Child handles keep fixed local offsets, so cones/cubes stay attached to shafts.
+        let gizmoRootWorldPosition = simd_float3(
+            gizmoRootWorldTransform.space.columns.3.x,
+            gizmoRootWorldTransform.space.columns.3.y,
+            gizmoRootWorldTransform.space.columns.3.z
+        )
+        let distanceToCamera = length(getCameraPosition(entityId: camera) - gizmoRootWorldPosition)
+        let worldScale = 2.0 * distanceToCamera * tan(fov * 0.5) * (gizmoDesiredScreenSize / renderInfo.viewPort.y)
+        gizmoRootLocalTransform.scale = simd_float3(repeating: worldScale)
+
         // Iterate over the entities found by the component query
         for entityId in entities {
             guard let renderComponent = scene.get(component: RenderComponent.self, for: entityId) else {
@@ -78,17 +99,6 @@ extension RenderPasses {
                 handleError(.noWorldTransformComponent, entityId)
                 continue
             }
-
-            guard let localTransformComponent = scene.get(component: LocalTransformComponent.self, for: entityId) else {
-                handleError(.noLocalTransformComponent, entityId)
-                continue
-            }
-
-            let distanceToCamera = length(getCameraPosition(entityId: camera) - getPosition(entityId: parentEntityIdGizmo))
-
-            let worldScale = (distanceToCamera * tan(fov * 0.5)) * (gizmoDesiredScreenSize / renderInfo.viewPort.y)
-
-            localTransformComponent.scale = simd_float3(repeating: worldScale)
             for mesh in renderComponent.mesh {
                 // update uniforms
                 var modelUniforms = Uniforms()
@@ -582,14 +592,11 @@ extension RenderPasses {
             &renderInfo.perspectiveSpace, length: MemoryLayout<matrix_float4x4>.stride, index: 2
         )
 
-        renderEncoder.setVertexBytes(
-            &worldTransform.space, length: MemoryLayout<matrix_float4x4>.stride, index: 3
-        )
-
         var scale: simd_float3 = .one
 
         if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
             var lightMesh: [Mesh] = []
+            var debugModelMatrix = worldTransform.space
             if let pointLightComponent = scene.get(component: PointLightComponent.self, for: activeEntity) {
                 scale = simd_float3(repeating: pointLightComponent.radius)
                 lightMesh = pointLightDebugMesh
@@ -599,12 +606,25 @@ extension RenderPasses {
 
                 scale = simd_float3(radius, radius, spotLightComponent.radius / 2.0)
                 lightMesh = spotLightDebugMesh
+                let spotDebugRotation = matrix4x4Rotation(
+                    radians: degreesToRadians(degrees: 90.0),
+                    axis: simd_float3(1.0, 0.0, 0.0)
+                )
+                debugModelMatrix = simd_mul(worldTransform.space, spotDebugRotation)
             } else if let areaLightComponent = scene.get(component: AreaLightComponent.self, for: activeEntity) {
                 lightMesh = areaLightDebugMesh
+                let areaDebugRotation = matrix4x4Rotation(
+                    radians: degreesToRadians(degrees: 90.0),
+                    axis: simd_float3(1.0, 0.0, 0.0)
+                )
+                debugModelMatrix = simd_mul(worldTransform.space, areaDebugRotation)
             } else if let dirLightComponent = scene.get(component: DirectionalLightComponent.self, for: activeEntity) {
                 lightMesh = dirLightDebugMesh
             }
 
+            renderEncoder.setVertexBytes(
+                &debugModelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3
+            )
             renderEncoder.setVertexBytes(&scale, length: MemoryLayout<simd_float3>.stride, index: 4)
 
             renderEncoder.setTriangleFillMode(.lines)
@@ -626,6 +646,10 @@ extension RenderPasses {
             }
 
         } else {
+            var modelMatrix = worldTransform.space
+            renderEncoder.setVertexBytes(
+                &modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3
+            )
             scale = simd_float3(repeating: 1.2)
             renderEncoder.setVertexBytes(&scale, length: MemoryLayout<simd_float3>.stride, index: 4)
             renderEncoder.setVertexBuffer(bufferResources.boundingBoxBuffer, offset: 0, index: 0)
