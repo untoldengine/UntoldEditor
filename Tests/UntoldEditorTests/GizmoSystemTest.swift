@@ -128,6 +128,49 @@ final class GizmoSystemTests: XCTestCase {
         XCTAssertTrue(gizmoActive)
     }
 
+    func test_createGizmo_usesMeshLocalOffsetForAnchorPosition() {
+        let active = makeEntity(name: "ImportedChild", pos: SIMD3<Float>(0, 0, 0))
+        var meshes = BasicPrimitives.createCube()
+        XCTAssertFalse(meshes.isEmpty, "Expected primitive mesh for test setup.")
+
+        let meshOffset = simd_float3(3.0, 4.0, 5.0)
+        meshes[0].localSpace = matrix4x4Translation(meshOffset.x, meshOffset.y, meshOffset.z)
+        meshes[0].worldSpace = meshes[0].localSpace
+
+        let dummyURL = URL(fileURLWithPath: "/tmp/gizmo-anchor-test")
+        associateMeshesToEntity(entityId: active, meshes: meshes)
+        registerRenderComponent(entityId: active, meshes: meshes, url: dummyURL, assetName: "ImportedChild")
+
+        activeEntity = active
+        createGizmo(name: "translateGizmo")
+
+        XCTAssertEqual(getLocalPosition(entityId: parentEntityIdGizmo), meshOffset,
+                       "Gizmo should anchor at rendered mesh pivot when entity transform is zero.")
+    }
+
+    func test_createGizmo_usesRenderableChildrenBounds_whenSelectedEntityHasNoRenderComponent() {
+        let parent = makeEntity(name: "ImportedRoot", pos: SIMD3<Float>(0, 0, 0))
+        let child = makeEntity(name: "ImportedChild", pos: SIMD3<Float>(0, 0, 0))
+        setParent(childId: child, parentId: parent)
+
+        var meshes = BasicPrimitives.createCube()
+        XCTAssertFalse(meshes.isEmpty, "Expected primitive mesh for test setup.")
+
+        let meshOffset = simd_float3(6.0, 2.0, -3.0)
+        meshes[0].localSpace = matrix4x4Translation(meshOffset.x, meshOffset.y, meshOffset.z)
+        meshes[0].worldSpace = meshes[0].localSpace
+
+        let dummyURL = URL(fileURLWithPath: "/tmp/gizmo-parent-anchor-test")
+        associateMeshesToEntity(entityId: child, meshes: meshes)
+        registerRenderComponent(entityId: child, meshes: meshes, url: dummyURL, assetName: "ImportedChild")
+
+        activeEntity = parent
+        createGizmo(name: "translateGizmo")
+
+        XCTAssertEqual(getLocalPosition(entityId: parentEntityIdGizmo), meshOffset,
+                       "Gizmo should anchor from renderable child bounds when selected entity is a non-render root.")
+    }
+
     // MARK: - hitGizmoToolAxis()
 
     func test_hitGizmoToolAxis_validNamesReturnTrue_andInvalidReturnsFalse() {

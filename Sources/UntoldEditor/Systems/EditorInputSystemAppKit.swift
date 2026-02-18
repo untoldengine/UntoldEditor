@@ -184,9 +184,9 @@
                 } else if let parentId = getEntityParent(entityId: entityId) {
                     // If shift is pressed, select child; otherwise select parent
                     if keyState.shiftPressed {
-                        hitEntityId = entityId // Select the child
+                        hitEntityId = parentId // Select the parent
                     } else {
-                        hitEntityId = parentId // Select parent (current behavior)
+                        hitEntityId = entityId // Select child
                     }
                 } else {
                     // Entity with no parent - select it directly

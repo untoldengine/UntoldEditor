@@ -650,7 +650,7 @@ extension RenderPasses {
             renderEncoder.setVertexBytes(
                 &modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3
             )
-            scale = simd_float3(repeating: 1.2)
+            scale = simd_float3(repeating: 1.0)
             renderEncoder.setVertexBytes(&scale, length: MemoryLayout<simd_float3>.stride, index: 4)
             renderEncoder.setVertexBuffer(bufferResources.boundingBoxBuffer, offset: 0, index: 0)
             renderEncoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: boundingBoxVertexCount)

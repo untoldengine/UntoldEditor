@@ -11,11 +11,6 @@ import Foundation
 import simd
 import UntoldEngine
 
-private func applyDefaultGizmoOrientation(entityId: EntityID) {
-    // Keep gizmo axis meshes aligned with engine/world axes.
-    rotateTo(entityId: entityId, angle: -90.0, axis: simd_float3(1.0, 0.0, 0.0))
-}
-
 private enum GizmoDimensions {
     static let axisLength: Float = 0.9
     static let shaftRadius: Float = 0.01
@@ -46,6 +41,58 @@ private func applyGizmoHandleColor(entityId: EntityID, color: simd_float4) {
             renderComponent.mesh[meshIndex].submeshes[subMeshIndex].material = material
         }
     }
+}
+
+private func gizmoAnchorWorldPosition(entityId: EntityID) -> simd_float3 {
+    guard let worldTransform = scene.get(component: WorldTransformComponent.self, for: entityId) else {
+        return getPosition(entityId: entityId)
+    }
+
+    @inline(__always)
+    func localBoundsCenter(for target: EntityID) -> simd_float3? {
+        guard let localTransform = scene.get(component: LocalTransformComponent.self, for: target) else {
+            return nil
+        }
+        return (localTransform.boundingBox.min + localTransform.boundingBox.max) * 0.5
+    }
+
+    var localCenter: simd_float3?
+
+    if hasComponent(entityId: entityId, componentType: RenderComponent.self) {
+        localCenter = localBoundsCenter(for: entityId)
+    } else {
+        // Imported USD roots often have no RenderComponent, while renderable children carry bounds.
+        // Match highlight behavior by anchoring from children's effective local bounds.
+        var minBounds = simd_float3(Float.greatestFiniteMagnitude, Float.greatestFiniteMagnitude, Float.greatestFiniteMagnitude)
+        var maxBounds = simd_float3(-Float.greatestFiniteMagnitude, -Float.greatestFiniteMagnitude, -Float.greatestFiniteMagnitude)
+        var foundRenderableChild = false
+
+        let children = getEntityChildren(parentId: entityId)
+        for childId in children {
+            guard hasComponent(entityId: childId, componentType: RenderComponent.self),
+                  let childTransform = scene.get(component: LocalTransformComponent.self, for: childId)
+            else {
+                continue
+            }
+
+            let translatedMin = childTransform.boundingBox.min + childTransform.position
+            let translatedMax = childTransform.boundingBox.max + childTransform.position
+            minBounds = simd_min(minBounds, translatedMin)
+            maxBounds = simd_max(maxBounds, translatedMax)
+            foundRenderableChild = true
+        }
+
+        if foundRenderableChild {
+            localCenter = (minBounds + maxBounds) * 0.5
+        }
+    }
+
+    guard let localCenter else {
+        return getPosition(entityId: entityId)
+    }
+
+    let modelMatrix = simd_mul(worldTransform.space, matrix4x4Translation(localCenter.x, localCenter.y, localCenter.z))
+    return simd_float3(modelMatrix.columns.3.x, modelMatrix.columns.3.y, modelMatrix.columns.3.z)
 }
 
 @discardableResult
@@ -358,7 +405,7 @@ func createGizmo(name: String) {
     registerSceneGraphComponent(entityId: parentEntityIdGizmo)
     registerComponent(entityId: parentEntityIdGizmo, componentType: GizmoComponent.self)
 
-    translateTo(entityId: parentEntityIdGizmo, position: getPosition(entityId: activeEntity))
+    translateTo(entityId: parentEntityIdGizmo, position: gizmoAnchorWorldPosition(entityId: activeEntity))
 
     if name == "translateGizmo" {
         makeTranslateGizmo()
