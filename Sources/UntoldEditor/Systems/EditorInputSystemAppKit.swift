@@ -443,6 +443,40 @@
         }
 
         internal func getRaycastedEntity(currentLocation: NSPoint, view: NSView) -> (entityId: EntityID, hit: Bool) {
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera()) else {
+                handleError(.noActiveCamera)
+                return (.invalid, false)
+            }
+
+            let currentCGPoint = simd_float2(Float(currentLocation.x), Float(currentLocation.y))
+            let viewportDimensions = simd_float2(Float(view.bounds.width), Float(view.bounds.height))
+            guard viewportDimensions.x > 0, viewportDimensions.y > 0 else {
+                return (.invalid, false)
+            }
+
+            let rayDirection: simd_float3 = rayDirectionInWorldSpace(
+                uMouseLocation: currentCGPoint,
+                uViewPortDim: viewportDimensions,
+                uPerspectiveSpace: renderInfo.perspectiveSpace,
+                uViewSpace: cameraComponent.viewSpace
+            )
+            guard rayDirection.x.isFinite, rayDirection.y.isFinite, rayDirection.z.isFinite else {
+                return (.invalid, false)
+            }
+
+            guard let (pickedEntity, _) = pickEntity(
+                rayOrigin: cameraComponent.localPosition,
+                rayDirection: rayDirection,
+                isGizmoActive: gizmoActive
+            ) else {
+                return (.invalid, false)
+            }
+
+            return (pickedEntity, true)
+        }
+        
+        // The gpu ray cast is not working for large scenes. TODO: fix getRaycasterdEntityGPU
+        internal func getRaycastedEntityGPU(currentLocation: NSPoint, view: NSView) -> (entityId: EntityID, hit: Bool) {
             var hitEntityId: EntityID = .invalid
             var hitEntity = false
 
