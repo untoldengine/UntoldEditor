@@ -949,6 +949,67 @@ struct RenderingEditorView: View {
                 }
             }
 
+            HStack {
+                VStack {
+                    TextInputNumberView(
+                        label: "",
+                        value: Binding(
+                            get: { getMaterialOpacity(entityId: entityId) },
+                            set: { newValue in
+                                updateMaterialOpacity(entityId: entityId, opacity: newValue)
+                                refreshView()
+                            }
+                        )
+                    )
+                    .frame(width: 60)
+
+                    Text("Opacity")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack {
+                    TextInputNumberView(
+                        label: "",
+                        value: Binding(
+                            get: { getMaterialAlphaCutoff(entityId: entityId) },
+                            set: { newValue in
+                                updateMaterialAlphaCutoff(entityId: entityId, cutoff: newValue)
+                                refreshView()
+                            }
+                        )
+                    )
+                    .frame(width: 60)
+                    .disabled(getMaterialAlphaMode(entityId: entityId) != .mask)
+
+                    Text("Alpha Cutoff")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                VStack {
+                    Picker("", selection: Binding(
+                        get: { getMaterialAlphaMode(entityId: entityId) },
+                        set: { newValue in
+                            updateMaterialAlphaMode(entityId: entityId, mode: newValue)
+                            refreshView()
+                        }
+                    )) {
+                        ForEach(MaterialAlphaMode.allCases) { mode in
+                            Text(mode.description).tag(mode)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .frame(width: 120)
+
+                    Text("Alpha Mask")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
             // Emmissive Input
             VStack {
                 TextInputVectorView(

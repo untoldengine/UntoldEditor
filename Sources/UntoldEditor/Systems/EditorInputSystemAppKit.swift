@@ -474,7 +474,7 @@
 
             return (pickedEntity, true)
         }
-        
+
         // The gpu ray cast is not working for large scenes. TODO: fix getRaycasterdEntityGPU
         internal func getRaycastedEntityGPU(currentLocation: NSPoint, view: NSView) -> (entityId: EntityID, hit: Bool) {
             var hitEntityId: EntityID = .invalid

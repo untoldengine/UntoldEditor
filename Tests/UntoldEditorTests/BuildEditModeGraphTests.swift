@@ -61,7 +61,7 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         let expectedIDs: Set<String> = [
             "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
-            "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
+            "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
@@ -71,11 +71,12 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "model", ["batchedShadow"])
         assertDeps(graph, "batchedModel", ["model"])
         assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "transparency", ["lightPass"])
         assertDeps(graph, "outline", ["batchedModel"])
         assertDeps(graph, "lightVisualPass", ["outline"])
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
-        assertDeps(graph, "precomp", ["model", "gizmo", "lightPass", "gaussian"])
+        assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
         assertDeps(graph, "look", ["precomp"])
         assertDeps(graph, "outputTransform", ["look"])
 
@@ -94,7 +95,7 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         let expectedIDs: Set<String> = [
             "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
-            "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
+            "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
@@ -104,11 +105,12 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "model", ["batchedShadow"])
         assertDeps(graph, "batchedModel", ["model"])
         assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "transparency", ["lightPass"])
         assertDeps(graph, "outline", ["batchedModel"])
         assertDeps(graph, "lightVisualPass", ["outline"])
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
-        assertDeps(graph, "precomp", ["model", "gizmo", "lightPass", "gaussian"])
+        assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
         assertDeps(graph, "look", ["precomp"])
         assertDeps(graph, "outputTransform", ["look"])
 

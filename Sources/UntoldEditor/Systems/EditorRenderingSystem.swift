@@ -111,6 +111,11 @@ func buildEditModeGraph() -> RenderGraphResult {
     let lightPass = RenderPass(id: "lightPass", dependencies: [batchedModelPass.id, modelPass.id, shadowPass.id], execute: RenderPasses.lightExecution)
     graph[lightPass.id] = lightPass
 
+    let transparencyPass = RenderPass(
+        id: "transparency", dependencies: [lightPass.id], execute: RenderPasses.transparencyExecution
+    )
+    graph[transparencyPass.id] = transparencyPass
+
     let highlightPass = RenderPass(
         id: "outline", dependencies: [batchedModelPass.id], execute: RenderPasses.highlightExecution
     )
@@ -129,7 +134,7 @@ func buildEditModeGraph() -> RenderGraphResult {
     graph[gaussianPass.id] = gaussianPass
 
     let preCompPass = RenderPass(
-        id: "precomp", dependencies: [modelPass.id, gizmoPass.id, lightPass.id, gaussianPass.id], execute: RenderPasses.preCompositeExecution
+        id: "precomp", dependencies: [modelPass.id, gizmoPass.id, transparencyPass.id, gaussianPass.id], execute: RenderPasses.preCompositeExecution
     )
     graph[preCompPass.id] = preCompPass
 

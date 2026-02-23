@@ -129,11 +129,12 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertEqual(graph["outline"]?.dependencies, ["batchedModel"], "Outline should depend on batchedModel")
         XCTAssertEqual(graph["lightVisualPass"]?.dependencies, ["outline"], "Light visual pass should depend on outline")
         XCTAssertEqual(graph["gizmo"]?.dependencies, ["lightVisualPass"], "Gizmo should depend on light visual pass")
+        XCTAssertEqual(graph["transparency"]?.dependencies, ["lightPass"], "Transparency should depend on light pass")
 
         let precompDeps = graph["precomp"]?.dependencies ?? []
         XCTAssertTrue(precompDeps.contains("model"), "Precomp should depend on model")
         XCTAssertTrue(precompDeps.contains("gizmo"), "Precomp should depend on gizmo")
-        XCTAssertTrue(precompDeps.contains("lightPass"), "Precomp should depend on light pass")
+        XCTAssertTrue(precompDeps.contains("transparency"), "Precomp should depend on transparency")
 
         XCTAssertEqual(graph["look"]?.dependencies, ["precomp"], "Look should depend on precomp")
         XCTAssertEqual(graph["outputTransform"]?.dependencies, ["look"], "Output transform should depend on look")
@@ -286,7 +287,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertEqual(precompPass.dependencies.count, 4, "Precomp should have exactly 4 dependencies")
         XCTAssertTrue(precompPass.dependencies.contains("model"), "Precomp should depend on model")
         XCTAssertTrue(precompPass.dependencies.contains("gizmo"), "Precomp should depend on gizmo")
-        XCTAssertTrue(precompPass.dependencies.contains("lightPass"), "Precomp should depend on lightPass")
+        XCTAssertTrue(precompPass.dependencies.contains("transparency"), "Precomp should depend on transparency")
         XCTAssertTrue(precompPass.dependencies.contains("gaussian"), "Precomp should depend on gaussian")
     }
 
