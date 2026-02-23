@@ -1,4 +1,12 @@
 # Changelog
+## v0.10.8 - 2026-02-23
+### 🐞 Fixes
+- [Patch] fixed transform for gizmo (d708c98…)
+- [Patch] Fixed edit mode graph (06251e0…)
+- [Patch] Replaced usdz gizmo with procedural generated gizmo (b258e58…)
+- [Patch] Fixed gizmo placement (5fbbbc2…)
+- [Patch] Fixed raycasting with cpu version (7fc5ecc…)
+- [Patch] Added transparency support (3db516c…)
 ## v0.10.0 - 2026-02-10
 ### 🐞 Fixes
 - [Feature] Added geometry streaming support (d78a58a…)
