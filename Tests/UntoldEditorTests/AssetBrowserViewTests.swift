@@ -509,6 +509,85 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
+    func test_tiledSceneManifestDetection_prefersFolderNamedManifest() throws {
+        try withTempDirectory { base in
+            let streamModel = base.appendingPathComponent("Dungeon", isDirectory: true)
+            try FileManager.default.createDirectory(at: streamModel, withIntermediateDirectories: true)
+
+            let manifest = streamModel.appendingPathComponent("Dungeon.json")
+            let alternate = streamModel.appendingPathComponent("alternate.json")
+            let invalid = streamModel.appendingPathComponent("notes.json")
+
+            let manifestData = """
+            {
+              "version": 1,
+              "streaming_defaults": {
+                "streaming_radius": 80,
+                "unload_radius": 120,
+                "priority": 0
+              },
+              "tiles": [
+                {
+                  "tile_id": "tile_0_0",
+                  "path_relative_to_manifest": "tile_exports/tile_0_0.untold",
+                  "file_size_bytes": 1024,
+                  "bounds": { "min": [0, 0, 0], "max": [1, 1, 1] },
+                  "center": [0.5, 0.5, 0.5]
+                }
+              ]
+            }
+            """.data(using: .utf8)!
+
+            try manifestData.write(to: manifest)
+            try manifestData.write(to: alternate)
+            try #"{"name":"not a tiled manifest"}"#.data(using: .utf8)!.write(to: invalid)
+
+            XCTAssertTrue(isTiledSceneManifest(manifest))
+            XCTAssertFalse(isTiledSceneManifest(invalid))
+            XCTAssertEqual(primaryTiledSceneManifest(in: streamModel), manifest)
+        }
+    }
+
+    func test_importStreamModelManifest_copiesManifestRelativeResources() throws {
+        try withTempDirectory { base in
+            let source = base.appendingPathComponent("Source", isDirectory: true)
+            let destination = base.appendingPathComponent("StreamModels/Dungeon", isDirectory: true)
+            let tileExports = source.appendingPathComponent("tile_exports", isDirectory: true)
+            try FileManager.default.createDirectory(at: tileExports, withIntermediateDirectories: true)
+
+            let manifest = source.appendingPathComponent("Dungeon.json")
+            let tile = tileExports.appendingPathComponent("tile_0_0.untold")
+
+            let manifestData = """
+            {
+              "version": 1,
+              "streaming_defaults": {
+                "streaming_radius": 80,
+                "unload_radius": 120,
+                "priority": 0
+              },
+              "tiles": [
+                {
+                  "tile_id": "tile_0_0",
+                  "path_relative_to_manifest": "tile_exports/tile_0_0.untold",
+                  "file_size_bytes": 1024,
+                  "bounds": { "min": [0, 0, 0], "max": [1, 1, 1] },
+                  "center": [0.5, 0.5, 0.5]
+                }
+              ]
+            }
+            """.data(using: .utf8)!
+
+            try manifestData.write(to: manifest)
+            try Data([1, 2, 3]).write(to: tile)
+
+            try importStreamModelManifest(sourceURL: manifest, destinationFolder: destination)
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appendingPathComponent("Dungeon.json").path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appendingPathComponent("tile_exports/tile_0_0.untold").path))
+        }
+    }
+
     func test_copyRuntimeAssetSidecars_copiesSiblingTexturesFolder() throws {
         try withTempDirectory { base in
             let sourceFolder = base.appendingPathComponent("Source", isDirectory: true)

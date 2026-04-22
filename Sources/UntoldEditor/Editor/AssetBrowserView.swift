@@ -13,6 +13,7 @@ import UntoldEngine
 private let runtimeAssetExtension = "untold"
 private let runtimeTextureFolderNames = ["Textures", "textures"]
 private let sourceAssetExtensions: Set<String> = ["usd", "usda", "usdc", "usdz"]
+private let streamModelResourceFolderNames = ["tile_exports", "tile_export", "Textures", "textures"]
 
 struct RuntimeExportRequest: Identifiable, Equatable {
     let id = UUID()
@@ -59,6 +60,116 @@ func primaryRuntimeAsset(in folder: URL, fileManager fm: FileManager = .default)
         ?? (runtimeAssets.count == 1 ? runtimeAssets.first : nil)
 }
 
+func isTiledSceneManifest(_ url: URL) -> Bool {
+    guard url.pathExtension.lowercased() == "json",
+          let data = try? Data(contentsOf: url),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          object["streaming_defaults"] != nil,
+          let tiles = object["tiles"] as? [[String: Any]]
+    else {
+        return false
+    }
+
+    return tiles.contains { tile in
+        guard let path = tile["path_relative_to_manifest"] as? String else { return false }
+        return path.isEmpty == false
+    }
+}
+
+func primaryTiledSceneManifest(in folder: URL, fileManager fm: FileManager = .default) -> URL? {
+    guard let contents = try? fm.contentsOfDirectory(
+        at: folder,
+        includingPropertiesForKeys: [.isDirectoryKey],
+        options: [.skipsHiddenFiles]
+    ) else {
+        return nil
+    }
+
+    let manifests = contents
+        .filter { isTiledSceneManifest($0) }
+        .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+
+    let folderName = folder.lastPathComponent
+    return manifests.first { $0.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(folderName) == .orderedSame }
+        ?? (manifests.count == 1 ? manifests.first : nil)
+}
+
+func tiledSceneResourceNames(in manifestURL: URL) -> Set<String> {
+    guard let data = try? Data(contentsOf: manifestURL),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+        return []
+    }
+
+    var resourceNames = Set<String>()
+
+    func collectResourceName(from path: String?) {
+        guard let path,
+              path.isEmpty == false,
+              path.hasPrefix("/") == false,
+              URL(string: path)?.scheme == nil
+        else {
+            return
+        }
+
+        let firstComponent = path.split(separator: "/").first.map(String.init)
+        if let firstComponent, firstComponent.isEmpty == false {
+            resourceNames.insert(firstComponent)
+        }
+    }
+
+    if let tiles = object["tiles"] as? [[String: Any]] {
+        for tile in tiles {
+            collectResourceName(from: tile["path_relative_to_manifest"] as? String)
+
+            if let hlodLevels = tile["hlod_levels"] as? [[String: Any]] {
+                for level in hlodLevels {
+                    collectResourceName(from: level["path"] as? String)
+                }
+            }
+
+            if let lodLevels = tile["lod_levels"] as? [[String: Any]] {
+                for level in lodLevels {
+                    collectResourceName(from: level["path"] as? String)
+                }
+            }
+        }
+    }
+
+    if let sharedBucket = object["shared_bucket"] as? [String: Any] {
+        collectResourceName(from: sharedBucket["path_relative_to_manifest"] as? String)
+    }
+
+    return resourceNames
+}
+
+func importStreamModelManifest(sourceURL: URL, destinationFolder: URL, fileManager fm: FileManager = .default) throws {
+    try fm.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
+
+    let destinationManifest = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
+    if fm.fileExists(atPath: destinationManifest.path) {
+        try fm.removeItem(at: destinationManifest)
+    }
+    try fm.copyItem(at: sourceURL, to: destinationManifest)
+
+    let sourceFolder = sourceURL.deletingLastPathComponent()
+    var resourceNames = tiledSceneResourceNames(in: sourceURL)
+    if resourceNames.isEmpty {
+        resourceNames.formUnion(streamModelResourceFolderNames)
+    }
+
+    for resourceName in resourceNames {
+        let sourceResource = sourceFolder.appendingPathComponent(resourceName)
+        guard fm.fileExists(atPath: sourceResource.path) else { continue }
+
+        let destinationResource = destinationFolder.appendingPathComponent(resourceName)
+        if fm.fileExists(atPath: destinationResource.path) {
+            try fm.removeItem(at: destinationResource)
+        }
+        try fm.copyItem(at: sourceResource, to: destinationResource)
+    }
+}
+
 func findExportUntoldScript(fileManager fm: FileManager = .default) -> URL? {
     let cwd = URL(fileURLWithPath: fm.currentDirectoryPath, isDirectory: true)
     let candidates = [
@@ -73,6 +184,7 @@ func findExportUntoldScript(fileManager fm: FileManager = .default) -> URL? {
 
 enum AssetCategory: String, CaseIterable {
     case models = "Models"
+    case streamModels = "StreamModels"
     case animations = "Animations"
     case scripts = "Scripts"
     case scenes = "Scenes"
@@ -80,12 +192,23 @@ enum AssetCategory: String, CaseIterable {
     case materials = "Materials"
     case hdr = "HDR"
 
+    var displayName: String {
+        switch self {
+        case .streamModels:
+            return "Stream Models"
+        default:
+            return rawValue
+        }
+    }
+
     var iconName: String {
         switch self {
         case .models:
             return "cube.fill"
         case .animations:
             return "film"
+        case .streamModels:
+            return "square.stack.3d.up.fill"
         case .hdr:
             return "film"
         case .materials:
@@ -147,7 +270,7 @@ struct AssetBrowserView: View {
                             Button(action: { importAssetForCategory(category) }) {
                                 HStack {
                                     Image(systemName: category.iconName)
-                                    Text("Import \(category.rawValue)")
+                                    Text("Import \(category.displayName)")
                                 }
                             }
                         }
@@ -229,7 +352,7 @@ struct AssetBrowserView: View {
                                 HStack {
                                     Image(systemName: selectedCategory == category.rawValue ? "folder.fill" : "folder")
                                         .foregroundColor(selectedCategory == category.rawValue ? Color.editorAccent : .gray)
-                                    Text(category.rawValue)
+                                    Text(category.displayName)
                                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                                         .foregroundColor(selectedCategory == category.rawValue ? .white : .primary)
                                 }
@@ -413,6 +536,8 @@ struct AssetBrowserView: View {
             openPanel.allowedContentTypes = ([runtimeAssetExtension] + sourceAssetExtensions.sorted()).compactMap {
                 UTType(filenameExtension: $0)
             }
+        case .streamModels:
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "json")!]
         case .scripts:
             openPanel.allowedContentTypes = [UTType(filenameExtension: "uscript")!]
         case .scenes:
@@ -425,13 +550,13 @@ struct AssetBrowserView: View {
             openPanel.allowedContentTypes = [UTType(filenameExtension: "hdr")!]
         }
 
-        openPanel.canChooseDirectories = (category == .materials)
+        openPanel.canChooseDirectories = (category == .materials || category == .streamModels)
         openPanel.allowsMultipleSelection = true
 
         guard let basePath = assetBasePath else { return }
         let categoryString = category.rawValue
         // Ensure category is valid
-        guard ["Models", "Animations", "HDR", "Materials", "Gaussians", "Scenes", "Scripts"].contains(categoryString) else { return }
+        guard AssetCategory.allCases.map(\.rawValue).contains(categoryString) else { return }
 
         let fm = FileManager.default
         let categoryRoot = basePath.appendingPathComponent(categoryString, isDirectory: true)
@@ -483,6 +608,20 @@ struct AssetBrowserView: View {
                                 category: category,
                                 destinationFolder: destFolder
                             )
+                        }
+
+                    case "StreamModels":
+                        if sourceURL.hasDirectoryPath {
+                            let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
+                            if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
+                            try fm.copyItem(at: sourceURL, to: destURL)
+                        } else if isTiledSceneManifest(sourceURL) {
+                            let baseName = sourceURL.deletingPathExtension().lastPathComponent
+                            let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
+                            if fm.fileExists(atPath: destFolder.path) { try fm.removeItem(at: destFolder) }
+                            try importStreamModelManifest(sourceURL: sourceURL, destinationFolder: destFolder, fileManager: fm)
+                        } else {
+                            showStatus("Selected JSON is not a tiled scene manifest", isError: true)
                         }
 
                     case "Scenes":
@@ -767,6 +906,13 @@ struct AssetBrowserView: View {
                                                         isFolder: false))
                         } else if category == .scripts {
                             // Not used anymore due to flat listing, but keep for safety (won’t execute due to continue above)
+                        } else if category == .streamModels {
+                            if item.pathExtension.lowercased() == "json", isTiledSceneManifest(item) {
+                                categoryAssets.append(Asset(name: item.lastPathComponent,
+                                                            category: category.rawValue,
+                                                            path: item,
+                                                            isFolder: false))
+                            }
                         } else if category == .scenes {
                             // For Scenes, allow files directly in the Scenes folder
                             categoryAssets.append(Asset(name: item.lastPathComponent,
@@ -938,7 +1084,68 @@ struct AssetBrowserView: View {
         )
     }
 
+    private func resolvedTiledSceneManifest(for asset: Asset) -> Asset? {
+        guard asset.category == AssetCategory.streamModels.rawValue else {
+            return nil
+        }
+
+        if asset.isFolder {
+            guard let manifestURL = primaryTiledSceneManifest(in: asset.path) else {
+                return nil
+            }
+
+            return Asset(
+                name: manifestURL.lastPathComponent,
+                category: asset.category,
+                path: manifestURL,
+                isFolder: false
+            )
+        }
+
+        guard isTiledSceneManifest(asset.path) else {
+            return nil
+        }
+
+        return asset
+    }
+
+    private func loadStreamModel(from asset: Asset) {
+        guard let manifestAsset = resolvedTiledSceneManifest(for: asset) else {
+            if asset.isFolder {
+                showStatus("No tiled scene manifest found in \(asset.name)", isError: true)
+            } else {
+                showStatus("Selected JSON is not a tiled scene manifest", isError: true)
+            }
+            return
+        }
+
+        let sceneRoot = createEntity()
+        let sceneName = manifestAsset.path.deletingPathExtension().lastPathComponent
+        setEntityName(entityId: sceneRoot, name: sceneName)
+
+        setEntityStreamScene(entityId: sceneRoot, url: manifestAsset.path) { success in
+            DispatchQueue.main.async {
+                if success {
+                    print("✅ Stream model loaded: \(sceneName)")
+                    showStatus("Loaded stream model: \(sceneName)")
+                } else {
+                    print("⚠️ Failed to load stream model: \(sceneName)")
+                    showStatus("Failed to load stream model: \(sceneName)", isError: true)
+                }
+                sceneGraphModel.refreshHierarchy()
+            }
+        }
+
+        selectionManager.selectedEntity = sceneRoot
+        showStatus("Loading stream model: \(sceneName)...")
+    }
+
     private func handle_add_model_double_click(asset: Asset) {
+        if asset.category == AssetCategory.streamModels.rawValue {
+            loadStreamModel(from: asset)
+            return
+        }
+
         guard let asset = resolvedRuntimeAsset(for: asset) else {
             if asset.isFolder,
                asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue
