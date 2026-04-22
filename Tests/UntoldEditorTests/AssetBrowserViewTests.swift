@@ -471,6 +471,44 @@ final class AssetBrowserViewTests: XCTestCase {
 
     // MARK: - Tests for importAssetForCategory
 
+    func test_primaryRuntimeAsset_prefersUntoldMatchingFolderName() throws {
+        try withTempDirectory { base in
+            let assetFolder = base.appendingPathComponent("Robot", isDirectory: true)
+            try FileManager.default.createDirectory(at: assetFolder, withIntermediateDirectories: true)
+
+            let matchingAsset = assetFolder.appendingPathComponent("Robot.untold")
+            let otherAsset = assetFolder.appendingPathComponent("Robot_LOD1.untold")
+            FileManager.default.createFile(atPath: matchingAsset.path, contents: Data())
+            FileManager.default.createFile(atPath: otherAsset.path, contents: Data())
+
+            XCTAssertEqual(primaryRuntimeAsset(in: assetFolder), matchingAsset)
+        }
+    }
+
+    func test_primaryRuntimeAsset_usesSoleUntoldWhenNameDoesNotMatchFolder() throws {
+        try withTempDirectory { base in
+            let assetFolder = base.appendingPathComponent("ImportedRobot", isDirectory: true)
+            try FileManager.default.createDirectory(at: assetFolder, withIntermediateDirectories: true)
+
+            let onlyAsset = assetFolder.appendingPathComponent("Robot.untold")
+            FileManager.default.createFile(atPath: onlyAsset.path, contents: Data())
+
+            XCTAssertEqual(primaryRuntimeAsset(in: assetFolder), onlyAsset)
+        }
+    }
+
+    func test_primaryRuntimeAsset_returnsNilForAmbiguousUntoldFiles() throws {
+        try withTempDirectory { base in
+            let assetFolder = base.appendingPathComponent("Robot", isDirectory: true)
+            try FileManager.default.createDirectory(at: assetFolder, withIntermediateDirectories: true)
+
+            FileManager.default.createFile(atPath: assetFolder.appendingPathComponent("Body.untold").path, contents: Data())
+            FileManager.default.createFile(atPath: assetFolder.appendingPathComponent("Wheels.untold").path, contents: Data())
+
+            XCTAssertNil(primaryRuntimeAsset(in: assetFolder))
+        }
+    }
+
     func test_copyRuntimeAssetSidecars_copiesSiblingTexturesFolder() throws {
         try withTempDirectory { base in
             let sourceFolder = base.appendingPathComponent("Source", isDirectory: true)

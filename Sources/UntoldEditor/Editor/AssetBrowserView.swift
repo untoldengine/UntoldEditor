@@ -32,6 +32,24 @@ func copyRuntimeAssetSidecars(for sourceURL: URL, to destinationFolder: URL, fil
     }
 }
 
+func primaryRuntimeAsset(in folder: URL, fileManager fm: FileManager = .default) -> URL? {
+    guard let contents = try? fm.contentsOfDirectory(
+        at: folder,
+        includingPropertiesForKeys: [.isDirectoryKey],
+        options: [.skipsHiddenFiles]
+    ) else {
+        return nil
+    }
+
+    let runtimeAssets = contents
+        .filter { $0.pathExtension.lowercased() == runtimeAssetExtension }
+        .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+
+    let folderName = folder.lastPathComponent
+    return runtimeAssets.first { $0.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(folderName) == .orderedSame }
+        ?? (runtimeAssets.count == 1 ? runtimeAssets.first : nil)
+}
+
 enum AssetCategory: String, CaseIterable {
     case models = "Models"
     case animations = "Animations"
@@ -495,23 +513,6 @@ struct AssetBrowserView: View {
                 continue
             }
 
-            // Flat list for Models and Animations - show .untold runtime files directly
-            if category == .models || category == .animations {
-                let runtimeAssetURLs = findFilesRecursively(at: categoryPath, withExtension: runtimeAssetExtension)
-                for url in runtimeAssetURLs {
-                    categoryAssets.append(
-                        Asset(name: url.lastPathComponent,
-                              category: category.rawValue,
-                              path: url,
-                              isFolder: false)
-                    )
-                }
-                // Sort for stable UI
-                categoryAssets.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-                groupedAssets[category.rawValue] = categoryAssets
-                continue
-            }
-
             // Non-Scripts categories: list immediate children, with folder navigation support
             if let contents = try? FileManager.default.contentsOfDirectory(
                 at: categoryPath,
@@ -697,9 +698,32 @@ struct AssetBrowserView: View {
 
     // MARK: - Add Model with Double Click
 
+    private func resolvedRuntimeAsset(for asset: Asset) -> Asset? {
+        guard asset.isFolder else { return asset }
+        guard asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue else {
+            return nil
+        }
+        guard let runtimeAssetURL = primaryRuntimeAsset(in: asset.path) else {
+            return nil
+        }
+
+        return Asset(
+            name: runtimeAssetURL.lastPathComponent,
+            category: asset.category,
+            path: runtimeAssetURL,
+            isFolder: false
+        )
+    }
+
     private func handle_add_model_double_click(asset: Asset) {
-        // Don't handle folders
-        guard !asset.isFolder else { return }
+        guard let asset = resolvedRuntimeAsset(for: asset) else {
+            if asset.isFolder,
+               asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue
+            {
+                showStatus("No primary .untold found in \(asset.name)", isError: true)
+            }
+            return
+        }
 
         let filename = asset.path.deletingPathExtension().lastPathComponent
         let withExtension = asset.path.pathExtension
