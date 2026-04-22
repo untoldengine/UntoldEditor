@@ -65,7 +65,7 @@ struct LODComponentEditorView: View {
               asset.category == "Models",
               !asset.isFolder
         else {
-            Logger.log(message: "⚠️ Please select a USDZ file from the Models section first")
+            Logger.log(message: "⚠️ Please select a .untold file from the Models section first")
             return
         }
 

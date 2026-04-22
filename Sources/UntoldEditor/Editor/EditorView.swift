@@ -404,7 +404,7 @@ public struct EditorView: View {
         cameraLookAt(entityId: gameCameraEntityID, eye: eye, target: target, up: up)
     }
 
-    private func editor_loadUSDScene() {
+    private func editor_loadUSDScene() {/*
         guard let url = openFilePicker() else { return }
 
         let filename = url.deletingPathExtension().lastPathComponent
@@ -417,6 +417,7 @@ public struct EditorView: View {
         selectionManager.objectWillChange.send()
 
         CameraSystem.shared.activeCamera = findSceneCamera()
+                                         */
     }
 
     private func editor_addNewEntity() {
@@ -695,12 +696,12 @@ public struct EditorView: View {
         let openPanel = NSOpenPanel()
         openPanel.title = "Quick Preview - Select 3D File"
         openPanel.allowedContentTypes = [
-            UTType(filenameExtension: "usdz")!,
+            UTType(filenameExtension: "untold")!,
             UTType(filenameExtension: "ply")!,
         ]
         openPanel.allowsMultipleSelection = false
         openPanel.canChooseDirectories = false
-        openPanel.message = "Select a 3D file to preview (USDZ or PLY)"
+        openPanel.message = "Select a 3D file to preview (Untold or PLY)"
 
         guard openPanel.runModal() == .OK, let fileURL = openPanel.url else {
             return
@@ -724,8 +725,8 @@ public struct EditorView: View {
             quickPreviewComp.originalFileName = fileName
         }
 
-        if fileExtension == "usdz" {
-            // Load USDZ using absolute path
+        if fileExtension == "untold" {
+            // Load Untold runtime asset using absolute path
             setEntityMeshAsync(entityId: entityId, filename: absolutePath, withExtension: fileExtension) { success in
                 if success {
                     print("✅ Quick Preview loaded: \(fileName).\(fileExtension)")

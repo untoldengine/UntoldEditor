@@ -10,6 +10,28 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UntoldEngine
 
+private let runtimeAssetExtension = "untold"
+private let runtimeTextureFolderNames = ["Textures", "textures"]
+
+func copyRuntimeAssetSidecars(for sourceURL: URL, to destinationFolder: URL, fileManager fm: FileManager = .default) throws {
+    let sourceFolder = sourceURL.deletingLastPathComponent()
+
+    for folderName in runtimeTextureFolderNames {
+        let textureFolderSource = sourceFolder.appendingPathComponent(folderName, isDirectory: true)
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: textureFolderSource.path, isDirectory: &isDir), isDir.boolValue else {
+            continue
+        }
+
+        let textureFolderDest = destinationFolder.appendingPathComponent(folderName, isDirectory: true)
+        if fm.fileExists(atPath: textureFolderDest.path) {
+            try fm.removeItem(at: textureFolderDest)
+        }
+        try fm.copyItem(at: textureFolderSource, to: textureFolderDest)
+        return
+    }
+}
+
 enum AssetCategory: String, CaseIterable {
     case models = "Models"
     case animations = "Animations"
@@ -341,9 +363,9 @@ struct AssetBrowserView: View {
         // Set allowed file types based on category
         switch category {
         case .models:
-            openPanel.allowedContentTypes = [UTType(filenameExtension: "usdz")!]
+            openPanel.allowedContentTypes = [UTType(filenameExtension: runtimeAssetExtension)!]
         case .animations:
-            openPanel.allowedContentTypes = [UTType(filenameExtension: "usdz")!]
+            openPanel.allowedContentTypes = [UTType(filenameExtension: runtimeAssetExtension)!]
         case .scripts:
             openPanel.allowedContentTypes = [UTType(filenameExtension: "uscript")!]
         case .scenes:
@@ -402,7 +424,7 @@ struct AssetBrowserView: View {
                         }
 
                     case "Models", "Animations":
-                        // Create <Category>/<name>/ and copy the .usdc
+                        // Create <Category>/<name>/ and copy the runtime asset.
                         let baseName = sourceURL.deletingPathExtension().lastPathComponent
                         let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
                         try fm.createDirectory(at: destFolder, withIntermediateDirectories: true)
@@ -411,16 +433,7 @@ struct AssetBrowserView: View {
                         if fm.fileExists(atPath: destModel.path) { try fm.removeItem(at: destModel) }
                         try fm.copyItem(at: sourceURL, to: destModel)
 
-                        // For Models: also copy sibling "textures" folder if it exists
-                        if selectedCategory == "Models" {
-                            let textureFolderSource = sourceURL.deletingLastPathComponent().appendingPathComponent("textures", isDirectory: true)
-                            let textureFolderDest = destFolder.appendingPathComponent("textures", isDirectory: true)
-                            var isDir: ObjCBool = false
-                            if fm.fileExists(atPath: textureFolderSource.path, isDirectory: &isDir), isDir.boolValue {
-                                if fm.fileExists(atPath: textureFolderDest.path) { try fm.removeItem(at: textureFolderDest) }
-                                try fm.copyItem(at: textureFolderSource, to: textureFolderDest)
-                            }
-                        }
+                        try copyRuntimeAssetSidecars(for: sourceURL, to: destFolder, fileManager: fm)
 
                     case "Scenes":
                         // Copy Scenes files directly into Scenes folder
@@ -482,10 +495,10 @@ struct AssetBrowserView: View {
                 continue
             }
 
-            // Flat list for Models and Animations - show .usdz files directly
+            // Flat list for Models and Animations - show .untold runtime files directly
             if category == .models || category == .animations {
-                let usdzURLs = findFilesRecursively(at: categoryPath, withExtension: "usdz")
-                for url in usdzURLs {
+                let runtimeAssetURLs = findFilesRecursively(at: categoryPath, withExtension: runtimeAssetExtension)
+                for url in runtimeAssetURLs {
                     categoryAssets.append(
                         Asset(name: url.lastPathComponent,
                               category: category.rawValue,
@@ -608,8 +621,8 @@ struct AssetBrowserView: View {
                     if isDir.boolValue {
                         return Asset(name: item.lastPathComponent, category: selectedCategory ?? "", path: item, isFolder: true)
                     } else {
-                        let allowedExtensions: Set<String> = ["usdz", "png", "jpg", "hdr", "tif", "ply", "json", "uscript"]
-                        guard allowedExtensions.contains(item.pathExtension) else { return nil }
+                        let allowedExtensions: Set<String> = [runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "tif", "tiff", "ply", "json", "uscript"]
+                        guard allowedExtensions.contains(item.pathExtension.lowercased()) else { return nil }
 
                         return Asset(name: item.lastPathComponent,
                                      category: selectedCategory ?? "",
@@ -691,9 +704,9 @@ struct AssetBrowserView: View {
         let filename = asset.path.deletingPathExtension().lastPathComponent
         let withExtension = asset.path.pathExtension
 
-        // Handle model files (usdz)
+        // Handle model files (.untold runtime assets)
         if asset.category == AssetCategory.models.rawValue,
-           withExtension.lowercased() == "usdz"
+           withExtension.lowercased() == runtimeAssetExtension
         {
             // Create entity
             let entityId = createEntity()
@@ -740,9 +753,9 @@ struct AssetBrowserView: View {
 
             showStatus("Queued Gaussian import: \(uniqueName) (see Console)")
         }
-        // Handle Animation files (usdz in Animations category)
+        // Handle Animation files (.untold runtime assets in Animations category)
         else if asset.category == AssetCategory.animations.rawValue,
-                withExtension.lowercased() == "usdz"
+                withExtension.lowercased() == runtimeAssetExtension
         {
             // Animations require a selected entity to work with
             guard let entityId = selectionManager.selectedEntity,

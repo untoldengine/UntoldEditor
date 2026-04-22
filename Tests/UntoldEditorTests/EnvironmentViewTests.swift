@@ -134,10 +134,10 @@ final class EnvironmentViewTests: XCTestCase {
             let models = base.appendingPathComponent("Models", isDirectory: true)
             try FileManager.default.createDirectory(at: models, withIntermediateDirectories: true)
 
-            let modelFile = models.appendingPathComponent("test.usdz")
+            let modelFile = models.appendingPathComponent("test.untold")
             FileManager.default.createFile(atPath: modelFile.path, contents: Data())
 
-            let modelAsset = Asset(name: "test.usdz", category: "Models", path: modelFile, isFolder: false)
+            let modelAsset = Asset(name: "test.untold", category: "Models", path: modelFile, isFolder: false)
 
             // Call addIBL with wrong category
             addIBL(asset: modelAsset)

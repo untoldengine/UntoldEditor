@@ -16,7 +16,7 @@ public class QuickPreviewComponent: Component {
     /// The absolute file path to the original asset
     public var absoluteFilePath: String
 
-    /// The file extension (usdz, ply, etc.)
+    /// The file extension (untold, ply, etc.)
     public var fileExtension: String
 
     /// The original filename without extension

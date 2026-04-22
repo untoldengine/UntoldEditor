@@ -117,8 +117,7 @@ final class AssetBrowserViewTests: XCTestCase {
             // Models: create a folder per model (what loadAssets expects)
             let carFolder = models.appendingPathComponent("Car", isDirectory: true)
             try FileManager.default.createDirectory(at: carFolder, withIntermediateDirectories: true)
-            // Place a model file inside (extension doesn’t matter for folder listing here)
-            FileManager.default.createFile(atPath: carFolder.appendingPathComponent("Car.usdz").path, contents: Data())
+            FileManager.default.createFile(atPath: carFolder.appendingPathComponent("Car.untold").path, contents: Data())
 
             // Materials: a folder per material
             let matFolder = materials.appendingPathComponent("Rust", isDirectory: true)
@@ -472,17 +471,67 @@ final class AssetBrowserViewTests: XCTestCase {
 
     // MARK: - Tests for importAssetForCategory
 
-    func test_importAssetForCategory_modelsFiltersOnlyUSDZ() throws {
+    func test_copyRuntimeAssetSidecars_copiesSiblingTexturesFolder() throws {
+        try withTempDirectory { base in
+            let sourceFolder = base.appendingPathComponent("Source", isDirectory: true)
+            let destinationFolder = base.appendingPathComponent("Destination", isDirectory: true)
+            let texturesFolder = sourceFolder.appendingPathComponent("Textures", isDirectory: true)
+            try FileManager.default.createDirectory(at: texturesFolder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
+
+            let sourceAsset = sourceFolder.appendingPathComponent("robot.untold")
+            let textureFile = texturesFolder.appendingPathComponent("basecolor.png")
+            let nativeTextureFile = texturesFolder.appendingPathComponent("basecolor.utex")
+            FileManager.default.createFile(atPath: sourceAsset.path, contents: Data())
+            FileManager.default.createFile(atPath: textureFile.path, contents: Data("texture".utf8))
+            FileManager.default.createFile(atPath: nativeTextureFile.path, contents: Data("native-texture".utf8))
+
+            try copyRuntimeAssetSidecars(for: sourceAsset, to: destinationFolder)
+
+            let copiedTexture = destinationFolder
+                .appendingPathComponent("Textures", isDirectory: true)
+                .appendingPathComponent("basecolor.png")
+            let copiedNativeTexture = destinationFolder
+                .appendingPathComponent("Textures", isDirectory: true)
+                .appendingPathComponent("basecolor.utex")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: copiedTexture.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: copiedNativeTexture.path))
+        }
+    }
+
+    func test_copyRuntimeAssetSidecars_supportsLowercaseTexturesFolder() throws {
+        try withTempDirectory { base in
+            let sourceFolder = base.appendingPathComponent("Source", isDirectory: true)
+            let destinationFolder = base.appendingPathComponent("Destination", isDirectory: true)
+            let texturesFolder = sourceFolder.appendingPathComponent("textures", isDirectory: true)
+            try FileManager.default.createDirectory(at: texturesFolder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
+
+            let sourceAsset = sourceFolder.appendingPathComponent("legacy.untold")
+            let textureFile = texturesFolder.appendingPathComponent("normal.png")
+            FileManager.default.createFile(atPath: sourceAsset.path, contents: Data())
+            FileManager.default.createFile(atPath: textureFile.path, contents: Data("texture".utf8))
+
+            try copyRuntimeAssetSidecars(for: sourceAsset, to: destinationFolder)
+
+            let copiedTexture = destinationFolder
+                .appendingPathComponent("textures", isDirectory: true)
+                .appendingPathComponent("normal.png")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: copiedTexture.path))
+        }
+    }
+
+    func test_importAssetForCategory_modelsFiltersOnlyUntold() throws {
         try withTempDirectory { base in
             // Create Models directory
             let models = base.appendingPathComponent("Models", isDirectory: true)
             try FileManager.default.createDirectory(at: models, withIntermediateDirectories: true)
 
             // Create test files
-            let usdzFile = models.appendingPathComponent("car.usdz")
+            let untoldFile = models.appendingPathComponent("car.untold")
             let pngFile = models.appendingPathComponent("texture.png")
             let jsonFile = models.appendingPathComponent("config.json")
-            FileManager.default.createFile(atPath: usdzFile.path, contents: Data())
+            FileManager.default.createFile(atPath: untoldFile.path, contents: Data())
             FileManager.default.createFile(atPath: pngFile.path, contents: Data())
             FileManager.default.createFile(atPath: jsonFile.path, contents: Data())
 
@@ -498,27 +547,27 @@ final class AssetBrowserViewTests: XCTestCase {
                 selectedAsset: .init(get: { selected }, set: { selected = $0 })
             )
 
-            // Verify that only .usdz files would be allowed for Models category
+            // Verify that only .untold files would be allowed for Models category
             let modelsCategory = AssetCategory.models
             XCTAssertEqual(modelsCategory.rawValue, "Models", "Models category should have correct name")
 
-            // The importAssetForCategory function filters by .usdz for models
-            XCTAssertTrue(FileManager.default.fileExists(atPath: usdzFile.path), "USDZ file should exist")
+            // The importAssetForCategory function filters by .untold for models
+            XCTAssertTrue(FileManager.default.fileExists(atPath: untoldFile.path), "Untold file should exist")
             XCTAssertTrue(FileManager.default.fileExists(atPath: pngFile.path), "PNG file should exist")
             XCTAssertTrue(FileManager.default.fileExists(atPath: jsonFile.path), "JSON file should exist")
         }
     }
 
-    func test_importAssetForCategory_animationsFiltersOnlyUSDZ() throws {
+    func test_importAssetForCategory_animationsFiltersOnlyUntold() throws {
         try withTempDirectory { base in
             // Create Animations directory
             let animations = base.appendingPathComponent("Animations", isDirectory: true)
             try FileManager.default.createDirectory(at: animations, withIntermediateDirectories: true)
 
             // Create test files
-            let usdzFile = animations.appendingPathComponent("walk.usdz")
+            let untoldFile = animations.appendingPathComponent("walk.untold")
             let scriptFile = animations.appendingPathComponent("controller.uscript")
-            FileManager.default.createFile(atPath: usdzFile.path, contents: Data())
+            FileManager.default.createFile(atPath: untoldFile.path, contents: Data())
             FileManager.default.createFile(atPath: scriptFile.path, contents: Data())
 
             assetBasePath = base
@@ -532,12 +581,12 @@ final class AssetBrowserViewTests: XCTestCase {
                 selectedAsset: .init(get: { selected }, set: { selected = $0 })
             )
 
-            // Verify that only .usdz files would be allowed for Animations category
+            // Verify that only .untold files would be allowed for Animations category
             // (Same as Models but different semantic meaning)
             let animationsCategory = AssetCategory.animations
             XCTAssertEqual(animationsCategory.rawValue, "Animations", "Animations category should have correct name")
 
-            XCTAssertTrue(FileManager.default.fileExists(atPath: usdzFile.path), "USDZ file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: untoldFile.path), "Untold file should exist")
             XCTAssertTrue(FileManager.default.fileExists(atPath: scriptFile.path), "Script file should exist")
         }
     }
@@ -550,9 +599,9 @@ final class AssetBrowserViewTests: XCTestCase {
 
             // Create test files
             let plyFile = gaussians.appendingPathComponent("cloud.ply")
-            let usdzFile = gaussians.appendingPathComponent("model.usdz")
+            let untoldFile = gaussians.appendingPathComponent("model.untold")
             FileManager.default.createFile(atPath: plyFile.path, contents: Data())
-            FileManager.default.createFile(atPath: usdzFile.path, contents: Data())
+            FileManager.default.createFile(atPath: untoldFile.path, contents: Data())
 
             assetBasePath = base
             EditorAssetBasePath.shared.basePath = base
@@ -570,7 +619,7 @@ final class AssetBrowserViewTests: XCTestCase {
             XCTAssertEqual(gaussiansCategory.rawValue, "Gaussians", "Gaussians category should have correct name")
 
             XCTAssertTrue(FileManager.default.fileExists(atPath: plyFile.path), "PLY file should exist")
-            XCTAssertTrue(FileManager.default.fileExists(atPath: usdzFile.path), "USDZ file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: untoldFile.path), "Untold file should exist")
         }
     }
 
@@ -681,9 +730,9 @@ final class AssetBrowserViewTests: XCTestCase {
 
             // Create test files
             let jsonFile = scenes.appendingPathComponent("level.json")
-            let usdzFile = scenes.appendingPathComponent("model.usdz")
+            let untoldFile = scenes.appendingPathComponent("model.untold")
             FileManager.default.createFile(atPath: jsonFile.path, contents: Data())
-            FileManager.default.createFile(atPath: usdzFile.path, contents: Data())
+            FileManager.default.createFile(atPath: untoldFile.path, contents: Data())
 
             assetBasePath = base
             EditorAssetBasePath.shared.basePath = base
@@ -701,7 +750,7 @@ final class AssetBrowserViewTests: XCTestCase {
             XCTAssertEqual(scenesCategory.rawValue, "Scenes", "Scenes category should have correct name")
 
             XCTAssertTrue(FileManager.default.fileExists(atPath: jsonFile.path), "JSON file should exist")
-            XCTAssertTrue(FileManager.default.fileExists(atPath: usdzFile.path), "USDZ file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: untoldFile.path), "Untold file should exist")
         }
     }
 }
