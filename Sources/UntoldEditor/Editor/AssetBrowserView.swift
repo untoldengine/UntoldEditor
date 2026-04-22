@@ -12,6 +12,15 @@ import UntoldEngine
 
 private let runtimeAssetExtension = "untold"
 private let runtimeTextureFolderNames = ["Textures", "textures"]
+private let sourceAssetExtensions: Set<String> = ["usd", "usda", "usdc", "usdz"]
+
+struct RuntimeExportRequest: Identifiable, Equatable {
+    let id = UUID()
+    let sourceURL: URL
+    let category: AssetCategory
+    let destinationFolder: URL
+    let outputURL: URL
+}
 
 func copyRuntimeAssetSidecars(for sourceURL: URL, to destinationFolder: URL, fileManager fm: FileManager = .default) throws {
     let sourceFolder = sourceURL.deletingLastPathComponent()
@@ -48,6 +57,18 @@ func primaryRuntimeAsset(in folder: URL, fileManager fm: FileManager = .default)
     let folderName = folder.lastPathComponent
     return runtimeAssets.first { $0.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(folderName) == .orderedSame }
         ?? (runtimeAssets.count == 1 ? runtimeAssets.first : nil)
+}
+
+func findExportUntoldScript(fileManager fm: FileManager = .default) -> URL? {
+    let cwd = URL(fileURLWithPath: fm.currentDirectoryPath, isDirectory: true)
+    let candidates = [
+        cwd.appendingPathComponent("../UntoldEngine/scripts/export-untold").standardizedFileURL,
+        cwd.appendingPathComponent("scripts/export-untold").standardizedFileURL,
+        URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+            .appendingPathComponent("Desktop/UntoldEngineStudio/UntoldEngine/scripts/export-untold"),
+    ]
+
+    return candidates.first { fm.isExecutableFile(atPath: $0.path) || fm.fileExists(atPath: $0.path) }
 }
 
 enum AssetCategory: String, CaseIterable {
@@ -98,6 +119,11 @@ struct AssetBrowserView: View {
     @State private var statusIsError = false
     @State private var targetEntityName: String = "None"
     @State private var showImportMenu = false
+    @State private var pendingRuntimeExport: RuntimeExportRequest?
+    @State private var runtimeExportQueue: [RuntimeExportRequest] = []
+    @State private var isExportingRuntimeAsset = false
+    @State private var exportConvertOrientation = true
+    @State private var exportSourceOrientation = "blender-native"
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
         folderPathStack.last
@@ -355,6 +381,9 @@ struct AssetBrowserView: View {
                 Text("This will remove \(asset.name) from disk under your Asset Folder.")
             }
         }
+        .sheet(item: $pendingRuntimeExport) { request in
+            runtimeExportSheet(for: request)
+        }
         .overlay(alignment: .bottom) {
             if let statusMessage {
                 Text(statusMessage)
@@ -380,10 +409,10 @@ struct AssetBrowserView: View {
 
         // Set allowed file types based on category
         switch category {
-        case .models:
-            openPanel.allowedContentTypes = [UTType(filenameExtension: runtimeAssetExtension)!]
-        case .animations:
-            openPanel.allowedContentTypes = [UTType(filenameExtension: runtimeAssetExtension)!]
+        case .models, .animations:
+            openPanel.allowedContentTypes = ([runtimeAssetExtension] + sourceAssetExtensions.sorted()).compactMap {
+                UTType(filenameExtension: $0)
+            }
         case .scripts:
             openPanel.allowedContentTypes = [UTType(filenameExtension: "uscript")!]
         case .scenes:
@@ -442,16 +471,19 @@ struct AssetBrowserView: View {
                         }
 
                     case "Models", "Animations":
-                        // Create <Category>/<name>/ and copy the runtime asset.
                         let baseName = sourceURL.deletingPathExtension().lastPathComponent
                         let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                        try fm.createDirectory(at: destFolder, withIntermediateDirectories: true)
+                        let sourceExtension = sourceURL.pathExtension.lowercased()
 
-                        let destModel = destFolder.appendingPathComponent(sourceURL.lastPathComponent)
-                        if fm.fileExists(atPath: destModel.path) { try fm.removeItem(at: destModel) }
-                        try fm.copyItem(at: sourceURL, to: destModel)
-
-                        try copyRuntimeAssetSidecars(for: sourceURL, to: destFolder, fileManager: fm)
+                        if sourceExtension == runtimeAssetExtension {
+                            try importRuntimeAsset(sourceURL: sourceURL, destinationFolder: destFolder, fileManager: fm)
+                        } else if sourceAssetExtensions.contains(sourceExtension) {
+                            queueRuntimeExport(
+                                sourceURL: sourceURL,
+                                category: category,
+                                destinationFolder: destFolder
+                            )
+                        }
 
                     case "Scenes":
                         // Copy Scenes files directly into Scenes folder
@@ -474,7 +506,198 @@ struct AssetBrowserView: View {
             }
 
             loadAssets()
-            showStatus("Queued import of \(openPanel.urls.count) item(s) (see Console)")
+            if runtimeExportQueue.isEmpty, pendingRuntimeExport == nil {
+                showStatus("Queued import of \(openPanel.urls.count) item(s) (see Console)")
+            }
+        }
+    }
+
+    private func importRuntimeAsset(sourceURL: URL, destinationFolder: URL, fileManager fm: FileManager) throws {
+        try fm.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
+
+        let destinationAsset = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
+        if fm.fileExists(atPath: destinationAsset.path) {
+            try fm.removeItem(at: destinationAsset)
+        }
+        try fm.copyItem(at: sourceURL, to: destinationAsset)
+        try copyRuntimeAssetSidecars(for: sourceURL, to: destinationFolder, fileManager: fm)
+    }
+
+    private func queueRuntimeExport(sourceURL: URL, category: AssetCategory, destinationFolder: URL) {
+        let outputURL = destinationFolder
+            .appendingPathComponent(sourceURL.deletingPathExtension().lastPathComponent)
+            .appendingPathExtension(runtimeAssetExtension)
+        let request = RuntimeExportRequest(
+            sourceURL: sourceURL,
+            category: category,
+            destinationFolder: destinationFolder,
+            outputURL: outputURL
+        )
+
+        runtimeExportQueue.append(request)
+        presentNextRuntimeExportIfNeeded()
+    }
+
+    private func presentNextRuntimeExportIfNeeded() {
+        guard pendingRuntimeExport == nil, !runtimeExportQueue.isEmpty else {
+            return
+        }
+        pendingRuntimeExport = runtimeExportQueue.removeFirst()
+    }
+
+    @ViewBuilder
+    private func runtimeExportSheet(for request: RuntimeExportRequest) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Convert to Untold Asset")
+                .font(.title2)
+                .bold()
+
+            Text("This USD file needs to be converted to Untold Engine's .untold runtime format before it can be added to your project.")
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Source")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(request.sourceURL.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(2)
+
+                Text("Output")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 6)
+                Text(request.outputURL.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(2)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Convert orientation", isOn: $exportConvertOrientation)
+
+                Picker("Source orientation", selection: $exportSourceOrientation) {
+                    Text("Blender native").tag("blender-native")
+                    Text("Engine oriented").tag("engine-oriented")
+                }
+                .disabled(!exportConvertOrientation)
+            }
+
+            if isExportingRuntimeAsset {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Exporting...")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    pendingRuntimeExport = nil
+                    presentNextRuntimeExportIfNeeded()
+                }
+                .disabled(isExportingRuntimeAsset)
+
+                Button("Export") {
+                    exportRuntimeAsset(request)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(isExportingRuntimeAsset)
+            }
+        }
+        .padding(20)
+        .frame(width: 560)
+    }
+
+    private func exportRuntimeAsset(_ request: RuntimeExportRequest) {
+        guard !isExportingRuntimeAsset else { return }
+        guard let exporterScript = findExportUntoldScript() else {
+            showStatus("export-untold script not found", isError: true)
+            Logger.log(message: "❌ export-untold script not found. Expected ../UntoldEngine/scripts/export-untold")
+            pendingRuntimeExport = nil
+            presentNextRuntimeExportIfNeeded()
+            return
+        }
+
+        isExportingRuntimeAsset = true
+        showStatus("Exporting \(request.sourceURL.lastPathComponent)...")
+        let convertOrientation = exportConvertOrientation
+        let sourceOrientation = exportSourceOrientation
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            let tempDirectory = FileManager.default.temporaryDirectory
+            let outputLogURL = tempDirectory.appendingPathComponent("untold-export-\(UUID().uuidString).out")
+            let errorLogURL = tempDirectory.appendingPathComponent("untold-export-\(UUID().uuidString).err")
+
+            do {
+                try FileManager.default.createDirectory(at: request.destinationFolder, withIntermediateDirectories: true)
+                if FileManager.default.fileExists(atPath: request.outputURL.path) {
+                    try FileManager.default.removeItem(at: request.outputURL)
+                }
+                FileManager.default.createFile(atPath: outputLogURL.path, contents: nil)
+                FileManager.default.createFile(atPath: errorLogURL.path, contents: nil)
+                let outputHandle = try FileHandle(forWritingTo: outputLogURL)
+                let errorHandle = try FileHandle(forWritingTo: errorLogURL)
+                defer {
+                    try? outputHandle.close()
+                    try? errorHandle.close()
+                    try? FileManager.default.removeItem(at: outputLogURL)
+                    try? FileManager.default.removeItem(at: errorLogURL)
+                }
+
+                process.executableURL = exporterScript
+                var arguments = [
+                    "--input", request.sourceURL.path,
+                    "--output", request.outputURL.path,
+                ]
+                if request.category == .animations {
+                    arguments.append("--animation")
+                }
+                if convertOrientation {
+                    arguments.append("--ConvertOrientation")
+                    arguments.append(contentsOf: ["--source-orientation", sourceOrientation])
+                }
+                process.arguments = arguments
+                process.standardOutput = outputHandle
+                process.standardError = errorHandle
+
+                try process.run()
+                process.waitUntilExit()
+
+                let stdout = (try? String(contentsOf: outputLogURL, encoding: .utf8)) ?? ""
+                let stderr = (try? String(contentsOf: errorLogURL, encoding: .utf8)) ?? ""
+
+                DispatchQueue.main.async {
+                    if !stdout.isEmpty {
+                        Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                    if !stderr.isEmpty {
+                        Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+
+                    isExportingRuntimeAsset = false
+                    pendingRuntimeExport = nil
+
+                    if process.terminationStatus == 0 {
+                        loadAssets()
+                        showStatus("Exported \(request.outputURL.lastPathComponent)")
+                    } else {
+                        showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
+                    }
+
+                    presentNextRuntimeExportIfNeeded()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    isExportingRuntimeAsset = false
+                    pendingRuntimeExport = nil
+                    Logger.log(message: "❌ Export failed: \(error)")
+                    showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
+                    presentNextRuntimeExportIfNeeded()
+                }
+            }
         }
     }
 
