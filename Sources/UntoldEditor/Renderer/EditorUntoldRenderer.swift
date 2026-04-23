@@ -35,6 +35,7 @@ extension UntoldRenderer {
         //  - user intent suggests editing (Shift or gizmo is active)
         guard isEditorEnabled,
               activeEntity != .invalid,
+              canEditSceneTransform(entityId: activeEntity),
               InputSystem.shared.keyState.shiftPressed || gizmoActive
         else {
             return

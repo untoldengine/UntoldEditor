@@ -175,27 +175,13 @@
             activeHitGizmoEntity = .invalid
 
             if hit {
-                // If hit a child mesh, select the parent instead (except for gizmos)
-                // Unless shift is pressed, then select the child directly
-                var hitEntityId = entityId
-                if hasComponent(entityId: entityId, componentType: GizmoComponent.self) {
-                    // Gizmo hit - select the gizmo directly
-                    hitEntityId = entityId
-                } else if let parentId = getEntityParent(entityId: entityId) {
-                    // If shift is pressed, select child; otherwise select parent
-                    if keyState.shiftPressed {
-                        hitEntityId = parentId // Select the parent
-                    } else {
-                        hitEntityId = entityId // Select child
-                    }
-                } else {
-                    // Entity with no parent - select it directly
-                    hitEntityId = entityId
-                }
+                let hitEntityId = hasComponent(entityId: entityId, componentType: GizmoComponent.self)
+                    ? entityId
+                    : editableAssetRootEntity(for: entityId)
 
-                activeEntity = hitEntityId
+                activeEntity = selectableTransformEntity(for: hitEntityId)
 
-                selectionDelegate?.didSelectEntity(activeEntity)
+                selectionDelegate?.didSelectEntity(hitEntityId)
                 selectionDelegate?.resetActiveAxis()
 
             } else {

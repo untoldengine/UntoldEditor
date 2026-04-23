@@ -1218,12 +1218,23 @@ struct AssetBrowserView: View {
         else if asset.category == AssetCategory.animations.rawValue,
                 withExtension.lowercased() == runtimeAssetExtension
         {
+            guard EditorAuthoringMode.sceneCompositionOnly == false else {
+                showStatus("Animations are linked in code for scene-composition projects", isError: true)
+                return
+            }
+
             // Animations require a selected entity to work with
             guard let entityId = selectionManager.selectedEntity,
                   entityId != .invalid
             else {
                 print("⚠️ Please select an entity first to add animation")
                 showStatus("Select an entity before adding animation", isError: true)
+                return
+            }
+
+            guard canAuthorAnimationComponent(entityId: entityId) else {
+                print("⚠️ Select a mesh node to add animation")
+                showStatus("Select a mesh node before adding animation", isError: true)
                 return
             }
 
@@ -1250,6 +1261,11 @@ struct AssetBrowserView: View {
         else if asset.category == AssetCategory.scripts.rawValue,
                 withExtension.lowercased() == "uscript"
         {
+            guard EditorAuthoringMode.sceneCompositionOnly == false else {
+                showStatus("Scripts are linked in code for scene-composition projects", isError: true)
+                return
+            }
+
             // Scripts require a selected entity to work with
             guard let entityId = selectionManager.selectedEntity,
                   entityId != .invalid

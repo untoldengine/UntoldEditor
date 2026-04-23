@@ -89,6 +89,12 @@ class EditorController: SelectionDelegate, ObservableObject {
         }
     }
 
+    func didInspectEntity(_ entityId: EntityID) {
+        DispatchQueue.main.async {
+            self.selectionManager.inspectEntity(entityId: entityId)
+        }
+    }
+
     func resetActiveAxis() {
         activeAxis = .none
     }

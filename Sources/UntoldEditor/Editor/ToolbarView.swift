@@ -34,9 +34,6 @@
 
         @State private var isPlaying = false
         @State private var showCreateProject = false
-        @State private var showingNewScriptDialog = false
-        @State private var newScriptName = ""
-        @State private var showBasePathAlert = false
         @State private var showInvalidProjectAlert = false
         @State private var invalidProjectMessage = ""
 
@@ -50,9 +47,7 @@
                 centeredButtons
                 Spacer()
 
-                if EditorFeatureFlags.enableScriptButtons {
-                    rightSection
-                }
+                rightSection
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 6)
@@ -68,23 +63,6 @@
             .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
             .sheet(isPresented: $showCreateProject) {
                 CreateProjectView()
-            }
-            .sheet(isPresented: $showingNewScriptDialog) {
-                NewScriptDialog(
-                    scriptName: $newScriptName,
-                    onCancel: {
-                        showingNewScriptDialog = false
-                        newScriptName = ""
-                    },
-                    onCreate: {
-                        createNewScript()
-                    }
-                )
-            }
-            .alert("No Project Loaded", isPresented: $showBasePathAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Please create a new project or open an existing project before working with scripts.")
             }
             .alert("Invalid Project", isPresented: $showInvalidProjectAlert) {
                 Button("OK", role: .cancel) {}
@@ -194,32 +172,6 @@
             HStack(spacing: 8) {
                 Divider().frame(height: 24)
 
-                // Consolidated Script menu (matches Save menu pattern)
-                Menu {
-                    Button("New Script", systemImage: "plus.circle.fill") {
-                        guard ensureAssetBasePath() else { return }
-                        showingNewScriptDialog = true
-                    }
-                    Button("Script in Xcode", systemImage: "hammer.fill", action: openInXcode)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "doc.text.fill")
-                        Text("Script")
-                        // Experimental indicator
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(.orange)
-                    }
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
-                    .background(Color.editorAccent)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                }
-                .menuStyle(.borderlessButton)
-                .focusable(false)
-                .help("USC Scripts (Experimental) - API subject to change")
-
                 // Show project name if loaded
                 if let projectName = editorBasePath.projectName {
                     Text(projectName)
@@ -239,66 +191,6 @@
                     .background(Color.editorSurface.opacity(0.6))
                     .cornerRadius(6)
             }
-        }
-
-        // MARK: - Script Management Functions
-
-        private func createNewScript() {
-            guard ensureAssetBasePath() else { return }
-            let manager = ScriptProjectManager.shared
-
-            // Initialize project if needed
-            if !manager.isProjectInitialized() {
-                do {
-                    try manager.initializeProject()
-                    print("✅ Script project initialized!")
-                } catch {
-                    print("❌ Failed to initialize project: \(error.localizedDescription)")
-                    showingNewScriptDialog = false
-                    newScriptName = ""
-                    return
-                }
-            }
-
-            // Create the script
-            do {
-                try manager.createNewScript(name: newScriptName)
-                print("✅ Script \(newScriptName).swift created!")
-                print("⚠️ Don't forget to add generate\(newScriptName)(to:) to GenerateScripts.swift main()")
-            } catch {
-                print("❌ Failed to create script: \(error.localizedDescription)")
-            }
-
-            showingNewScriptDialog = false
-            newScriptName = ""
-        }
-
-        private func openInXcode() {
-            guard ensureAssetBasePath() else { return }
-            let manager = ScriptProjectManager.shared
-
-            // Initialize project if needed
-            if !manager.isProjectInitialized() {
-                do {
-                    try manager.initializeProject()
-                    print("✅ Script project initialized! Opening in Xcode...")
-                } catch {
-                    print("❌ Failed to initialize: \(error.localizedDescription)")
-                    return
-                }
-            }
-
-            // Open Package.swift in Xcode
-            guard let scriptsDir = manager.scriptsDirectory() else {
-                print("❌ Scripts directory not found")
-                return
-            }
-
-            let packageSwiftPath = scriptsDir.appendingPathComponent("Package.swift")
-
-            // Use NSWorkspace to open the file with default app (Xcode)
-            NSWorkspace.shared.open(packageSwiftPath)
-            print("✅ Opening Scripts project in Xcode")
         }
 
         private func openExistingProject() {
@@ -364,51 +256,6 @@
             print("📁 Asset base path set to: \(gameDataPath.path)")
         }
 
-        private func ensureAssetBasePath() -> Bool {
-            guard EditorAssetBasePath.shared.basePath != nil else {
-                showBasePathAlert = true
-                return false
-            }
-            return true
-        }
-    }
-
-    // MARK: - New Script Dialog
-
-    struct NewScriptDialog: View {
-        @Binding var scriptName: String
-        let onCancel: () -> Void
-        let onCreate: () -> Void
-
-        var body: some View {
-            VStack(spacing: 16) {
-                Text("Create New Script")
-                    .font(.headline)
-
-                TextField("Script Name (e.g., PlayerController)", text: $scriptName)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .frame(width: 300)
-
-                Text("Name should be alphanumeric and start with a letter.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                HStack(spacing: 12) {
-                    Button("Cancel") {
-                        onCancel()
-                    }
-                    .keyboardShortcut(.cancelAction)
-
-                    Button("Create") {
-                        onCreate()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(scriptName.isEmpty)
-                }
-            }
-            .padding(24)
-            .frame(width: 400)
-        }
     }
 
     // MARK: - Toolbar Button Component

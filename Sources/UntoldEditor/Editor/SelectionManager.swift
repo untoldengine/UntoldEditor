@@ -12,6 +12,7 @@ import UntoldEngine
 
 protocol SelectionDelegate: AnyObject {
     func didSelectEntity(_ entityId: EntityID)
+    func didInspectEntity(_ entityId: EntityID)
     func resetActiveAxis()
 }
 
@@ -19,7 +20,9 @@ class SceneGraphModel: ObservableObject {
     @Published var childrenMap: [EntityID: [EntityID]] = [:]
 
     func refreshHierarchy() {
-        let allEntities = getAllGameEntities()
+        let allEntities = getAllGameEntities().filter { entityId in
+            EditorAuthoringMode.sceneCompositionOnly == false || isDerivedAssetNode(entityId) == false
+        }
 
         childrenMap = Dictionary(grouping: allEntities) { entityId in
             // If there's no ScenegraphComponent (e.g., camera), treat as root
@@ -41,7 +44,22 @@ class SelectionManager: ObservableObject {
     init() {}
 
     func selectEntity(entityId: EntityID) {
-        selectedEntity = entityId
+        selectEntity(entityId: editableAssetRootEntity(for: entityId), inspectEntityId: editableAssetRootEntity(for: entityId))
+    }
+
+    func inspectEntity(entityId: EntityID) {
+        selectEntity(entityId: editableAssetRootEntity(for: entityId), inspectEntityId: entityId)
+    }
+
+    private func selectEntity(entityId: EntityID, inspectEntityId: EntityID) {
+        selectedEntity = inspectEntityId
+
+        guard canEditSceneTransform(entityId: entityId) else {
+            activeEntity = .invalid
+            gizmoActive = false
+            removeGizmo()
+            return
+        }
 
         // Check if entity or any of its children have a render component
         let hasRenderCapability = entityOrChildrenHaveRenderComponent(entityId: entityId)
@@ -69,7 +87,7 @@ class SelectionManager: ObservableObject {
         // Check children
         let children = getEntityChildren(parentId: entityId)
         for childId in children {
-            if hasComponent(entityId: childId, componentType: RenderComponent.self) {
+            if entityOrChildrenHaveRenderComponent(entityId: childId) {
                 return true
             }
         }
@@ -88,15 +106,19 @@ class SelectionManager: ObservableObject {
             maxBounds = simd_max(maxBounds, localTransform.boundingBox.max)
         }
 
-        // Check children
-        let children = getEntityChildren(parentId: entityId)
-        for childId in children {
+        accumulateChildBounds(parentId: entityId, minBounds: &minBounds, maxBounds: &maxBounds)
+
+        return (min: minBounds, max: maxBounds)
+    }
+
+    private func accumulateChildBounds(parentId: EntityID, minBounds: inout simd_float3, maxBounds: inout simd_float3) {
+        for childId in getEntityChildren(parentId: parentId) {
             if let childTransform = scene.get(component: LocalTransformComponent.self, for: childId) {
                 minBounds = simd_min(minBounds, childTransform.boundingBox.min)
                 maxBounds = simd_max(maxBounds, childTransform.boundingBox.max)
             }
-        }
 
-        return (min: minBounds, max: maxBounds)
+            accumulateChildBounds(parentId: childId, minBounds: &minBounds, maxBounds: &maxBounds)
+        }
     }
 }

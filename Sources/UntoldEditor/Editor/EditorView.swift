@@ -124,11 +124,6 @@ public struct EditorView: View {
                                 Label("Effects", systemImage: "cube")
                             }
 
-                        StaticBatchingView()
-                            .tabItem {
-                                Label("Batching", systemImage: "square.3.layers.3d")
-                            }
-
                         InspectorView(
                             selectionManager: selectionManager,
                             sceneGraphModel: sceneGraphModel,
@@ -440,6 +435,10 @@ public struct EditorView: View {
             print("No entity is selected.") // Handle case where no entity is selected
             return
         }
+        guard isDerivedAssetNode(entityId) == false else {
+            print("⚠️ Asset nodes cannot be removed directly")
+            return
+        }
 
         destroyEntity(entityId: entityId)
 
@@ -625,6 +624,11 @@ public struct EditorView: View {
     // MARK: - Parenting Functions
 
     private func editor_parentEntity(childId: EntityID, parentId: EntityID) {
+        guard isDerivedAssetNode(childId) == false, isDerivedAssetNode(parentId) == false else {
+            print("⚠️ Asset nodes cannot be reparented directly")
+            return
+        }
+
         // Ensure both entities exist and have ScenegraphComponent
         guard hasComponent(entityId: childId, componentType: ScenegraphComponent.self),
               hasComponent(entityId: parentId, componentType: ScenegraphComponent.self)
@@ -657,6 +661,11 @@ public struct EditorView: View {
     }
 
     private func editor_unparentEntity(childId: EntityID) {
+        guard isDerivedAssetNode(childId) == false else {
+            print("⚠️ Asset nodes cannot be unparented directly")
+            return
+        }
+
         // Ensure entity has ScenegraphComponent
         guard hasComponent(entityId: childId, componentType: ScenegraphComponent.self) else {
             print("⚠️ Cannot unparent entity: missing ScenegraphComponent")

@@ -34,3 +34,9 @@ enum EditorFeatureFlags {
     // - Script buttons: If we implement visual scripting / Blueprint-like system
     // - Script component: If we add hot-reloading or modding support via USC scripts
 }
+
+enum EditorAuthoringMode {
+    /// Keep the editor focused on scene composition. Runtime behavior such as
+    /// animation, kinetics, scripts, LOD, and batching should be wired in code.
+    static let sceneCompositionOnly: Bool = true
+}

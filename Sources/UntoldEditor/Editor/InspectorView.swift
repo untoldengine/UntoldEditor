@@ -49,6 +49,11 @@ private func onAddMesh_Editor(entityId: EntityID, url: URL) {
 }
 
 private func onAddAnimation_Editor(entityId: EntityID, url: URL) {
+    guard canAuthorAnimationComponent(entityId: entityId) else {
+        print("⚠️ Select a mesh node to assign animation")
+        return
+    }
+
     let filename = url.deletingPathExtension().lastPathComponent
     let withExtension = url.pathExtension
 
@@ -208,13 +213,17 @@ func mergeEntityComponents(
 
     // Include script component if feature flag is enabled
     var allComponents = editor_availableComponents
-    if EditorFeatureFlags.enableScriptComponent {
+    if EditorFeatureFlags.enableScriptComponent, EditorAuthoringMode.sceneCompositionOnly == false {
         allComponents.append(scriptComponent_Editor)
     }
 
     let matchingComponents = allComponents.filter { existingComponentIDs.contains($0.id) }
 
     for match in matchingComponents {
+        guard canShowComponentInInspector(componentType: match.type, for: entityId) else {
+            continue
+        }
+
         let key = ObjectIdentifier(match.type)
 
         if mergedComponents[key] == nil {
@@ -222,7 +231,7 @@ func mergeEntityComponents(
         }
     }
 
-    return mergedComponents
+    return mergedComponents.filter { canShowComponentInInspector(componentType: $0.value.type, for: entityId) }
 }
 
 func sortEntityComponents(componentOption_Editor: [ObjectIdentifier: ComponentOption_Editor]) -> [ComponentOption_Editor] {
@@ -244,7 +253,6 @@ struct InspectorView: View {
     @ObservedObject var sceneGraphModel: SceneGraphModel
     @ObservedObject var editorComponentsState = EditorComponentsState.shared
     var onAddName_Editor: () -> Void
-    @State private var showComponentSelection = false
     // @State private var editor_entityComponents: [EntityID: [ObjectIdentifier: ComponentOption_Editor]] = [:]
     @FocusState private var isNameTextFieldFocused: Bool
     @Binding var selectedAsset: Asset?
@@ -255,23 +263,6 @@ struct InspectorView: View {
                 .font(.headline)
                 .padding(.bottom, 8)
 
-            if selectionManager.selectedEntity != nil, selectionManager.selectedEntity != .invalid {
-                Button(action: { showComponentSelection = true }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.white)
-                        Text("Add Components")
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
             if let entityId = selectionManager.selectedEntity, entityId != .invalid {
                 ScrollView { // Make the entire inspector scrollable
                     VStack(alignment: .leading) {
@@ -280,17 +271,24 @@ struct InspectorView: View {
                             TextField("Set Entity Name", text: Binding(
                                 get: { getEntityName(entityId: entityId) },
                                 set: {
-                                    setEntityName(entityId: entityId, name: $0)
+                                    if isDerivedAssetNode(entityId) == false {
+                                        setEntityName(entityId: entityId, name: $0)
+                                    }
                                 }
                             ))
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .padding()
                             .focused($isNameTextFieldFocused)
+                                .disabled(isDerivedAssetNode(entityId))
                             .onSubmit {
                                 onAddName_Editor()
                                 refreshView()
                                 isNameTextFieldFocused = false
                             }
+                        }
+
+                        if isDerivedAssetNode(entityId) {
+                            AssetNodeInspectorBanner(entityId: entityId, selectionManager: selectionManager)
                         }
 
                         if let entityId = selectionManager.selectedEntity {
@@ -302,7 +300,9 @@ struct InspectorView: View {
                             let sortedComponents = sortEntityComponents(componentOption_Editor: mergedComponents)
 
                             // Static Batching Section - Show for any entity with renderable hierarchy
-                            StaticBatchingEditorView(entityId: entityId, refreshView: refreshView)
+                            if EditorAuthoringMode.sceneCompositionOnly == false, isDerivedAssetNode(entityId) == false {
+                                StaticBatchingEditorView(entityId: entityId, refreshView: refreshView)
+                            }
 
                             ForEach(sortedComponents, id: \.id) { editor_component in
                                 VStack(alignment: .leading, spacing: 4) {
@@ -311,13 +311,15 @@ struct InspectorView: View {
                                             .font(.headline)
                                             .frame(maxWidth: .infinity, alignment: .leading)
 
-                                        Button(action: {
-                                            removeComponentFromEntity_Editor(componentType: editor_component.type)
-                                        }) {
-                                            Image(systemName: "trash")
-                                                .foregroundColor(.red)
+                                        if canRemoveComponentFromInspector(componentType: editor_component.type, from: entityId) {
+                                            Button(action: {
+                                                removeComponentFromEntity_Editor(componentType: editor_component.type)
+                                            }) {
+                                                Image(systemName: "trash")
+                                                    .foregroundColor(.red)
+                                            }
+                                            .buttonStyle(BorderlessButtonStyle())
                                         }
-                                        .buttonStyle(BorderlessButtonStyle())
                                     }
 
                                     editor_component.view(entityId, selectedAsset, refreshView)
@@ -339,40 +341,11 @@ struct InspectorView: View {
         }
         .frame(minWidth: 200, maxWidth: 250)
         .padding()
-        .sheet(isPresented: $showComponentSelection) {
-            VStack {
-                Text("Select a Component")
-                    .font(.headline)
-                    .padding()
-
-                List(availableComponentsWithFlags(), id: \.id) { component in
-                    Button(action: {
-                        addComponentToEntity_Editor(componentType: component.type)
-                        showComponentSelection = false
-                    }) {
-                        HStack {
-                            Image(systemName: "cube")
-                            Text(component.name)
-                        }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-                .scrollContentBackground(.hidden) // Hides system background
-
-                Button("Cancel") {
-                    showComponentSelection = false
-                }
-                .padding()
-            }
-            .frame(width: 300, height: 300)
-            .background(
-                Color.editorBackground.ignoresSafeArea()
-            )
-        }
     }
 
     func addComponentToEntity_Editor(componentType: Any.Type) {
         guard let entityId = selectionManager.selectedEntity else { return }
+        guard canAddComponentFromInspector(componentType: componentType, to: entityId) else { return }
 
         let key = ObjectIdentifier(componentType)
 
@@ -405,6 +378,7 @@ struct InspectorView: View {
 
     func removeComponentFromEntity_Editor(componentType: Any.Type) {
         guard let entityId = selectionManager.selectedEntity else { return }
+        guard canRemoveComponentFromInspector(componentType: componentType, from: entityId) else { return }
 
         let key = ObjectIdentifier(componentType)
 
@@ -448,8 +422,11 @@ struct InspectorView: View {
 
     private func availableComponentsWithFlags() -> [ComponentOption_Editor] {
         var components = availableComponents_Editor
-        if EditorFeatureFlags.enableScriptComponent {
+        if EditorFeatureFlags.enableScriptComponent, EditorAuthoringMode.sceneCompositionOnly == false {
             components.append(scriptComponent_Editor)
+        }
+        if let entityId = selectionManager.selectedEntity {
+            components = components.filter { canAddComponentFromInspector(componentType: $0.type, to: entityId) }
         }
         return components
     }
@@ -571,36 +548,43 @@ struct RenderingEditorView: View {
 
     var body: some View {
         Text("Mesh")
+        let readOnlyRender = EditorAuthoringMode.sceneCompositionOnly
 
         HStack(spacing: 12) {
             Text(getAssetURLString(entityId: entityId) ?? " ")
-            Button(action: {
-                let selectedCategory: AssetCategory = .models
-                if let assetPath = asset?.path, selectedCategory.rawValue == asset?.category {
-                    onAddMesh_Editor(entityId: entityId, url: assetPath)
+
+            if readOnlyRender == false {
+                Button(action: {
+                    let selectedCategory: AssetCategory = .models
+                    if let assetPath = asset?.path, selectedCategory.rawValue == asset?.category {
+                        onAddMesh_Editor(entityId: entityId, url: assetPath)
+                    }
+                    refreshView()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.white)
+                        Text("Assign")
+                            .fontWeight(.regular)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(Color.editorAccent)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                 }
-                refreshView()
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.white)
-                    Text("Assign")
-                        .fontWeight(.regular)
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(Color.editorAccent)
-                .foregroundColor(.white)
-                .cornerRadius(8)
-                .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                .buttonStyle(PlainButtonStyle())
             }
-            .buttonStyle(PlainButtonStyle())
         }
         .padding(8)
         .background(Color.secondary.opacity(0.05))
         .cornerRadius(8)
 
-        if hasComponent(entityId: entityId, componentType: RenderComponent.self), hasComponent(entityId: entityId, componentType: LightComponent.self) == false {
+        if readOnlyRender == false,
+           hasComponent(entityId: entityId, componentType: RenderComponent.self),
+           hasComponent(entityId: entityId, componentType: LightComponent.self) == false
+        {
             Text("Material Properties")
                 .font(.headline)
                 .padding(.bottom, 4)
@@ -848,6 +832,68 @@ struct RenderingEditorView: View {
     }
 }
 
+private struct AssetNodeInspectorBanner: View {
+    let entityId: EntityID
+    @ObservedObject var selectionManager: SelectionManager
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: isBindableAssetMeshNode(entityId) ? "cube.fill" : "square.stack.3d.up")
+                .foregroundColor(.secondary)
+
+            Text(isBindableAssetMeshNode(entityId) ? "Mesh Node" : "Asset Node")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            if let rootId = assetRootEntityId(for: entityId), rootId != .invalid {
+                Button(action: {
+                    selectionManager.selectEntity(entityId: rootId)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.left")
+                        Text(getEntityName(entityId: rootId))
+                            .lineLimit(1)
+                    }
+                }
+                .buttonStyle(BorderlessButtonStyle())
+                .help("Select asset root")
+            }
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.12))
+        .cornerRadius(6)
+    }
+}
+
+private struct ReadOnlyVectorView: View {
+    let label: String
+    let value: simd_float3
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(label)
+                .font(.headline)
+
+            HStack {
+                vectorValue(value.x)
+                vectorValue(value.y)
+                vectorValue(value.z)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func vectorValue(_ value: Float) -> some View {
+        Text(value, format: .number.precision(.fractionLength(3)))
+            .frame(width: 60)
+            .padding(.vertical, 3)
+            .background(Color.secondary.opacity(0.12))
+            .cornerRadius(4)
+    }
+}
+
 struct TransformationEditorView: View {
     let entityId: EntityID
     let refreshView: () -> Void
@@ -857,8 +903,10 @@ struct TransformationEditorView: View {
     var body: some View {
         Text("Transform Properties")
 
+        let isReadOnlyAssetNode = isDerivedAssetNode(entityId)
+
         // Warning banner if entity is marked as static
-        if hasComponent(entityId: entityId, componentType: StaticBatchComponent.self) {
+        if !isReadOnlyAssetNode, hasComponent(entityId: entityId, componentType: StaticBatchComponent.self) {
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(.orange)
@@ -871,36 +919,48 @@ struct TransformationEditorView: View {
             .cornerRadius(6)
         }
 
-        let localTransformComponent = scene.get(component: LocalTransformComponent.self, for: entityId)
-        let position = getLocalPosition(entityId: entityId)
-        let orientation = simd_float3(localTransformComponent!.rotationX, localTransformComponent!.rotationY, localTransformComponent!.rotationZ)
-        let scale = getScale(entityId: entityId)
-        TextInputVectorView(label: "Position", value: Binding(
-            get: { position },
-            set: { newPosition in
-                handleTransformChange()
-                translateTo(entityId: entityId, position: newPosition)
-                refreshView()
-            }
-        ))
+        if let localTransformComponent = scene.get(component: LocalTransformComponent.self, for: entityId) {
+            let position = getLocalPosition(entityId: entityId)
+            let orientation = simd_float3(localTransformComponent.rotationX, localTransformComponent.rotationY, localTransformComponent.rotationZ)
+            let scale = getScale(entityId: entityId)
 
-        TextInputVectorView(label: "Orientation", value: Binding(
-            get: { orientation },
-            set: { newOrientation in
-                handleTransformChange()
-                applyAxisRotations(entityId: entityId, axis: newOrientation)
-                refreshView()
-            }
-        ))
+            if isReadOnlyAssetNode {
+                ReadOnlyVectorView(label: "Position", value: position)
+                ReadOnlyVectorView(label: "Orientation", value: orientation)
+                ReadOnlyVectorView(label: "Scale", value: scale)
+            } else {
+                TextInputVectorView(label: "Position", value: Binding(
+                    get: { position },
+                    set: { newPosition in
+                        handleTransformChange()
+                        translateTo(entityId: entityId, position: newPosition)
+                        refreshView()
+                    }
+                ))
 
-        TextInputVectorView(label: "Scale", value: Binding(
-            get: { scale },
-            set: { newScale in
-                handleTransformChange()
-                scaleTo(entityId: entityId, scale: newScale)
-                refreshView()
+                TextInputVectorView(label: "Orientation", value: Binding(
+                    get: { orientation },
+                    set: { newOrientation in
+                        handleTransformChange()
+                        applyAxisRotations(entityId: entityId, axis: newOrientation)
+                        refreshView()
+                    }
+                ))
+
+                TextInputVectorView(label: "Scale", value: Binding(
+                    get: { scale },
+                    set: { newScale in
+                        handleTransformChange()
+                        scaleTo(entityId: entityId, scale: newScale)
+                        refreshView()
+                    }
+                ))
             }
-        ))
+        } else {
+            Text("No transform data")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
     }
 
     private func handleTransformChange() {

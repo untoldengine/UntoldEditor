@@ -43,10 +43,6 @@ struct SceneHierarchyView: View {
                 Menu {
                     Button("Empty Entity", systemImage: "plus") { onAddEntity_Editor() }
                     Divider()
-                    Button("Cube", systemImage: "cube.fill") { onAddCube() }
-                    Button("Sphere", systemImage: "circle.fill") { onAddSphere() }
-                    Button("Plane", systemImage: "rectangle.fill") { onAddPlane() }
-                    Divider()
                     Button("Directional Light", systemImage: "sun.max") { onAddDirLight() }
                     Button("Point Light", systemImage: "lightbulb") { onAddPointLight() }
                     Button("Spot Light", systemImage: "flashlight.on.fill") { onAddSpotLight() }
@@ -71,6 +67,8 @@ struct SceneHierarchyView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .help("Remove Selected Entity")
+                .disabled(selectionManager.selectedEntity.map { isDerivedAssetNode($0) } ?? false)
+                .opacity(selectionManager.selectedEntity.map { isDerivedAssetNode($0) } ?? false ? 0.45 : 1.0)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -122,24 +120,34 @@ struct EntityRow: View {
         entityid == selectionManager.selectedEntity
     }
 
+    private var isAssetNode: Bool {
+        isDerivedAssetNode(entityid)
+    }
+
     var body: some View {
+        if isAssetNode {
+            styledEntityRow
+        } else {
+            styledEntityRow
+                .draggable(String(entityid))
+        }
+    }
+
+    private var styledEntityRow: some View {
         entityRowContent
             .padding(8)
-            .background(
-                isSelected ? Color.gray.opacity(0.8) : Color.clear
-            )
+            .background(isSelected ? Color.gray.opacity(0.8) : Color.clear)
             .cornerRadius(6)
-            .draggable(String(entityid))
     }
 
     private var entityRowContent: some View {
         HStack(spacing: 8) {
-            Image(systemName: "cube.fill")
-                .foregroundColor(isSelected ? .white : .gray)
+            Image(systemName: isAssetNode ? (isBindableAssetMeshNode(entityid) ? "cube.fill" : "square.stack.3d.up") : "cube")
+                .foregroundColor(isSelected ? .white : (isAssetNode ? .secondary : .gray))
 
             Text(entityName)
                 .fontWeight(isSelected ? .bold : .regular)
-                .foregroundColor(isSelected ? .white : .primary)
+                .foregroundColor(isSelected ? .white : (isAssetNode ? .secondary : .primary))
 
             Spacer()
         }
@@ -170,7 +178,7 @@ struct HierarchyNode: View {
             .contentShape(Rectangle())
             .padding(.leading, CGFloat(depth * 12))
             .onTapGesture {
-                selectionManager.selectEntity(entityId: entityId)
+                selectionManager.inspectEntity(entityId: entityId)
             }
             .contextMenu {
                 contextMenuContent
@@ -200,6 +208,7 @@ struct HierarchyNode: View {
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard isDerivedAssetNode(entityId) == false else { return false }
         guard let provider = providers.first else { return false }
 
         provider.loadObject(ofClass: NSString.self) { object, _ in
@@ -207,6 +216,7 @@ struct HierarchyNode: View {
                let draggedValue = UInt64(draggedEntityIdString)
             {
                 let draggedEntityId = EntityID(draggedValue)
+                guard isDerivedAssetNode(draggedEntityId) == false else { return }
 
                 // Don't allow parenting to self
                 if draggedEntityId == entityId {
@@ -255,7 +265,10 @@ struct HierarchyNode: View {
     // Context menu for entity row
     private var contextMenuContent: some View {
         VStack {
-            if hasParent {
+            if isDerivedAssetNode(entityId) {
+                Text("Asset node")
+                    .foregroundColor(.gray)
+            } else if hasParent {
                 Button(action: {
                     DispatchQueue.main.async {
                         onUnparentEntity(entityId)
