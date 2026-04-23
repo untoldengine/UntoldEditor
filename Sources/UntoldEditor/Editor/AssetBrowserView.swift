@@ -307,8 +307,7 @@ struct AssetBrowserView: View {
 
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
-                        TextField("Filter assets", text: $searchQuery)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        ExplicitClickTextField(text: $searchQuery, placeholder: "Filter assets")
                     }
                     .frame(maxWidth: 240)
 

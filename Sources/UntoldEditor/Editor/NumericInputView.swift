@@ -20,7 +20,7 @@
         }
 
         func makeNSView(context: Context) -> NSTextField {
-            let textField = NSTextField(string: text)
+            let textField = ExplicitClickFocusNSTextField(string: text)
             textField.delegate = context.coordinator
             textField.target = context.coordinator
             textField.action = #selector(Coordinator.didSubmitFromAction(_:))
@@ -57,18 +57,20 @@
                 text.wrappedValue = textField.stringValue
             }
 
-            func controlTextDidEndEditing(_: Notification) {
+            func controlTextDidEndEditing(_ notification: Notification) {
                 if suppressNextEndEditingCommit {
                     suppressNextEndEditingCommit = false
                     return
                 }
 
                 onSubmit()
+                (notification.object as? ExplicitClickFocusNSTextField)?.clearClickFocus()
             }
 
             @objc func didSubmitFromAction(_ sender: NSControl) {
                 suppressNextEndEditingCommit = true
                 onSubmit()
+                (sender as? ExplicitClickFocusNSTextField)?.clearClickFocus()
                 sender.window?.makeFirstResponder(nil)
             }
 
@@ -81,12 +83,14 @@
                 {
                     suppressNextEndEditingCommit = true
                     onSubmit()
+                    (control as? ExplicitClickFocusNSTextField)?.clearClickFocus()
                     control.window?.makeFirstResponder(nil)
                     return true
                 }
 
                 return false
             }
+
         }
     }
 
