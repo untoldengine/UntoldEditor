@@ -289,7 +289,7 @@ public struct EditorView: View {
         let scenesFolder = basePath.appendingPathComponent("Scenes", isDirectory: true)
         try? FileManager.default.createDirectory(at: scenesFolder, withIntermediateDirectories: true)
 
-        let targetURL = scenesFolder.appendingPathComponent(name).appendingPathExtension("json")
+        let targetURL = scenesFolder.appendingPathComponent(name).appendingPathExtension(untoldSceneFileExtension)
         pendingTargetURL = targetURL
 
         if FileManager.default.fileExists(atPath: targetURL.path) {
@@ -331,7 +331,7 @@ public struct EditorView: View {
         // Check if a scene is selected in the Asset Browser
         if let asset = selectedAsset,
            asset.category == "Scenes",
-           asset.path.pathExtension.lowercased() == "json"
+           asset.path.pathExtension.lowercased() == untoldSceneFileExtension
         {
             // Load from selected asset
             sceneData = loadGameScene(from: asset.path)
@@ -698,10 +698,11 @@ public struct EditorView: View {
         openPanel.allowedContentTypes = [
             UTType(filenameExtension: "untold")!,
             UTType(filenameExtension: "ply")!,
+            UTType(filenameExtension: "json")!,
         ]
         openPanel.allowsMultipleSelection = false
         openPanel.canChooseDirectories = false
-        openPanel.message = "Select a 3D file to preview (Untold or PLY)"
+        openPanel.message = "Select an Untold asset, PLY Gaussian, or tiled scene manifest to preview"
 
         guard openPanel.runModal() == .OK, let fileURL = openPanel.url else {
             return
@@ -709,6 +710,11 @@ public struct EditorView: View {
 
         let fileExtension = fileURL.pathExtension.lowercased()
         let absolutePath = fileURL.path
+
+        if fileExtension == "json", !isTiledSceneManifest(fileURL) {
+            Logger.log(message: "⚠️ Quick Preview JSON is not a tiled scene manifest: \(fileURL.lastPathComponent)")
+            return
+        }
 
         // Create a new entity for the preview
         removeGizmo()
@@ -738,6 +744,25 @@ public struct EditorView: View {
             // Load Gaussian PLY using absolute path
             setEntityGaussian(entityId: entityId, filename: absolutePath, withExtension: fileExtension)
             print("✅ Quick Preview Gaussian loaded: \(fileName).\(fileExtension)")
+        } else if fileExtension == "json" {
+            setEntityStreamScene(entityId: entityId, url: fileURL) { success in
+                DispatchQueue.main.async {
+                    if success {
+                        print("✅ Quick Preview stream model loaded: \(fileName).\(fileExtension)")
+                    } else {
+                        print("⚠️ Failed to load Quick Preview stream model: \(fileName).\(fileExtension)")
+                    }
+                    sceneGraphModel.refreshHierarchy()
+                }
+            }
+
+            selectionManager.selectedEntity = entityId
+            editor_entities = getAllGameEntities()
+            sceneGraphModel.refreshHierarchy()
+
+            print("ℹ️ Quick Preview mode: Stream model loaded with absolute manifest path")
+            print("⚠️ Note: Quick Preview entities cannot be saved to scenes (absolute paths not serialized)")
+            return
         }
 
         // Spawn in front of camera

@@ -52,6 +52,10 @@ private func onAddAnimation_Editor(entityId: EntityID, url: URL) {
     let filename = url.deletingPathExtension().lastPathComponent
     let withExtension = url.pathExtension
 
+    if !hasComponent(entityId: entityId, componentType: AnimationComponent.self) {
+        registerComponent(entityId: entityId, componentType: AnimationComponent.self)
+    }
+
     setEntityAnimations(entityId: entityId, filename: filename, withExtension: withExtension, name: filename)
     // changeAnimation(entityId: entityId, name: filename)
 
@@ -60,7 +64,9 @@ private func onAddAnimation_Editor(entityId: EntityID, url: URL) {
         return
     }
 
-    animationComponent.animationsFilenames.append(url)
+    if animationComponent.animationsFilenames.contains(url) == false {
+        animationComponent.animationsFilenames.append(url)
+    }
 }
 
 public func addComponent_Editor(componentOption: ComponentOption_Editor) {

@@ -253,7 +253,7 @@ final class EditorControllerTests: XCTestCase {
     func test_saveSceneDirect_createsFile() throws {
         // Arrange
         let sceneData = SceneData(entities: [])
-        let saveURL = tempBaseURL.appendingPathComponent("test_scene.json")
+        let saveURL = tempBaseURL.appendingPathComponent("test_scene.untoldscene")
 
         // Act
         saveSceneDirect(sceneData: sceneData, to: saveURL)
@@ -270,7 +270,7 @@ final class EditorControllerTests: XCTestCase {
     func test_saveSceneDirect_createsJSON() throws {
         // Arrange
         let sceneData = SceneData(entities: [])
-        let saveURL = tempBaseURL.appendingPathComponent("test_scene.json")
+        let saveURL = tempBaseURL.appendingPathComponent("test_scene.untoldscene")
 
         // Act
         saveSceneDirect(sceneData: sceneData, to: saveURL)
@@ -288,14 +288,14 @@ final class EditorControllerTests: XCTestCase {
         let scenesFolder = tempBaseURL.appendingPathComponent("Scenes", isDirectory: true)
         try FileManager.default.createDirectory(at: scenesFolder, withIntermediateDirectories: true)
 
-        let saveURL = tempBaseURL.appendingPathComponent("test_scene.json")
+        let saveURL = tempBaseURL.appendingPathComponent("test_scene.untoldscene")
         let sceneData = SceneData(entities: [])
 
         // Act
         saveSceneDirect(sceneData: sceneData, to: saveURL)
 
         // Assert
-        let copiedURL = scenesFolder.appendingPathComponent("test_scene.json")
+        let copiedURL = scenesFolder.appendingPathComponent("test_scene.untoldscene")
         XCTAssertTrue(FileManager.default.fileExists(atPath: copiedURL.path), "Scene should be copied to Scenes folder")
     }
 
@@ -306,7 +306,7 @@ final class EditorControllerTests: XCTestCase {
         let scenesFolder = tempBaseURL.appendingPathComponent("Scenes", isDirectory: true)
         try FileManager.default.createDirectory(at: scenesFolder, withIntermediateDirectories: true)
 
-        let saveURL = scenesFolder.appendingPathComponent("test_scene.json")
+        let saveURL = scenesFolder.appendingPathComponent("test_scene.untoldscene")
         let sceneData = SceneData(entities: [])
 
         // Act
@@ -314,7 +314,7 @@ final class EditorControllerTests: XCTestCase {
 
         // Assert
         let files = try FileManager.default.contentsOfDirectory(at: scenesFolder, includingPropertiesForKeys: nil)
-        let sceneFiles = files.filter { $0.lastPathComponent == "test_scene.json" }
+        let sceneFiles = files.filter { $0.lastPathComponent == "test_scene.untoldscene" }
         XCTAssertEqual(sceneFiles.count, 1, "Should not create duplicate when already in Scenes folder")
     }
 
@@ -325,7 +325,7 @@ final class EditorControllerTests: XCTestCase {
         let scenesFolder = tempBaseURL.appendingPathComponent("Scenes", isDirectory: true)
         try FileManager.default.createDirectory(at: scenesFolder, withIntermediateDirectories: true)
 
-        let saveURL = scenesFolder.appendingPathComponent("test_scene.json")
+        let saveURL = scenesFolder.appendingPathComponent("test_scene.untoldscene")
 
         // Create initial file
         let initialData = SceneData(entities: [])
@@ -339,14 +339,14 @@ final class EditorControllerTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: saveURL.path), "File should still exist")
 
         let files = try FileManager.default.contentsOfDirectory(at: scenesFolder, includingPropertiesForKeys: nil)
-        let sceneFiles = files.filter { $0.lastPathComponent == "test_scene.json" }
+        let sceneFiles = files.filter { $0.lastPathComponent == "test_scene.untoldscene" }
         XCTAssertEqual(sceneFiles.count, 1, "Should have exactly one file")
     }
 
     func test_loadGameScene_decodesCorrectly() throws {
         // Arrange: Create a scene file manually
         let sceneData = SceneData(entities: [])
-        let saveURL = tempBaseURL.appendingPathComponent("test_load.json")
+        let saveURL = tempBaseURL.appendingPathComponent("test_load.untoldscene")
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = .prettyPrinted
@@ -534,7 +534,7 @@ final class EditorControllerTests: XCTestCase {
 
         // 2. Create and save scene
         let sceneData = SceneData(entities: [])
-        let saveURL = scenesFolder.appendingPathComponent("workflow_test.json")
+        let saveURL = scenesFolder.appendingPathComponent("workflow_test.untoldscene")
 
         saveSceneDirect(sceneData: sceneData, to: saveURL)
 

@@ -258,8 +258,8 @@ final class AssetBrowserViewTests: XCTestCase {
             try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
 
             // Add scene files directly in Scenes folder
-            let sceneFile1 = scenes.appendingPathComponent("level1.json")
-            let sceneFile2 = scenes.appendingPathComponent("level2.json")
+            let sceneFile1 = scenes.appendingPathComponent("level1.untoldscene")
+            let sceneFile2 = scenes.appendingPathComponent("level2.untoldscene")
             FileManager.default.createFile(atPath: sceneFile1.path, contents: Data())
             FileManager.default.createFile(atPath: sceneFile2.path, contents: Data())
 
@@ -297,8 +297,8 @@ final class AssetBrowserViewTests: XCTestCase {
             }
 
             let sceneNames = Set(grouped["Scenes", default: []].map(\.name))
-            XCTAssertTrue(sceneNames.contains("level1.json"), "Scene file 1 should be loaded")
-            XCTAssertTrue(sceneNames.contains("level2.json"), "Scene file 2 should be loaded")
+            XCTAssertTrue(sceneNames.contains("level1.untoldscene"), "Scene file 1 should be loaded")
+            XCTAssertTrue(sceneNames.contains("level2.untoldscene"), "Scene file 2 should be loaded")
         }
     }
 
@@ -839,16 +839,16 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
-    func test_importAssetForCategory_scenesFiltersOnlyJSON() throws {
+    func test_importAssetForCategory_scenesFiltersOnlyUntoldScene() throws {
         try withTempDirectory { base in
             // Create Scenes directory
             let scenes = base.appendingPathComponent("Scenes", isDirectory: true)
             try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
 
             // Create test files
-            let jsonFile = scenes.appendingPathComponent("level.json")
+            let sceneFile = scenes.appendingPathComponent("level.untoldscene")
             let untoldFile = scenes.appendingPathComponent("model.untold")
-            FileManager.default.createFile(atPath: jsonFile.path, contents: Data())
+            FileManager.default.createFile(atPath: sceneFile.path, contents: Data())
             FileManager.default.createFile(atPath: untoldFile.path, contents: Data())
 
             assetBasePath = base
@@ -862,11 +862,11 @@ final class AssetBrowserViewTests: XCTestCase {
                 selectedAsset: .init(get: { selected }, set: { selected = $0 })
             )
 
-            // Verify that only .json files would be allowed for Scenes category
+            // Verify that only .untoldscene files would be allowed for Scenes category
             let scenesCategory = AssetCategory.scenes
             XCTAssertEqual(scenesCategory.rawValue, "Scenes", "Scenes category should have correct name")
 
-            XCTAssertTrue(FileManager.default.fileExists(atPath: jsonFile.path), "JSON file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: sceneFile.path), "Untold scene file should exist")
             XCTAssertTrue(FileManager.default.fileExists(atPath: untoldFile.path), "Untold file should exist")
         }
     }

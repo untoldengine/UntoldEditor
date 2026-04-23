@@ -12,6 +12,12 @@ import simd
 import UniformTypeIdentifiers
 import UntoldEngine
 
+let untoldSceneFileExtension = "untoldscene"
+
+extension UTType {
+    static let untoldScene = UTType(filenameExtension: untoldSceneFileExtension)!
+}
+
 public class EditorComponentsState: ObservableObject {
     public static let shared = EditorComponentsState()
 
@@ -103,8 +109,8 @@ extension Notification.Name {
 func saveScene(sceneData: SceneData) {
     let savePanel = NSSavePanel()
     savePanel.title = "Save Scene"
-    savePanel.allowedContentTypes = [UTType.json]
-    savePanel.nameFieldStringValue = "untitled.json"
+    savePanel.allowedContentTypes = [.untoldScene]
+    savePanel.nameFieldStringValue = "untitled.\(untoldSceneFileExtension)"
     savePanel.canCreateDirectories = true
     savePanel.isExtensionHidden = false
 
@@ -209,7 +215,7 @@ func saveSceneDirect(sceneData: SceneData, to url: URL) {
 func loadGameScene() -> SceneData? {
     let openPanel = NSOpenPanel()
     openPanel.title = "Open Scene"
-    openPanel.allowedContentTypes = [UTType.json]
+    openPanel.allowedContentTypes = [.untoldScene]
     openPanel.allowsMultipleSelection = false
 
     if openPanel.runModal() == .OK, let url = openPanel.url {

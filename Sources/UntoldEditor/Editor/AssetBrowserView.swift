@@ -541,7 +541,7 @@ struct AssetBrowserView: View {
         case .scripts:
             openPanel.allowedContentTypes = [UTType(filenameExtension: "uscript")!]
         case .scenes:
-            openPanel.allowedContentTypes = [UTType(filenameExtension: "json")!]
+            openPanel.allowedContentTypes = [.untoldScene]
         case .gaussians:
             openPanel.allowedContentTypes = [UTType(filenameExtension: "ply")!]
         case .materials:
@@ -612,6 +612,11 @@ struct AssetBrowserView: View {
 
                     case "StreamModels":
                         if sourceURL.hasDirectoryPath {
+                            guard primaryTiledSceneManifest(in: sourceURL, fileManager: fm) != nil else {
+                                showStatus("No tiled scene manifest found in selected folder", isError: true)
+                                continue
+                            }
+
                             let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
                             if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
                             try fm.copyItem(at: sourceURL, to: destURL)
@@ -915,10 +920,12 @@ struct AssetBrowserView: View {
                             }
                         } else if category == .scenes {
                             // For Scenes, allow files directly in the Scenes folder
-                            categoryAssets.append(Asset(name: item.lastPathComponent,
-                                                        category: category.rawValue,
-                                                        path: item,
-                                                        isFolder: false))
+                            if item.pathExtension.lowercased() == untoldSceneFileExtension {
+                                categoryAssets.append(Asset(name: item.lastPathComponent,
+                                                            category: category.rawValue,
+                                                            path: item,
+                                                            isFolder: false))
+                            }
                         }
                     }
                 }
@@ -1230,7 +1237,9 @@ struct AssetBrowserView: View {
 
             // Store the animation file URL in the component
             if let animationComponent = scene.get(component: AnimationComponent.self, for: entityId) {
-                animationComponent.animationsFilenames.append(asset.path)
+                if animationComponent.animationsFilenames.contains(asset.path) == false {
+                    animationComponent.animationsFilenames.append(asset.path)
+                }
             }
 
             // Refresh view
@@ -1284,9 +1293,9 @@ struct AssetBrowserView: View {
                 print("❌ Failed to load script: \(error.localizedDescription)")
             }
         }
-        // Handle Scene files (json)
+        // Handle Scene files (.untoldscene)
         else if asset.category == AssetCategory.scenes.rawValue,
-                withExtension.lowercased() == "json"
+                withExtension.lowercased() == untoldSceneFileExtension
         {
             // Show confirmation dialog before loading scene
             pendingSceneToLoad = asset.path

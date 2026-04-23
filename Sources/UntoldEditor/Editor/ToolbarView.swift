@@ -345,7 +345,7 @@
             }
 
             // Create standard asset subfolders if they don't exist
-            let assetFolders = ["Models", "Animations", "Scenes", "Scripts", "Gaussians", "Materials", "HDR", "Shaders"]
+            let assetFolders = ["Models", "StreamModels", "Animations", "Scenes", "Scripts", "Gaussians", "Materials", "HDR", "Shaders"]
             for folder in assetFolders {
                 let folderURL = gameDataPath.appendingPathComponent(folder, isDirectory: true)
                 if !fm.fileExists(atPath: folderURL.path) {
