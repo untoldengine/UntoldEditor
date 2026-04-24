@@ -14,6 +14,7 @@ import ModelIO
 @testable import UntoldEngine
 import XCTest
 
+@MainActor
 final class EditorRenderPipeLinesTests: XCTestCase {
     override func setUp() {
         super.setUp()
@@ -49,7 +50,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
 
     func test_debugPipelineType_exists() {
         // Assert
-        let debugType: RenderPipelineType = .debug
+        let debugType: RenderPipelineType = "debug"
         XCTAssertNotNil(debugType, "Debug pipeline type should exist")
         XCTAssertEqual(debugType.rawValue, "debug", "Debug pipeline type raw value should be 'debug'")
     }
@@ -57,7 +58,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
     func test_pipelineTypes_areHashable() {
         // Arrange
         let gizmo: RenderPipelineType = .gizmo
-        let debug: RenderPipelineType = .debug
+        let debug: RenderPipelineType = "debug"
 
         // Act - Use in a dictionary (requires Hashable)
         let pipelineDict: [RenderPipelineType: String] = [
@@ -67,7 +68,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
 
         // Assert
         XCTAssertEqual(pipelineDict[.gizmo], "Gizmo Pipeline")
-        XCTAssertEqual(pipelineDict[.debug], "Debug Pipeline")
+        XCTAssertEqual(pipelineDict["debug"], "Debug Pipeline")
     }
 
     func test_pipelineTypes_canBeCreatedFromStringLiteral() {
@@ -151,7 +152,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
 
     func test_InitDebugPipeline_returnsNonNilPipeline() {
         // Act
-        let pipeline = InitDebugPipeline()
+        let pipeline = UntoldEditor.InitDebugPipeline()
 
         // Assert
         XCTAssertNotNil(pipeline, "InitDebugPipeline should return a pipeline")
@@ -159,7 +160,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
 
     func test_InitDebugPipeline_hasPipelineState() {
         // Act
-        guard let pipeline = InitDebugPipeline() else {
+        guard let pipeline = UntoldEditor.InitDebugPipeline() else {
             XCTFail("Pipeline should be created")
             return
         }
@@ -170,7 +171,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
 
     func test_InitDebugPipeline_hasDepthState() {
         // Act
-        guard let pipeline = InitDebugPipeline() else {
+        guard let pipeline = UntoldEditor.InitDebugPipeline() else {
             XCTFail("Pipeline should be created")
             return
         }
@@ -181,7 +182,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
 
     func test_InitDebugPipeline_successIsTrue() {
         // Act
-        guard let pipeline = InitDebugPipeline() else {
+        guard let pipeline = UntoldEditor.InitDebugPipeline() else {
             XCTFail("Pipeline should be created")
             return
         }
@@ -192,7 +193,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
 
     func test_InitDebugPipeline_hasCorrectName() {
         // Act
-        guard let pipeline = InitDebugPipeline() else {
+        guard let pipeline = UntoldEditor.InitDebugPipeline() else {
             XCTFail("Pipeline should be created")
             return
         }
@@ -206,7 +207,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
         // The actual descriptor is created by createDebugVertexDescriptor()
 
         // Act
-        guard let pipeline = InitDebugPipeline() else {
+        guard let pipeline = UntoldEditor.InitDebugPipeline() else {
             XCTFail("Pipeline should be created")
             return
         }
@@ -260,7 +261,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
         // The debug pipeline explicitly uses .bgra8Unorm_srgb color format
 
         // Act
-        guard let pipeline = InitDebugPipeline() else {
+        guard let pipeline = UntoldEditor.InitDebugPipeline() else {
             XCTFail("Pipeline should be created")
             return
         }
@@ -287,7 +288,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
         // This means depth testing is disabled
 
         // Act
-        guard let pipeline = InitDebugPipeline() else {
+        guard let pipeline = UntoldEditor.InitDebugPipeline() else {
             XCTFail("Pipeline should be created")
             return
         }
@@ -301,7 +302,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
         // The debug pipeline uses depthCompareFunction: .less
 
         // Act
-        guard let pipeline = InitDebugPipeline() else {
+        guard let pipeline = UntoldEditor.InitDebugPipeline() else {
             XCTFail("Pipeline should be created")
             return
         }
@@ -335,7 +336,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
         let pipelines = EditorDefaultPipeLines()
 
         // Assert
-        let hasDebug = pipelines.contains { $0.0 == .debug }
+        let hasDebug = pipelines.contains { $0.0.rawValue == "debug" }
         XCTAssertTrue(hasDebug, "EditorDefaultPipeLines should include debug pipeline")
     }
 
@@ -371,7 +372,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
         // Act
         let pipelines = EditorDefaultPipeLines()
 
-        guard let debugPair = pipelines.first(where: { $0.0 == .debug }) else {
+        guard let debugPair = pipelines.last(where: { $0.0.rawValue == "debug" }) else {
             XCTFail("Debug pipeline should be in the list")
             return
         }
@@ -405,7 +406,7 @@ final class EditorRenderPipeLinesTests: XCTestCase {
     func test_bothPipelines_canBeCreatedSimultaneously() {
         // Act
         let gizmoPipeline = InitGizmoPipeline()
-        let debugPipeline = InitDebugPipeline()
+        let debugPipeline = UntoldEditor.InitDebugPipeline()
 
         // Assert
         XCTAssertNotNil(gizmoPipeline, "Gizmo pipeline should be created")

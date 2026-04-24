@@ -116,7 +116,7 @@ final class InspectorViewTests: XCTestCase {
         let merged = mergeEntityComponents(selectedEntity: e, editor_availableComponents: availableComponents_Editor)
         let sorted = sortEntityComponents(componentOption_Editor: merged)
 
-        let expected = ["Render Component", "Transform Component", "Animation Component", "Kinetic Component"]
+        let expected = ["Render Component", "Transform Component"]
         let names = Array(sorted.map(\.name).prefix(expected.count))
         XCTAssertEqual(names, expected, "Components should be sorted as expected.")
     }
@@ -180,7 +180,7 @@ final class InspectorViewTests: XCTestCase {
         XCTAssertEqual(getLightIntensity(entityId: e), initialIntensity + 2.0, accuracy: 0.0001)
     }
 
-    func test_removeComponent_removesDirectionalLight_fromEntity() {
+    func test_removeComponent_isDisabledForDirectionalLightInSceneCompositionMode() {
         // Arrange
         let e = createEntityWithName("Light Entity")
         addTransform(to: e)
@@ -196,15 +196,15 @@ final class InspectorViewTests: XCTestCase {
         XCTAssertTrue(hasComponent(entityId: e, componentType: LightComponent.self),
                       "LightComponent should be present after adding directional light.")
 
-        // Act: Remove the DirectionalLightComponent
+        // Act: Removal is disabled in scene composition mode
         sut.removeComponentFromEntity_Editor(componentType: DirectionalLightComponent.self)
 
-        // Assert: Component should be removed from the scene
-        XCTAssertFalse(hasComponent(entityId: e, componentType: DirectionalLightComponent.self),
-                       "DirectionalLightComponent should be removed from the entity.")
+        // Assert: Component remains because inspector-side removal is disabled
+        XCTAssertTrue(hasComponent(entityId: e, componentType: DirectionalLightComponent.self),
+                      "DirectionalLightComponent removal should be disabled in scene composition mode.")
     }
 
-    func test_removeComponent_removesKinetic_fromEntity() {
+    func test_removeComponent_doesNotRemoveKinetic_whenRemovalIsDisabled() {
         // Arrange
         let e = createEntityWithName("Physics Entity")
         addTransform(to: e)
@@ -219,12 +219,12 @@ final class InspectorViewTests: XCTestCase {
         // Act: Remove the KineticComponent
         sut.removeComponentFromEntity_Editor(componentType: KineticComponent.self)
 
-        // Assert: Component should be removed from the scene
-        XCTAssertFalse(hasComponent(entityId: e, componentType: KineticComponent.self),
-                       "KineticComponent should be removed from the entity.")
+        // Assert: Component remains because removal is disabled
+        XCTAssertTrue(hasComponent(entityId: e, componentType: KineticComponent.self),
+                      "KineticComponent removal should be disabled in scene composition mode.")
     }
 
-    func test_removeComponent_removesFromEditorState() {
+    func test_removeComponent_doesNotRemoveFromEditorState_whenRemovalIsDisabled() {
         // Arrange
         let e = createEntityWithName("Test Entity")
         addTransform(to: e)
@@ -243,12 +243,12 @@ final class InspectorViewTests: XCTestCase {
         // Act: Remove the component
         sut.removeComponentFromEntity_Editor(componentType: PointLightComponent.self)
 
-        // Assert: Component should be removed from editor state
-        XCTAssertNil(EditorComponentsState.shared.components[e]?[key],
-                     "Component should be removed from editor state.")
+        // Assert: Component remains in editor state because removal is disabled
+        XCTAssertNotNil(EditorComponentsState.shared.components[e]?[key],
+                        "Component should remain in editor state when removal is disabled.")
     }
 
-    func test_addComponentSheet_addsGaussianComponent() {
+    func test_addComponentSheet_doesNotAddGaussianComponent_inSceneCompositionMode() {
         // Arrange
         let e = createEntityWithName("Gaussian Holder")
         addTransform(to: e)
@@ -259,20 +259,18 @@ final class InspectorViewTests: XCTestCase {
         XCTAssertFalse(hasComponent(entityId: e, componentType: GaussianComponent.self),
                        "GaussianComponent should not be present initially.")
 
-        // Act: Add GaussianComponent through the inspector
+        // Act: Gaussian authoring is disabled in scene composition mode
         sut.addComponentToEntity_Editor(componentType: GaussianComponent.self)
 
-        // Assert: Component should be in editor state
+        // Assert: Component should not be added to editor state
         let key = ObjectIdentifier(GaussianComponent.self)
-        XCTAssertNotNil(EditorComponentsState.shared.components[e]?[key],
-                        "GaussianComponent should be in editor state after adding.")
-
-        // Assert: Component is not added to the engine until a Gaussian asset is assigned
+        XCTAssertNil(EditorComponentsState.shared.components[e]?[key],
+                     "GaussianComponent should not be added from the inspector in scene composition mode.")
         XCTAssertFalse(hasComponent(entityId: e, componentType: GaussianComponent.self),
-                       "GaussianComponent should not be registered in the engine just by adding it to the inspector.")
+                       "GaussianComponent should not be registered in the engine.")
     }
 
-    func test_removeComponent_removesGaussianComponent() {
+    func test_removeComponent_doesNotRemoveGaussianComponent_whenRemovalIsDisabled() {
         // Arrange
         let e = createEntityWithName("Gaussian Entity")
         addTransform(to: e)
@@ -290,17 +288,17 @@ final class InspectorViewTests: XCTestCase {
         // Act: Remove the GaussianComponent
         sut.removeComponentFromEntity_Editor(componentType: GaussianComponent.self)
 
-        // Assert: Component should be removed from the scene
-        XCTAssertFalse(hasComponent(entityId: e, componentType: GaussianComponent.self),
-                       "GaussianComponent should be removed from the entity.")
+        // Assert: Component remains because removal is disabled
+        XCTAssertTrue(hasComponent(entityId: e, componentType: GaussianComponent.self),
+                      "GaussianComponent removal should be disabled in scene composition mode.")
 
-        // Assert: Component should be removed from editor state
+        // Assert: Inspector never authors Gaussian state in scene composition mode
         let key = ObjectIdentifier(GaussianComponent.self)
         XCTAssertNil(EditorComponentsState.shared.components[e]?[key],
-                     "GaussianComponent should be removed from editor state.")
+                     "GaussianComponent should not have an inspector editor-state entry in scene composition mode.")
     }
 
-    func test_mergeComponents_includesGaussianComponent() {
+    func test_mergeComponents_excludesGaussianComponent_inSceneCompositionMode() {
         // Arrange
         let e = createEntityWithName("Gaussian Entity")
         addTransform(to: e)
@@ -312,9 +310,8 @@ final class InspectorViewTests: XCTestCase {
         // Act
         let merged = mergeEntityComponents(selectedEntity: e, editor_availableComponents: availableComponents_Editor)
 
-        // Assert: GaussianComponent should be included in merged components
+        // Assert: GaussianComponent should be hidden from inspector composition mode
         let key = ObjectIdentifier(GaussianComponent.self)
-        XCTAssertNotNil(merged[key], "GaussianComponent should be included in merged components.")
-        XCTAssertEqual(merged[key]?.name, "Gaussian Component", "Component name should match.")
+        XCTAssertNil(merged[key], "GaussianComponent should be excluded from merged components.")
     }
 }

@@ -481,7 +481,10 @@ final class AssetBrowserViewTests: XCTestCase {
             FileManager.default.createFile(atPath: matchingAsset.path, contents: Data())
             FileManager.default.createFile(atPath: otherAsset.path, contents: Data())
 
-            XCTAssertEqual(primaryRuntimeAsset(in: assetFolder), matchingAsset)
+            XCTAssertEqual(
+                primaryRuntimeAsset(in: assetFolder)?.standardizedFileURL,
+                matchingAsset.standardizedFileURL
+            )
         }
     }
 
@@ -493,7 +496,10 @@ final class AssetBrowserViewTests: XCTestCase {
             let onlyAsset = assetFolder.appendingPathComponent("Robot.untold")
             FileManager.default.createFile(atPath: onlyAsset.path, contents: Data())
 
-            XCTAssertEqual(primaryRuntimeAsset(in: assetFolder), onlyAsset)
+            XCTAssertEqual(
+                primaryRuntimeAsset(in: assetFolder)?.standardizedFileURL,
+                onlyAsset.standardizedFileURL
+            )
         }
     }
 
@@ -544,7 +550,10 @@ final class AssetBrowserViewTests: XCTestCase {
 
             XCTAssertTrue(isTiledSceneManifest(manifest))
             XCTAssertFalse(isTiledSceneManifest(invalid))
-            XCTAssertEqual(primaryTiledSceneManifest(in: streamModel), manifest)
+            XCTAssertEqual(
+                primaryTiledSceneManifest(in: streamModel)?.standardizedFileURL,
+                manifest.standardizedFileURL
+            )
         }
     }
 

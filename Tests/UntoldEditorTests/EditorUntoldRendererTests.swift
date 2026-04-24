@@ -14,6 +14,7 @@ import ModelIO
 @testable import UntoldEngine
 import XCTest
 
+@MainActor
 final class EditorUntoldRendererTests: XCTestCase {
     private var renderer: UntoldRenderer!
     private var originalGameMode: Bool!

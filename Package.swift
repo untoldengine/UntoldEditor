@@ -11,9 +11,9 @@ let package = Package(
     ],
     dependencies: [
         // Use a branch during active development:
-        // .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
+        //.package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
         // Or pin to a release:
-        .package(url: "https://github.com/untoldengine/UntoldEngine.git", exact: "0.10.8"),
+        .package(url: "https://github.com/untoldengine/UntoldEngine.git", exact: "0.12.6"),
     ],
     targets: [
         .executableTarget(
