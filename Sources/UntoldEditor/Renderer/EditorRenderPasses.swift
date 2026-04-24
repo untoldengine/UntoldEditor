@@ -127,21 +127,12 @@ extension RenderPasses {
 
                 modelUniforms.projectionMatrix = renderInfo.perspectiveSpace
 
-                if let modelUniformBuffer = mesh.spaceUniform[renderInfo.currentEye] {
-                    modelUniformBuffer.contents().copyMemory(
-                        from: &modelUniforms, byteCount: MemoryLayout<Uniforms>.stride
-                    )
-                } else {
-                    handleError(.bufferAllocationFailed, "Gizmo Uniform buffer")
-                    return
-                }
-
-                renderEncoder.setVertexBuffer(
-                    mesh.spaceUniform[renderInfo.currentEye], offset: 0, index: Int(modelPassUniformIndex.rawValue)
+                renderEncoder.setVertexBytes(
+                    &modelUniforms, length: MemoryLayout<Uniforms>.stride, index: Int(modelPassUniformIndex.rawValue)
                 )
 
-                renderEncoder.setFragmentBuffer(
-                    mesh.spaceUniform[renderInfo.currentEye], offset: 0, index: Int(modelPassUniformIndex.rawValue)
+                renderEncoder.setFragmentBytes(
+                    &modelUniforms, length: MemoryLayout<Uniforms>.stride, index: Int(modelPassUniformIndex.rawValue)
                 )
 
                 renderEncoder.setVertexBuffer(
@@ -275,21 +266,12 @@ extension RenderPasses {
 
                 modelUniforms.projectionMatrix = renderInfo.perspectiveSpace
 
-                if let modelUniformBuffer = mesh.spaceUniform[renderInfo.currentEye] {
-                    modelUniformBuffer.contents().copyMemory(
-                        from: &modelUniforms, byteCount: MemoryLayout<Uniforms>.stride
-                    )
-                } else {
-                    handleError(.bufferAllocationFailed, "Model Uniform buffer")
-                    return
-                }
-
-                renderEncoder.setVertexBuffer(
-                    mesh.spaceUniform[renderInfo.currentEye], offset: 0, index: Int(modelPassUniformIndex.rawValue)
+                renderEncoder.setVertexBytes(
+                    &modelUniforms, length: MemoryLayout<Uniforms>.stride, index: Int(modelPassUniformIndex.rawValue)
                 )
 
-                renderEncoder.setFragmentBuffer(
-                    mesh.spaceUniform[renderInfo.currentEye], offset: 0, index: Int(modelPassUniformIndex.rawValue)
+                renderEncoder.setFragmentBytes(
+                    &modelUniforms, length: MemoryLayout<Uniforms>.stride, index: Int(modelPassUniformIndex.rawValue)
                 )
 
                 renderEncoder.setVertexBuffer(
