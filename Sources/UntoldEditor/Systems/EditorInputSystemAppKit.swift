@@ -175,13 +175,17 @@
             activeHitGizmoEntity = .invalid
 
             if hit {
-                let hitEntityId = hasComponent(entityId: entityId, componentType: GizmoComponent.self)
+                let transformEntityId = hasComponent(entityId: entityId, componentType: GizmoComponent.self)
                     ? entityId
                     : editableAssetRootEntity(for: entityId)
 
-                activeEntity = selectableTransformEntity(for: hitEntityId)
+                activeEntity = selectableTransformEntity(for: transformEntityId)
 
-                selectionDelegate?.didSelectEntity(hitEntityId)
+                if hasComponent(entityId: entityId, componentType: GizmoComponent.self) {
+                    selectionDelegate?.didSelectEntity(entityId)
+                } else {
+                    selectionDelegate?.didInspectEntity(entityId)
+                }
                 selectionDelegate?.resetActiveAxis()
 
             } else {
