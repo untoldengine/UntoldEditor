@@ -43,6 +43,10 @@ struct SceneHierarchyView: View {
                 Menu {
                     Button("Empty Entity", systemImage: "plus") { onAddEntity_Editor() }
                     Divider()
+                    Button("Cube", systemImage: "cube") { onAddCube() }
+                    Button("Sphere", systemImage: "circle") { onAddSphere() }
+                    Button("Plane", systemImage: "square") { onAddPlane() }
+                    Divider()
                     Button("Directional Light", systemImage: "sun.max") { onAddDirLight() }
                     Button("Point Light", systemImage: "lightbulb") { onAddPointLight() }
                     Button("Spot Light", systemImage: "flashlight.on.fill") { onAddSpotLight() }
