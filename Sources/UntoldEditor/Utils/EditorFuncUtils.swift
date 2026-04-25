@@ -12,11 +12,19 @@ import ModelIO
 import SwiftUI
 import UntoldEngine
 
-func bindingForWrapMode(entityId: EntityID, textureType: TextureType, onChange: @escaping () -> Void) -> Binding<WrapMode> {
+func bindingForWrapMode(
+    entityId: EntityID,
+    textureType: TextureType,
+    meshIndex: Int = 0,
+    submeshIndex: Int = 0,
+    onChange: @escaping () -> Void
+) -> Binding<WrapMode> {
     Binding<WrapMode>(
         get: {
             guard let renderComponent = scene.get(component: RenderComponent.self, for: entityId),
-                  let material = renderComponent.mesh[0].submeshes[0].material
+                  renderComponent.mesh.indices.contains(meshIndex),
+                  renderComponent.mesh[meshIndex].submeshes.indices.contains(submeshIndex),
+                  let material = renderComponent.mesh[meshIndex].submeshes[submeshIndex].material
             else {
                 return .clampToEdge // fallback
             }
@@ -69,16 +77,21 @@ func bindingForMaterialRoughness(entityId: EntityID, onChange: @escaping () -> V
 }
 
 // Helper function to get NSImage from material texture, handling both file-based and embedded USDZ textures
-func getMaterialTextureImage(entityId: EntityID, type: TextureType) -> NSImage? {
+func getMaterialTextureImage(
+    entityId: EntityID,
+    type: TextureType,
+    meshIndex: Int = 0,
+    submeshIndex: Int = 0
+) -> NSImage? {
     // First, check if we have a URL
-    guard let url = getMaterialTextureURL(entityId: entityId, type: type) else {
+    guard let url = getMaterialTextureURL(entityId: entityId, type: type, meshIndex: meshIndex, submeshIndex: submeshIndex) else {
         return nil
     }
 
     // Check if this is an embedded USDZ texture
     if isEmbeddedUSDZTexture(url) {
         // For embedded textures, we need to extract the image from MDLTexture
-        guard let mdlTexture = getMaterialMDLTexture(entityId: entityId, type: type) else {
+        guard let mdlTexture = getMaterialMDLTexture(entityId: entityId, type: type, meshIndex: meshIndex, submeshIndex: submeshIndex) else {
             print("Warning: Could not get MDLTexture for embedded texture: \(url)")
             return nil
         }

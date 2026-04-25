@@ -291,6 +291,19 @@ struct InspectorView: View {
                             AssetNodeInspectorBanner(entityId: entityId, selectionManager: selectionManager)
                         }
 
+                        if let inspectedMesh = selectionManager.inspectedMesh,
+                           inspectedMesh.entityId == entityId
+                        {
+                            RenderingEditorView(
+                                entityId: entityId,
+                                asset: selectedAsset,
+                                refreshView: refreshView,
+                                meshIndex: inspectedMesh.meshIndex,
+                                inspectionOnly: true
+                            )
+                            Divider()
+                        }
+
                         if let entityId = selectionManager.selectedEntity {
                             let mergedComponents = mergeEntityComponents(
                                 selectedEntity: entityId,
@@ -545,289 +558,355 @@ struct RenderingEditorView: View {
     let entityId: EntityID
     let asset: Asset?
     let refreshView: () -> Void
+    var meshIndex: Int = 0
+    var inspectionOnly: Bool = false
+    @State private var hasPendingUntoldWrite = false
+    @State private var untoldUpdateStatus: String?
 
     var body: some View {
-        Text("Mesh")
-        let readOnlyRender = EditorAuthoringMode.sceneCompositionOnly
+        let readOnlyRender = EditorAuthoringMode.sceneCompositionOnly || inspectionOnly
 
-        HStack(spacing: 12) {
-            Text(getAssetURLString(entityId: entityId) ?? " ")
+        return VStack(alignment: .leading) {
+            Text("Mesh")
 
-            if readOnlyRender == false {
-                Button(action: {
-                    let selectedCategory: AssetCategory = .models
-                    if let assetPath = asset?.path, selectedCategory.rawValue == asset?.category {
-                        onAddMesh_Editor(entityId: entityId, url: assetPath)
+            HStack(spacing: 12) {
+                Text(meshLabel)
+
+                if readOnlyRender == false {
+                    Button(action: {
+                        let selectedCategory: AssetCategory = .models
+                        if let assetPath = asset?.path, selectedCategory.rawValue == asset?.category {
+                            onAddMesh_Editor(entityId: entityId, url: assetPath)
+                        }
+                        refreshView()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.white)
+                            Text("Assign")
+                                .fontWeight(.regular)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(Color.editorAccent)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
                     }
-                    refreshView()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.white)
-                        Text("Assign")
-                            .fontWeight(.regular)
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
-                    .background(Color.editorAccent)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
             }
-        }
-        .padding(8)
-        .background(Color.secondary.opacity(0.05))
-        .cornerRadius(8)
+            .padding(8)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(8)
 
-        if readOnlyRender == false,
-           hasComponent(entityId: entityId, componentType: RenderComponent.self),
-           hasComponent(entityId: entityId, componentType: LightComponent.self) == false
-        {
-            Text("Material Properties")
-                .font(.headline)
-                .padding(.bottom, 4)
+            if hasComponent(entityId: entityId, componentType: RenderComponent.self),
+               hasComponent(entityId: entityId, componentType: LightComponent.self) == false
+            {
+                Text("Material Properties")
+                    .font(.headline)
+                    .padding(.bottom, 4)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 24) {
-                    ForEach(TextureType.allCases) { type in
-                        let image: NSImage? = {
-                            // Use the helper function that handles both regular and embedded textures
-                            if let img = getMaterialTextureImage(entityId: entityId, type: type) {
-                                return img
-                            } else {
-                                return NSImage(named: "Default Texture")
-                            }
-                        }()
-
-                        VStack(alignment: .center, spacing: 8) {
-                            // Texture preview
-                            Button(action: {
-                                if asset?.category == "Materials", let path = asset?.path {
-                                    updateMaterialTexture(entityId: entityId, textureType: type, path: path)
-                                    refreshView()
-                                }
-                            }) {
-                                if let image {
-                                    Image(nsImage: image)
-                                        .resizable()
-                                        .frame(width: 64, height: 64)
-                                        .cornerRadius(6)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 24) {
+                        ForEach(TextureType.allCases) { type in
+                            let image: NSImage? = {
+                                if let img = getMaterialTextureImage(entityId: entityId, type: type, meshIndex: meshIndex) {
+                                    return img
                                 } else {
-                                    Image(systemName: "photo")
-                                        .resizable()
-                                        .frame(width: 64, height: 64)
-                                        .foregroundColor(.gray)
+                                    return NSImage(named: "Default Texture")
                                 }
-                            }
-                            .buttonStyle(PlainButtonStyle())
+                            }()
 
-                            // Remove or Restore texture buttons
-                            HStack(spacing: 8) {
-                                // Remove texture button
+                            VStack(alignment: .center, spacing: 8) {
                                 Button(action: {
-                                    removeMaterialTexture(entityId: entityId, textureType: type)
-                                    refreshView()
+                                    if asset?.category == "Materials", let path = asset?.path {
+                                        updateMaterialTexture(entityId: entityId, textureType: type, path: path, meshIndex: meshIndex)
+                                        refreshView()
+                                    }
                                 }) {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundColor(.red)
+                                    if let image {
+                                        Image(nsImage: image)
+                                            .resizable()
+                                            .frame(width: 64, height: 64)
+                                            .cornerRadius(6)
+                                    } else {
+                                        Image(systemName: "photo")
+                                            .resizable()
+                                            .frame(width: 64, height: 64)
+                                            .foregroundColor(.gray)
+                                    }
                                 }
-                                .buttonStyle(BorderlessButtonStyle())
+                                .buttonStyle(PlainButtonStyle())
 
-                                // Restore button (only show if there's an embedded texture to restore)
-                                if canRestoreEmbeddedTexture(entityId: entityId, type: type) {
+                                HStack(spacing: 8) {
                                     Button(action: {
-                                        restoreEmbeddedTexture(entityId: entityId, textureType: type)
+                                        removeMaterialTexture(entityId: entityId, textureType: type, meshIndex: meshIndex)
                                         refreshView()
                                     }) {
-                                        Image(systemName: "arrow.counterclockwise.circle.fill")
-                                            .foregroundColor(.blue)
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(.red)
                                     }
                                     .buttonStyle(BorderlessButtonStyle())
-                                    .help("Restore original embedded texture")
-                                }
-                            }
 
-                            // Texture name
-                            Text(type.displayName)
-                                .font(.caption)
-                                .padding(.top, 4)
-
-                            Divider().padding(.vertical, 4)
-
-                            // Wrap Mode
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Wrap Mode")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-
-                                Picker("", selection: bindingForWrapMode(entityId: entityId, textureType: type, onChange: refreshView)) {
-                                    ForEach(WrapMode.allCases) { mode in
-                                        Text(mode.description).tag(mode)
+                                    if canRestoreEmbeddedTexture(entityId: entityId, type: type, meshIndex: meshIndex) {
+                                        Button(action: {
+                                            restoreEmbeddedTexture(entityId: entityId, textureType: type, meshIndex: meshIndex)
+                                            refreshView()
+                                        }) {
+                                            Image(systemName: "arrow.counterclockwise.circle.fill")
+                                                .foregroundColor(.blue)
+                                        }
+                                        .buttonStyle(BorderlessButtonStyle())
+                                        .help("Restore original embedded texture")
                                     }
                                 }
-                                .pickerStyle(MenuPickerStyle())
-                                .frame(maxWidth: 100)
+                                .disabled(inspectionOnly)
+                                .opacity(inspectionOnly ? 0.7 : 1.0)
+
+                                Text(type.displayName)
+                                    .font(.caption)
+                                    .padding(.top, 4)
+
+                                Divider().padding(.vertical, 4)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Wrap Mode")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    Picker("", selection: bindingForWrapMode(entityId: entityId, textureType: type, meshIndex: meshIndex, onChange: refreshView)) {
+                                        ForEach(WrapMode.allCases) { mode in
+                                            Text(mode.description).tag(mode)
+                                        }
+                                    }
+                                    .pickerStyle(MenuPickerStyle())
+                                    .frame(maxWidth: 100)
+                                }
+                                .disabled(inspectionOnly)
+                                .opacity(inspectionOnly ? 0.7 : 1.0)
                             }
+                            .frame(width: 100)
                         }
-                        .frame(width: 100) // lock column width for consistency
                     }
+                    .padding(.horizontal, 12)
                 }
-                .padding(.horizontal, 12)
-            }
 
-            HStack {
-                Text("UV Scale")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
+                HStack {
+                    Text("UV Scale")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
 
-                TextInputNumberView(
-                    label: "",
-                    value: Binding(
-                        get: { getMaterialSTScale(entityId: entityId) },
-                        set: { newValue in
-                            updateMaterialSTScale(entityId: entityId, stScale: newValue)
-                            refreshView()
-                        }
+                    TextInputNumberView(
+                        label: "",
+                        value: Binding(
+                            get: { getMaterialSTScale(entityId: entityId, meshIndex: meshIndex) },
+                            set: { newValue in
+                                updateMaterialSTScale(entityId: entityId, stScale: newValue, meshIndex: meshIndex)
+                                refreshView()
+                            }
+                        )
                     )
-                )
-                .frame(width: 60)
-            }
-
-            Divider()
-            HStack {
-                // Base Color Picker
-                VStack {
-                    ColorPicker("", selection: Binding(
-                        get: { colorFromSimd(getMaterialBaseColor(entityId: entityId)) },
-                        set: { newColor in updateMaterialColor(entityId: entityId, color: newColor) }
-                    ))
                     .frame(width: 60)
-
-                    Text("Base Color")
-                        .font(.caption)
-                    // .foregroundColor(.secondary)
+                    .disabled(inspectionOnly)
+                    .opacity(inspectionOnly ? 0.7 : 1.0)
                 }
+
+                Divider()
+                HStack {
+                // Base Color Picker
+                    VStack {
+                        ColorPicker("", selection: Binding(
+                            get: { colorFromSimd(getMaterialBaseColor(entityId: entityId, meshIndex: meshIndex)) },
+                            set: { newColor in updateMaterialColor(entityId: entityId, color: newColor, meshIndex: meshIndex) }
+                        ))
+                        .frame(width: 60)
+                        .disabled(inspectionOnly)
+                        .opacity(inspectionOnly ? 0.7 : 1.0)
+
+                        Text("Base Color")
+                            .font(.caption)
+                    }
 
                 // Roughness Input
-                VStack {
-                    TextInputNumberView(
-                        label: "",
-                        value: Binding(
-                            get: { getMaterialRoughness(entityId: entityId) },
-                            set: { newValue in
-                                updateMaterialRoughness(entityId: entityId, roughness: newValue)
-                                refreshView()
-                            }
+                    VStack {
+                        TextInputNumberView(
+                            label: "",
+                            value: Binding(
+                                get: { getMaterialRoughness(entityId: entityId, meshIndex: meshIndex) },
+                                set: { newValue in
+                                    updateMaterialRoughness(entityId: entityId, roughness: newValue, meshIndex: meshIndex)
+                                    if inspectionOnly, isUntoldBackedMesh {
+                                        hasPendingUntoldWrite = true
+                                        untoldUpdateStatus = nil
+                                    }
+                                    refreshView()
+                                }
+                            )
                         )
-                    )
-                    .frame(width: 60)
+                        .frame(width: 60)
 
-                    Text("Roughness")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                        Text("Roughness")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
 
                 // Metallic Input
-                VStack {
-                    TextInputNumberView(
-                        label: "",
-                        value: Binding(
-                            get: { getMaterialMetallic(entityId: entityId) },
-                            set: { newValue in
-                                updateMaterialMetallic(entityId: entityId, metallic: newValue)
-                                refreshView()
-                            }
+                    VStack {
+                        TextInputNumberView(
+                            label: "",
+                            value: Binding(
+                                get: { getMaterialMetallic(entityId: entityId, meshIndex: meshIndex) },
+                                set: { newValue in
+                                    updateMaterialMetallic(entityId: entityId, metallic: newValue, meshIndex: meshIndex)
+                                    if inspectionOnly, isUntoldBackedMesh {
+                                        hasPendingUntoldWrite = true
+                                        untoldUpdateStatus = nil
+                                    }
+                                    refreshView()
+                                }
+                            )
                         )
-                    )
-                    .frame(width: 60)
+                        .frame(width: 60)
 
-                    Text("Metallic")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            HStack {
-                VStack {
-                    TextInputNumberView(
-                        label: "",
-                        value: Binding(
-                            get: { getMaterialOpacity(entityId: entityId) },
-                            set: { newValue in
-                                updateMaterialOpacity(entityId: entityId, opacity: newValue)
-                                refreshView()
-                            }
-                        )
-                    )
-                    .frame(width: 60)
-
-                    Text("Opacity")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                VStack {
-                    TextInputNumberView(
-                        label: "",
-                        value: Binding(
-                            get: { getMaterialAlphaCutoff(entityId: entityId) },
-                            set: { newValue in
-                                updateMaterialAlphaCutoff(entityId: entityId, cutoff: newValue)
-                                refreshView()
-                            }
-                        )
-                    )
-                    .frame(width: 60)
-                    .disabled(getMaterialAlphaMode(entityId: entityId) != .mask)
-
-                    Text("Alpha Cutoff")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            HStack {
-                VStack {
-                    Picker("", selection: Binding(
-                        get: { getMaterialAlphaMode(entityId: entityId) },
-                        set: { newValue in
-                            updateMaterialAlphaMode(entityId: entityId, mode: newValue)
-                            refreshView()
-                        }
-                    )) {
-                        ForEach(MaterialAlphaMode.allCases) { mode in
-                            Text(mode.description).tag(mode)
-                        }
+                        Text("Metallic")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
-                    .pickerStyle(MenuPickerStyle())
-                    .frame(width: 120)
+                }
 
-                    Text("Alpha Mask")
+                HStack {
+                    VStack {
+                        TextInputNumberView(
+                            label: "",
+                            value: Binding(
+                                get: { getMaterialOpacity(entityId: entityId, meshIndex: meshIndex) },
+                                set: { newValue in
+                                    updateMaterialOpacity(entityId: entityId, opacity: newValue, meshIndex: meshIndex, submeshIndex: 0)
+                                    if inspectionOnly, isUntoldBackedMesh {
+                                        hasPendingUntoldWrite = true
+                                        untoldUpdateStatus = nil
+                                    }
+                                    refreshView()
+                                }
+                            )
+                        )
+                        .frame(width: 60)
+
+                        Text("Opacity")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    VStack {
+                        Picker("", selection: Binding(
+                            get: { getMaterialAlphaMode(entityId: entityId, meshIndex: meshIndex) },
+                            set: { newValue in
+                                updateMaterialAlphaMode(entityId: entityId, mode: newValue, meshIndex: meshIndex)
+                                if inspectionOnly, isUntoldBackedMesh {
+                                    hasPendingUntoldWrite = true
+                                    untoldUpdateStatus = nil
+                                }
+                                refreshView()
+                            }
+                        )) {
+                            ForEach(MaterialAlphaMode.allCases) { mode in
+                                Text(mode.description).tag(mode)
+                            }
+                        }
+                        .pickerStyle(MenuPickerStyle())
+                        .frame(width: 120)
+
+                        Text("Alpha Mask")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if inspectionOnly, isUntoldBackedMesh, hasPendingUntoldWrite {
+                    Button(action: updateUntoldAsset) {
+                        Text("Update .untold")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    if let untoldUpdateStatus {
+                        Text(untoldUpdateStatus)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                VStack {
+                    TextInputVectorView(
+                        label: "",
+                        value: Binding(
+                            get: { getMaterialEmmissive(entityId: entityId, meshIndex: meshIndex) },
+                            set: { newValue in
+                                updateMaterialEmmisive(entityId: entityId, emmissive: newValue, meshIndex: meshIndex)
+                                refreshView()
+                            }
+                        )
+                    )
+                    .frame(width: 200)
+                    .disabled(inspectionOnly)
+                    .opacity(inspectionOnly ? 0.7 : 1.0)
+
+                    Text("Emmisive")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
+        }
+        .onAppear {
+            hasPendingUntoldWrite = false
+            untoldUpdateStatus = nil
+        }
+        .onChange(of: entityId) { _ in
+            hasPendingUntoldWrite = false
+            untoldUpdateStatus = nil
+        }
+        .onChange(of: meshIndex) { _ in
+            hasPendingUntoldWrite = false
+            untoldUpdateStatus = nil
+        }
+    }
 
-            // Emmissive Input
-            VStack {
-                TextInputVectorView(
-                    label: "",
-                    value: Binding(
-                        get: { getMaterialEmmissive(entityId: entityId) },
-                        set: { newValue in
-                            updateMaterialEmmisive(entityId: entityId, emmissive: newValue)
-                            refreshView()
-                        }
-                    )
-                )
-                .frame(width: 80)
+    private var meshLabel: String {
+        guard let renderComponent = scene.get(component: RenderComponent.self, for: entityId),
+              renderComponent.mesh.indices.contains(meshIndex)
+        else {
+            return getAssetURLString(entityId: entityId) ?? " "
+        }
 
-                Text("Emmisive")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+        let mesh = renderComponent.mesh[meshIndex]
+        let name = mesh.modelMDLMesh.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if inspectionOnly, !name.isEmpty {
+            return name
+        }
+
+        return getAssetURLString(entityId: entityId) ?? (name.isEmpty ? " " : name)
+    }
+
+    private var isUntoldBackedMesh: Bool {
+        resolveUntoldAssetURL(entityId: entityId) != nil
+    }
+
+    private func updateUntoldAsset() {
+        do {
+            try persistAlphaMaterialOverridesToUntold(
+                entityId: entityId,
+                meshIndex: meshIndex,
+                opacity: getMaterialOpacity(entityId: entityId, meshIndex: meshIndex),
+                alphaCutoff: getMaterialAlphaCutoff(entityId: entityId, meshIndex: meshIndex),
+                roughness: getMaterialRoughness(entityId: entityId, meshIndex: meshIndex),
+                metallic: getMaterialMetallic(entityId: entityId, meshIndex: meshIndex),
+                alphaMode: getMaterialAlphaMode(entityId: entityId, meshIndex: meshIndex)
+            )
+            hasPendingUntoldWrite = false
+            untoldUpdateStatus = "Updated \(resolveUntoldAssetURL(entityId: entityId)?.lastPathComponent ?? ".untold")"
+            refreshView()
+        } catch {
+            untoldUpdateStatus = error.localizedDescription
         }
     }
 }

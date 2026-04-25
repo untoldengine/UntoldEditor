@@ -161,6 +161,7 @@
             }
 
             let currentLocation = gestureRecognizer.location(in: view)
+            let rayContext = raycastContext(currentLocation: currentLocation, view: view)
 
             let (entityId, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
 
@@ -183,6 +184,15 @@
 
                 if hasComponent(entityId: entityId, componentType: GizmoComponent.self) {
                     selectionDelegate?.didSelectEntity(entityId)
+                } else if keyState.shiftPressed,
+                          let rayContext,
+                          let meshIndex = pickMeshIndexForEntity(
+                              entityId: entityId,
+                              rayOrigin: rayContext.rayOrigin,
+                              rayDirection: rayContext.rayDirection
+                          )
+                {
+                    selectionDelegate?.didInspectMesh(entityId, meshIndex: meshIndex)
                 } else {
                     selectionDelegate?.didInspectEntity(entityId)
                 }
@@ -432,16 +442,16 @@
             }
         }
 
-        internal func getRaycastedEntity(currentLocation: NSPoint, view: NSView) -> (entityId: EntityID, hit: Bool) {
+        private func raycastContext(currentLocation: NSPoint, view: NSView) -> (rayOrigin: simd_float3, rayDirection: simd_float3)? {
             guard let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera()) else {
                 handleError(.noActiveCamera)
-                return (.invalid, false)
+                return nil
             }
 
             let currentCGPoint = simd_float2(Float(currentLocation.x), Float(currentLocation.y))
             let viewportDimensions = simd_float2(Float(view.bounds.width), Float(view.bounds.height))
             guard viewportDimensions.x > 0, viewportDimensions.y > 0 else {
-                return (.invalid, false)
+                return nil
             }
 
             let rayDirection: simd_float3 = rayDirectionInWorldSpace(
@@ -450,19 +460,28 @@
                 uPerspectiveSpace: renderInfo.perspectiveSpace,
                 uViewSpace: cameraComponent.viewSpace
             )
+
             guard rayDirection.x.isFinite, rayDirection.y.isFinite, rayDirection.z.isFinite else {
+                return nil
+            }
+
+            return (cameraComponent.localPosition, rayDirection)
+        }
+
+        internal func getRaycastedEntity(currentLocation: NSPoint, view: NSView) -> (entityId: EntityID, hit: Bool) {
+            guard let rayContext = raycastContext(currentLocation: currentLocation, view: view) else {
                 return (.invalid, false)
             }
 
-            guard let (pickedEntity, _) = pickEntity(
-                rayOrigin: cameraComponent.localPosition,
-                rayDirection: rayDirection,
-                isGizmoActive: gizmoActive
+            guard let hit = pickEntity(
+                rayOrigin: rayContext.rayOrigin,
+                rayDirection: rayContext.rayDirection,
+                options: ScenePickOptions(isGizmoActive: gizmoActive)
             ) else {
                 return (.invalid, false)
             }
 
-            return (pickedEntity, true)
+            return (hit.entityId, true)
         }
 
         // The gpu ray cast is not working for large scenes. TODO: fix getRaycasterdEntityGPU

@@ -95,6 +95,12 @@ class EditorController: SelectionDelegate, ObservableObject {
         }
     }
 
+    func didInspectMesh(_ entityId: EntityID, meshIndex: Int) {
+        DispatchQueue.main.async {
+            self.selectionManager.inspectMesh(entityId: entityId, meshIndex: meshIndex)
+        }
+    }
+
     func resetActiveAxis() {
         activeAxis = .none
     }
