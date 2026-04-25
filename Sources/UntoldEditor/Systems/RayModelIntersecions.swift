@@ -17,7 +17,8 @@ func newAccelerationStructure(
 ) -> MTLAccelerationStructure? {
     // 1. Query for the sizes needed to store and build the acceleration structure
     let accelSize: MTLAccelerationStructureSizes = renderInfo.device.accelerationStructureSizes(
-        descriptor: accelerationStructureDescriptor)
+        descriptor: accelerationStructureDescriptor
+    )
 
     // 2. Allocate an acceleration structure large enough for the descriptor. It only allocates memory. It does not build the structure
     guard
@@ -141,7 +142,8 @@ func createAccelerationStructures(_: Bool) {
         )
 
         let localSpace = MTLPackedFloat4x3(
-            columns: (column0, column1, column2, column3))
+            columns: (column0, column1, column2, column3)
+        )
 
         let mask: Int32 = GEOMETRY_MASK_TRIANGLE
 
@@ -186,7 +188,8 @@ func createInstanceAccelerationStructures() {
 
     // 3. Populate instance descriptors
     let instaceDescriptorBuffer = accelStructResources.instanceBuffer!.contents().assumingMemoryBound(
-        to: MTLAccelerationStructureInstanceDescriptor.self)
+        to: MTLAccelerationStructureInstanceDescriptor.self
+    )
 
     for (instanceIndex, _) in accelStructResources.primitiveAccelerationStructures.enumerated() {
         instaceDescriptorBuffer[instanceIndex].accelerationStructureIndex =
@@ -226,7 +229,8 @@ func initRayPickerCompute() {
     // create a pipeline
     do {
         rayModelIntersectPipeline.pipelineState = try renderInfo.device.makeComputePipelineState(
-            function: rayModelIntersectKernel)
+            function: rayModelIntersectKernel
+        )
 
         rayModelIntersectPipeline.name = "ray vs model intersect pipe"
         rayModelIntersectPipeline.success = true

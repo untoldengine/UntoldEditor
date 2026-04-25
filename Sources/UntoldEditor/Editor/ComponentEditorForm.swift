@@ -10,7 +10,7 @@ import Foundation
 import SwiftUI
 import UntoldEngine
 
-// 1) Describe the fields you want to render
+/// 1) Describe the fields you want to render
 public enum EditorField {
     case number(label: String,
                 get: (EntityID) -> Float,
@@ -26,7 +26,7 @@ public enum EditorField {
               set: (EntityID, String) -> Void)
 }
 
-// 2) Render fields into controls, wiring refreshView automatically
+/// 2) Render fields into controls, wiring refreshView automatically
 public struct ComponentForm: View {
     let entityId: EntityID
     let fields: [EditorField]
@@ -72,7 +72,7 @@ public struct ComponentForm: View {
     }
 }
 
-// 3) Helper to produce the `view:` closure you already use
+/// 3) Helper to produce the `view:` closure you already use
 public func makeEditorView(fields: [EditorField]) -> (EntityID?, Asset?, @escaping () -> Void) -> AnyView {
     { selectedId, _, refresh in
         AnyView(

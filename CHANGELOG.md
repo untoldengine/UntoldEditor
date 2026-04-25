@@ -1,4 +1,18 @@
 # Changelog
+## v0.12.7 - 2026-04-25
+### 🐞 Fixes
+- [Patch] AssetBrowserView now accepts untold files (f972fa2…)
+- [Patch] Organized asset browser view to show folders (330ffe9…)
+- [Patch] Added exporter to editor (14e06b9…)
+- [Patch] added stream assets to Asset Browser view (caf4b68…)
+- [Patch] editor creates a scene as a untoldscene format (c5b75ba…)
+- [Patch] Clean up the editor (f88f97b…)
+- [Patch] Fix text field with focus during startup (3cc9eec…)
+- [Patch] Added the cube, plane and sphere to scenegraph (981c6f5…)
+- [Patch] updated buffers to reflect engine changes (490285d…)
+- [Patch] Fixed the selection manager (381f1b1…)
+- [Patch] Made render components editable (3b47600…)
+- [Patch] Updated package dependency (0f99577…)
 ## v0.10.8 - 2026-02-23
 ### 🐞 Fixes
 - [Patch] fixed transform for gizmo (d708c98…)

@@ -30,7 +30,7 @@ var accelStructResources = AccelStructResources()
 
 var rayModelIntersectPipeline = ComputePipeline()
 
-// Visual Debugger
+/// Visual Debugger
 enum DebugSelection: Int {
     case normalOutput
     case iblOutput
@@ -51,5 +51,5 @@ class DebugSettings: ObservableObject {
     @Published var debugEnabled: Bool = true
 }
 
-// Editor
+/// Editor
 public var enableEditor: Bool = true

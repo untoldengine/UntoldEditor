@@ -16,7 +16,7 @@ import SwiftUI
 import XCTest
 
 final class AssetBrowserViewTests: XCTestCase {
-    // Helper to create a temp directory tree for a test and clean it up afterwards.
+    /// Helper to create a temp directory tree for a test and clean it up afterwards.
     private func withTempDirectory(_ body: (URL) throws -> Void) throws {
         let base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("AssetBrowserViewTests-\(UUID().uuidString)", isDirectory: true)
@@ -25,7 +25,7 @@ final class AssetBrowserViewTests: XCTestCase {
         try body(base)
     }
 
-    // Build a view instance with minimal dependencies wired.
+    /// Build a view instance with minimal dependencies wired.
     private func makeView(assets: Binding<[String: [Asset]]>,
                           selectedAsset: Binding<Asset?>,
                           selectionManager: SelectionManager = SelectionManager(),
@@ -64,7 +64,7 @@ final class AssetBrowserViewTests: XCTestCase {
         )
 
         // When: simulate tapping a file row by assigning selected to an item (what a tap gesture would do).
-        let hdrAsset = assetsState["HDR"]!.first!
+        let hdrAsset = try XCTUnwrap(assetsState["HDR"]?.first)
         selected = hdrAsset
 
         // Then: the binding should reflect the selected asset
@@ -73,7 +73,7 @@ final class AssetBrowserViewTests: XCTestCase {
         XCTAssertEqual(selected?.isFolder, false)
     }
 
-    func test_switchingCategoriesResetsFolderStack() throws {
+    func test_switchingCategoriesResetsFolderStack() {
         var assetsState: [String: [Asset]] = [
             "Models": [
                 Asset(name: "Vehicles", category: "Models", path: URL(fileURLWithPath: "/tmp/Models/Vehicles"), isFolder: true),
@@ -192,7 +192,7 @@ final class AssetBrowserViewTests: XCTestCase {
         )
 
         // Simulate selection (what a tap would do)
-        let toSelect = assetsState["Models"]!.first!
+        let toSelect = try XCTUnwrap(assetsState["Models"]?.first)
         selected = toSelect
 
         XCTAssertEqual(selected?.name, "Crate")

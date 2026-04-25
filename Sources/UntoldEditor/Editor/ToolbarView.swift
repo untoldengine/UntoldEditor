@@ -14,7 +14,7 @@
     struct ToolbarView: View {
         @ObservedObject var selectionManager: SelectionManager
         @ObservedObject var editorBasePath = EditorAssetBasePath.shared
-        private let editorVersionLabel = "v0.12.6"
+        private let editorVersionLabel = "v0.12.7"
 
         var onSave: () -> Void
         var onSaveAs: () -> Void
@@ -255,7 +255,6 @@
             print("✅ Opened project: \(projectName)")
             print("📁 Asset base path set to: \(gameDataPath.path)")
         }
-
     }
 
     // MARK: - Toolbar Button Component

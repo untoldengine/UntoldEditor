@@ -143,7 +143,8 @@ public struct EditorView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .ignoresSafeArea())
+                .ignoresSafeArea()
+            )
 
             // Loading indicator overlay
             LoadingIndicatorView()
@@ -399,20 +400,20 @@ public struct EditorView: View {
         cameraLookAt(entityId: gameCameraEntityID, eye: eye, target: target, up: up)
     }
 
-    private func editor_loadUSDScene() {/*
-        guard let url = openFilePicker() else { return }
+    private func editor_loadUSDScene() { /*
+     guard let url = openFilePicker() else { return }
 
-        let filename = url.deletingPathExtension().lastPathComponent
-        let withExtension = url.pathExtension
+     let filename = url.deletingPathExtension().lastPathComponent
+     let withExtension = url.pathExtension
 
-        loadScene(filename: filename, withExtension: withExtension)
-        editor_entities = getAllGameEntities()
-        selectionManager.selectedEntity = nil
-        activeEntity = .invalid
-        selectionManager.objectWillChange.send()
+     loadScene(filename: filename, withExtension: withExtension)
+     editor_entities = getAllGameEntities()
+     selectionManager.selectedEntity = nil
+     activeEntity = .invalid
+     selectionManager.objectWillChange.send()
 
-        CameraSystem.shared.activeCamera = findSceneCamera()
-                                         */
+     CameraSystem.shared.activeCamera = findSceneCamera()
+                                      */
     }
 
     private func editor_addNewEntity() {

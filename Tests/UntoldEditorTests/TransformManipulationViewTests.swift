@@ -25,8 +25,10 @@ func createGizmoMockup(name: String) {
 // MARK: - Helpers to extract Button actions from SwiftUI views
 
 private extension View {
-    // Wrap any view into AnyView for simple type erasure in tests
-    func eraseToAnyView() -> AnyView { AnyView(self) }
+    /// Wrap any view into AnyView for simple type erasure in tests
+    func eraseToAnyView() -> AnyView {
+        AnyView(self)
+    }
 }
 
 private struct IntrospectButton<Content: View>: View {
@@ -89,9 +91,9 @@ final class TransformManipulationViewTests: XCTestCase {
         super.tearDown()
     }
 
-    // Helper to directly invoke the Button action by evaluating the view’s body and triggering the action closure
-    // Since ModeButton constructs its Button inline, we simulate the same effect by calling the action closure
-    // embedded in ModeButton’s body. The simplest way is to mirror the logic and assert state mutations.
+    /// Helper to directly invoke the Button action by evaluating the view’s body and triggering the action closure
+    /// Since ModeButton constructs its Button inline, we simulate the same effect by calling the action closure
+    /// embedded in ModeButton’s body. The simplest way is to mirror the logic and assert state mutations.
     private func tapModeButton(_ mode: TransformManipulationMode,
                                activeMode: inout TransformManipulationMode)
     {

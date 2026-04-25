@@ -16,7 +16,7 @@ import SwiftUI
 import XCTest
 
 final class EnvironmentViewTests: XCTestCase {
-    // Helper to create a temp directory tree for a test and clean it up afterwards.
+    /// Helper to create a temp directory tree for a test and clean it up afterwards.
     private func withTempDirectory(_ body: (URL) throws -> Void) throws {
         let base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent("EnvironmentViewTests-\(UUID().uuidString)", isDirectory: true)

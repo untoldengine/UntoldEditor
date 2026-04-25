@@ -14,7 +14,9 @@ import XCTest
 final class InputSystemCoreTests: XCTestCase {
     private final class DelegateSpy: InputSystemDelegate {
         var updateCount = 0
-        func didUpdateKeyState() { updateCount += 1 }
+        func didUpdateKeyState() {
+            updateCount += 1
+        }
     }
 
     private var originalDelegate: InputSystemDelegate?

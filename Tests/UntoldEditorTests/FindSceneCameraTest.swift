@@ -46,7 +46,7 @@ final class FindSceneCameraTests: XCTestCase {
 
     // MARK: - Tests
 
-    func test_returnsExistingSceneCamera_whenPresent() throws {
+    func test_returnsExistingSceneCamera_whenPresent() {
         // Arrange: create a camera that qualifies as the "scene camera"
         let existing = createEntity()
         registerComponent(entityId: existing, componentType: CameraComponent.self)
@@ -62,7 +62,7 @@ final class FindSceneCameraTests: XCTestCase {
         XCTAssertEqual(sceneCameraCount(), beforeCount, "Should not create another scene camera if one exists.")
     }
 
-    func test_createsSceneCamera_whenMissing() throws {
+    func test_createsSceneCamera_whenMissing() {
         // Precondition: clean scene has no scene camera
         XCTAssertEqual(sceneCameraCount(), 0, "Fresh scene should not have a scene camera.")
 
@@ -87,7 +87,7 @@ final class FindSceneCameraTests: XCTestCase {
         // XCTAssertEqual(pose.up, cameraUpDefault)
     }
 
-    func test_idempotent_findSceneCamera_calls() throws {
+    func test_idempotent_findSceneCamera_calls() {
         let first = findSceneCamera()
         let second = findSceneCamera()
 

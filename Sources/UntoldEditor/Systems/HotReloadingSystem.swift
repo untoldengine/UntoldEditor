@@ -177,8 +177,7 @@ func loadMetalLibraryFromUserSelection() -> MTLLibrary? {
     }
 
     do {
-        let library = try renderInfo.device.makeLibrary(URL: fileURL)
-        return library
+        return try renderInfo.device.makeLibrary(URL: fileURL)
     } catch {
         print("❌ Failed to load the metallib file: \(error)")
         return nil

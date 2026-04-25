@@ -51,11 +51,13 @@ extension UntoldRenderer {
             return
         }
 
-        // Convenience to avoid repeating the optional chaining
+        /// Convenience to avoid repeating the optional chaining
         @inline(__always)
-        func refreshInspector() { editorController?.refreshInspector() }
+        func refreshInspector() {
+            editorController?.refreshInspector()
+        }
 
-        // Remove static batching when entity is transformed via gizmo
+        /// Remove static batching when entity is transformed via gizmo
         @inline(__always)
         func handleStaticBatchOnTransform(entityId: EntityID) {
             if hasComponent(entityId: entityId, componentType: StaticBatchComponent.self) {

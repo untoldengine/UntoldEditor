@@ -15,7 +15,7 @@ import XCTest
 
 #if canImport(AppKit)
     final class ToolbarViewTests: XCTestCase {
-        // Build a ToolbarView with closures that flip flags so we can assert wiring.
+        /// Build a ToolbarView with closures that flip flags so we can assert wiring.
         private func makeSUT(
             selectionManager: SelectionManager = SelectionManager(),
             onSaveCalled: UnsafeMutablePointer<Bool>,

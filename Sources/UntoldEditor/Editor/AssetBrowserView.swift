@@ -688,7 +688,6 @@ struct AssetBrowserView: View {
         pendingRuntimeExport = runtimeExportQueue.removeFirst()
     }
 
-    @ViewBuilder
     private func runtimeExportSheet(for request: RuntimeExportRequest) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Convert to Untold Asset")
@@ -953,7 +952,7 @@ struct AssetBrowserView: View {
         }
     }
 
-    // Recursively find all files with a specific extension under a root directory
+    /// Recursively find all files with a specific extension under a root directory
     private func findFilesRecursively(at root: URL, withExtension ext: String) -> [URL] {
         var results: [URL] = []
         let fm = FileManager.default
@@ -971,7 +970,6 @@ struct AssetBrowserView: View {
         return results
     }
 
-    @ViewBuilder
     private func assetRow(_ asset: Asset) -> some View {
         HStack {
             Image(systemName: asset.isFolder ? "folder.fill" : "cube.fill")

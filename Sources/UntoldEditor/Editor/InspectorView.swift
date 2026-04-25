@@ -190,7 +190,7 @@ var availableComponents_Editor: [ComponentOption_Editor] = [
     ),
 ]
 
-// Script Component - controlled by feature flag
+/// Script Component - controlled by feature flag
 var scriptComponent_Editor: ComponentOption_Editor = .init(id: getComponentId(for: ScriptComponent.self), name: "Script Component", type: ScriptComponent.self, view: { selectedId, asset, refreshView in
     AnyView(
         Group {
@@ -235,7 +235,7 @@ func mergeEntityComponents(
 }
 
 func sortEntityComponents(componentOption_Editor: [ObjectIdentifier: ComponentOption_Editor]) -> [ComponentOption_Editor] {
-    let sortedComponents = Array(componentOption_Editor.values).sorted { lhs, rhs in
+    Array(componentOption_Editor.values).sorted { lhs, rhs in
         let order: [String: Int] = [
             "Render Component": 1,
             "Transform Component": 2,
@@ -244,8 +244,6 @@ func sortEntityComponents(componentOption_Editor: [ObjectIdentifier: ComponentOp
         ]
         return (order[lhs.name] ?? Int.max) < (order[rhs.name] ?? Int.max)
     }
-
-    return sortedComponents
 }
 
 struct InspectorView: View {
@@ -279,7 +277,7 @@ struct InspectorView: View {
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .padding()
                             .focused($isNameTextFieldFocused)
-                                .disabled(isDerivedAssetNode(entityId))
+                            .disabled(isDerivedAssetNode(entityId))
                             .onSubmit {
                                 onAddName_Editor()
                                 refreshView()
@@ -465,7 +463,7 @@ struct StaticBatchingEditorView: View {
 
     @State private var staticBatchCheckboxState: Bool = false
 
-    // Check if entity or any of its children have RenderComponent
+    /// Check if entity or any of its children have RenderComponent
     private func hasRenderableHierarchy(entityId: EntityID) -> Bool {
         // Check self
         if hasComponent(entityId: entityId, componentType: RenderComponent.self) {
@@ -483,7 +481,7 @@ struct StaticBatchingEditorView: View {
         return false
     }
 
-    // Check if entity or any of its children have StaticBatchComponent
+    /// Check if entity or any of its children have StaticBatchComponent
     private func isMarkedAsStatic(entityId: EntityID) -> Bool {
         // Check self
         if hasComponent(entityId: entityId, componentType: StaticBatchComponent.self) {
@@ -714,7 +712,7 @@ struct RenderingEditorView: View {
 
                 Divider()
                 HStack {
-                // Base Color Picker
+                    // Base Color Picker
                     VStack {
                         ColorPicker("", selection: Binding(
                             get: { colorFromSimd(getMaterialBaseColor(entityId: entityId, meshIndex: meshIndex)) },
@@ -728,7 +726,7 @@ struct RenderingEditorView: View {
                             .font(.caption)
                     }
 
-                // Roughness Input
+                    // Roughness Input
                     VStack {
                         TextInputNumberView(
                             label: "",
@@ -751,7 +749,7 @@ struct RenderingEditorView: View {
                             .foregroundColor(.secondary)
                     }
 
-                // Metallic Input
+                    // Metallic Input
                     VStack {
                         TextInputNumberView(
                             label: "",

@@ -14,9 +14,11 @@ import SwiftUI
 import XCTest
 
 final class ComponentEditorFormTests: XCTestCase {
-    private func makeEntityID(_ raw: UInt64 = 42) -> EntityID { EntityID(raw) }
+    private func makeEntityID(_ raw: UInt64 = 42) -> EntityID {
+        EntityID(raw)
+    }
 
-    func test_numberFieldInvokesSetAndRefresh() throws {
+    func test_numberFieldInvokesSetAndRefresh() {
         let eid = makeEntityID(1001)
 
         var storage: [EntityID: Float] = [eid: 1.5]
@@ -55,7 +57,7 @@ final class ComponentEditorFormTests: XCTestCase {
         _ = form.body
     }
 
-    func test_vector3FieldInvokesSetAndRefresh() throws {
+    func test_vector3FieldInvokesSetAndRefresh() {
         let eid = makeEntityID(2002)
 
         var storage: [EntityID: SIMD3<Float>] = [eid: SIMD3<Float>(1, 2, 3)]
@@ -91,7 +93,7 @@ final class ComponentEditorFormTests: XCTestCase {
         _ = form.body
     }
 
-    func test_textFieldInvokesSetAndRefreshAndHasPlaceholder() throws {
+    func test_textFieldInvokesSetAndRefreshAndHasPlaceholder() {
         let eid = makeEntityID(3003)
 
         var storage: [EntityID: String] = [eid: "Old Name"]
@@ -139,7 +141,7 @@ final class ComponentEditorFormTests: XCTestCase {
         _ = form.body
     }
 
-    func test_multipleFieldsEachTriggerRefresh() throws {
+    func test_multipleFieldsEachTriggerRefresh() {
         let eid = makeEntityID(4004)
 
         var numStorage: [EntityID: Float] = [eid: 0]
@@ -190,7 +192,7 @@ final class ComponentEditorFormTests: XCTestCase {
         _ = form.body
     }
 
-    func test_makeEditorViewEmbedsForm() throws {
+    func test_makeEditorViewEmbedsForm() {
         let eid = makeEntityID(5555)
 
         var numValue: Float = 1

@@ -244,7 +244,7 @@ struct HierarchyNode: View {
         return true // Return true immediately, async callback will handle the actual parenting
     }
 
-    // Check if an entity is a descendant of another entity
+    /// Check if an entity is a descendant of another entity
     private func isDescendant(entityId: EntityID, potentialDescendant: EntityID) -> Bool {
         let children = sceneGraphModel.getChildren(entityId: entityId)
 
@@ -261,12 +261,12 @@ struct HierarchyNode: View {
         return false
     }
 
-    // Check if entity has a parent
+    /// Check if entity has a parent
     private var hasParent: Bool {
         getEntityParent(entityId: entityId) != nil
     }
 
-    // Context menu for entity row
+    /// Context menu for entity row
     private var contextMenuContent: some View {
         VStack {
             if isDerivedAssetNode(entityId) {

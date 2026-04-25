@@ -17,7 +17,7 @@ public struct LoadingIndicatorView: View {
     @State private var currentProgress: Float = 0.0
     @State private var totalCount = 0
 
-    // Timer to poll loading state
+    /// Timer to poll loading state
     private let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     public init() {}

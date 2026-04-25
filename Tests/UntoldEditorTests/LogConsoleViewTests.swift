@@ -13,7 +13,7 @@ import SwiftUI
 @testable import UntoldEngine
 import XCTest
 
-// A minimal harness exposing the private helpers of LogConsoleView for testing.
+/// A minimal harness exposing the private helpers of LogConsoleView for testing.
 private struct LogConsoleViewHarness {
     let view = LogConsoleView()
 

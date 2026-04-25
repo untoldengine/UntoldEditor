@@ -23,7 +23,8 @@ func createGizmoVertexDescriptor() -> MTLVertexDescriptor? {
     )
 
     vertexDescriptor.gizmo.layouts[Int(modelPassVerticesIndex.rawValue)] = MDLVertexBufferLayout(
-        stride: MemoryLayout<simd_float4>.stride)
+        stride: MemoryLayout<simd_float4>.stride
+    )
 
     guard let vertexDescriptor = MTKMetalVertexDescriptorFromModelIO(vertexDescriptor.gizmo) else {
         return nil

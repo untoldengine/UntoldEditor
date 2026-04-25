@@ -17,7 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
 
     func applicationDidFinishLaunching(_: Notification) {
-        Logger.log(message: "Launching Untold Engine Editor v0.12.6")
+        Logger.log(message: "Launching Untold Engine Editor v0.12.7")
 
         // Step 1. Create and configure the window
         window = NSWindow(
@@ -27,7 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
 
-        window.title = "Untold Engine Editor v0.12.6"
+        window.title = "Untold Engine Editor v0.12.7"
         window.center()
 
         let hostingView = NSHostingView(rootView: EditorView())

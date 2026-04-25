@@ -59,7 +59,7 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         XCTAssertEqual(finalID, "outputTransform")
 
-        let expectedIDs: Set<String> = [
+        let expectedIDs: Set = [
             "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
             "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
@@ -93,7 +93,7 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         XCTAssertEqual(finalID, "outputTransform")
 
-        let expectedIDs: Set<String> = [
+        let expectedIDs: Set = [
             "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
             "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]

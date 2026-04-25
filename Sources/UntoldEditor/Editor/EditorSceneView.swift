@@ -34,7 +34,7 @@ struct EditorSceneView: View, UntoldRendererDelegate {
             }
     }
 
-    // UntoldRenderer delegate functions
+    /// UntoldRenderer delegate functions
     func willDraw(in _: MTKView) {
         if hotReload {
             // updateRayKernelPipeline()

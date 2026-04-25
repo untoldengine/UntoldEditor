@@ -27,7 +27,7 @@ func resolveUntoldAssetURL(entityId: EntityID) -> URL? {
 private func resolveUntoldMaterialTarget(entityId: EntityID, meshIndex: Int) throws -> UntoldMaterialTarget {
     guard let assetURL = resolveUntoldAssetURL(entityId: entityId) else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 1, userInfo: [
-            NSLocalizedDescriptionKey: "Selected mesh is not backed by a .untold asset."
+            NSLocalizedDescriptionKey: "Selected mesh is not backed by a .untold asset.",
         ])
     }
 
@@ -35,34 +35,34 @@ private func resolveUntoldMaterialTarget(entityId: EntityID, meshIndex: Int) thr
     let decoded = try UntoldReader().readAsset(from: fileData)
     guard let targetEntityRecord = resolveEntityRecordForMesh(entityId: entityId, meshIndex: meshIndex, decoded: decoded) else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 2, userInfo: [
-            NSLocalizedDescriptionKey: "Could not map the selected mesh to an entity record in the .untold file."
+            NSLocalizedDescriptionKey: "Could not map the selected mesh to an entity record in the .untold file.",
         ])
     }
 
     guard Int(targetEntityRecord.meshRecordCount) > meshIndex else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 3, userInfo: [
-            NSLocalizedDescriptionKey: "Selected mesh index is out of range for the .untold entity record."
+            NSLocalizedDescriptionKey: "Selected mesh index is out of range for the .untold entity record.",
         ])
     }
 
     let meshRecordIndex = Int(targetEntityRecord.firstMeshRecordIndex) + meshIndex
     guard decoded.meshes.indices.contains(meshRecordIndex) else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 4, userInfo: [
-            NSLocalizedDescriptionKey: "Could not locate the mesh record in the .untold file."
+            NSLocalizedDescriptionKey: "Could not locate the mesh record in the .untold file.",
         ])
     }
 
     let meshRecord = decoded.meshes[meshRecordIndex]
     guard meshRecord.materialIndex != UntoldFormat.invalidIndex else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 5, userInfo: [
-            NSLocalizedDescriptionKey: "Selected mesh does not reference a writable material record."
+            NSLocalizedDescriptionKey: "Selected mesh does not reference a writable material record.",
         ])
     }
 
     let materialIndex = Int(meshRecord.materialIndex)
     guard decoded.materials.indices.contains(materialIndex) else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 6, userInfo: [
-            NSLocalizedDescriptionKey: "Material record index is out of range in the .untold file."
+            NSLocalizedDescriptionKey: "Material record index is out of range in the .untold file.",
         ])
     }
 
@@ -152,13 +152,13 @@ func persistAlphaMaterialOverridesToUntold(
 
     guard let materialChunk = decoded.chunks.first(where: { $0.chunkType == .materialTable }) else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 7, userInfo: [
-            NSLocalizedDescriptionKey: "The .untold file does not contain a material table."
+            NSLocalizedDescriptionKey: "The .untold file does not contain a material table.",
         ])
     }
 
     guard materialChunk.compressionType == .none else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 8, userInfo: [
-            NSLocalizedDescriptionKey: "Compressed material tables are not supported by the editor patch flow."
+            NSLocalizedDescriptionKey: "Compressed material tables are not supported by the editor patch flow.",
         ])
     }
 
@@ -175,7 +175,7 @@ func persistAlphaMaterialOverridesToUntold(
     let materialRange = Int(materialChunk.fileOffset) ..< Int(materialChunk.fileOffset + materialChunk.compressedSize)
     guard materialRange.count == materialData.count else {
         throw NSError(domain: "UntoldMaterialPersistence", code: 9, userInfo: [
-            NSLocalizedDescriptionKey: "Material table size changed unexpectedly; aborting patch."
+            NSLocalizedDescriptionKey: "Material table size changed unexpectedly; aborting patch.",
         ])
     }
 

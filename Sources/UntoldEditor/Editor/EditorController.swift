@@ -47,8 +47,8 @@ public class EditorAssetBasePath: ObservableObject {
         }
     }
 
-    // Extract project name from the GameData path
-    // e.g., /path/to/MyGame/Sources/MyGame/GameData -> "MyGame"
+    /// Extract project name from the GameData path
+    /// e.g., /path/to/MyGame/Sources/MyGame/GameData -> "MyGame"
     public var projectName: String? {
         guard let basePath else { return nil }
 
@@ -112,7 +112,7 @@ class EditorController: SelectionDelegate, ObservableObject {
     }
 }
 
-// Notification to ask the Asset Browser to reload its listing
+/// Notification to ask the Asset Browser to reload its listing
 extension Notification.Name {
     static let assetBrowserReload = Notification.Name("AssetBrowser.Reload")
     static let projectWillSwitch = Notification.Name("Project.WillSwitch")

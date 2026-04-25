@@ -8,11 +8,10 @@
 
 // These unit tests were jump-started with AI assistance — then refined by humans. If you spot an issue, please submit an issue.
 
-import XCTest
-
 import ModelIO
 @testable import UntoldEditor
 @testable import UntoldEngine
+import XCTest
 
 final class GizmoSystemTests: XCTestCase {
     private var originalActiveEntity: EntityID!
@@ -21,7 +20,7 @@ final class GizmoSystemTests: XCTestCase {
     private var originalActiveHitGizmoEntity: EntityID!
 
     #if canImport(AppKit)
-        // Editor controller mock up
+        /// Editor controller mock up
         final class TestEditorController {
             enum Axis { case x, y, z, none }
             enum Mode { case translate, rotate, scale, lightRotate, none }

@@ -35,7 +35,7 @@ final class LightDebugMeshesTests: XCTestCase {
         super.tearDown()
     }
 
-    func test_loadLightDebugMeshes_assignsAllMeshes() throws {
+    func test_loadLightDebugMeshes_assignsAllMeshes() {
         loadLightDebugMeshes()
 
         XCTAssertNotNil(spotLightDebugMesh, "spotLightDebugMesh should be loaded.")
@@ -44,7 +44,7 @@ final class LightDebugMeshesTests: XCTestCase {
         XCTAssertNotNil(dirLightDebugMesh, "dirLightDebugMesh should be loaded.")
     }
 
-    func test_loadLightDebugMeshes_loadsCorrectNames() throws {
+    func test_loadLightDebugMeshes_loadsCorrectNames() {
         loadLightDebugMeshes()
 
         XCTAssertEqual(spotLightDebugMesh.first?.assetName, "Cone")

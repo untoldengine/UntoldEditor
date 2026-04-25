@@ -475,7 +475,7 @@ func hitGizmoToolAxis(entityId: EntityID) -> Bool {
 
     let name = getEntityName(entityId: entityId)
 
-    let validNames: Set<String> = [
+    let validNames: Set = [
         "xAxisTranslate", "yAxisTranslate", "zAxisTranslate",
         "xAxisRotate", "yAxisRotate", "zAxisRotate",
         "xAxisScale", "yAxisScale", "zAxisScale",

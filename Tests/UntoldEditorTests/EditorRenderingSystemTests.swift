@@ -155,7 +155,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertEqual(graph["batchedModel"]?.dependencies, ["model"], "Batched model should depend on model")
     }
 
-    func test_buildEditModeGraph_canBeTopologicallySorted() {
+    func test_buildEditModeGraph_canBeTopologicallySorted() throws {
         // Arrange
         renderEnvironment = false
 
@@ -165,18 +165,18 @@ final class EditorRenderingSystemTests: XCTestCase {
         // Assert - Verify graph can be sorted without cycles
         XCTAssertNoThrow(try topologicalSortGraph(graph: graph), "Edit mode graph should be sortable without cycles")
 
-        let sortedPasses = try! topologicalSortGraph(graph: graph)
+        let sortedPasses = try topologicalSortGraph(graph: graph)
         XCTAssertTrue(sortedPasses.count > 0, "Sorted passes should not be empty")
         XCTAssertEqual(sortedPasses.count, graph.count, "Sorted passes count should match graph size")
     }
 
-    func test_buildEditModeGraph_topologicalOrder_respectsDependencies() {
+    func test_buildEditModeGraph_topologicalOrder_respectsDependencies() throws {
         // Arrange
         renderEnvironment = false
 
         // Act
         let (graph, _) = buildEditModeGraph()
-        let sortedPasses = try! topologicalSortGraph(graph: graph)
+        let sortedPasses = try topologicalSortGraph(graph: graph)
         let order = sortedPasses.map(\.id)
 
         // Assert - Verify topological constraints

@@ -76,7 +76,7 @@ func bindingForMaterialRoughness(entityId: EntityID, onChange: @escaping () -> V
     )
 }
 
-// Helper function to get NSImage from material texture, handling both file-based and embedded USDZ textures
+/// Helper function to get NSImage from material texture, handling both file-based and embedded USDZ textures
 func getMaterialTextureImage(
     entityId: EntityID,
     type: TextureType,
@@ -109,7 +109,7 @@ func getMaterialTextureImage(
     }
 }
 
-// Convert MDLTexture to NSImage
+/// Convert MDLTexture to NSImage
 func nsImageFromMDLTexture(_ mdlTexture: MDLTexture) -> NSImage? {
     // Get the texture data from MDLTexture
     guard let texelData = mdlTexture.texelDataWithTopLeftOrigin() else {
