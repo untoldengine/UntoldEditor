@@ -23,6 +23,13 @@ struct RuntimeExportRequest: Identifiable, Equatable {
     let outputURL: URL
 }
 
+struct TilesExportRequest: Identifiable, Equatable {
+    let id = UUID()
+    let sourceURL: URL
+    let destinationFolder: URL
+    let outputDirURL: URL
+}
+
 func copyRuntimeAssetSidecars(for sourceURL: URL, to destinationFolder: URL, fileManager fm: FileManager = .default) throws {
     let sourceFolder = sourceURL.deletingLastPathComponent()
 
@@ -170,16 +177,57 @@ func importStreamModelManifest(sourceURL: URL, destinationFolder: URL, fileManag
     }
 }
 
-func findExportUntoldScript(fileManager fm: FileManager = .default) -> URL? {
+func findUntoldEngineScript(named name: String, fileManager fm: FileManager = .default) -> URL? {
     let cwd = URL(fileURLWithPath: fm.currentDirectoryPath, isDirectory: true)
-    let candidates = [
-        cwd.appendingPathComponent("../UntoldEngine/scripts/export-untold").standardizedFileURL,
-        cwd.appendingPathComponent("scripts/export-untold").standardizedFileURL,
-        URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-            .appendingPathComponent("Desktop/UntoldEngineStudio/UntoldEngine/scripts/export-untold"),
+
+    var scriptsDirCandidates: [URL] = []
+
+    // DMG / installed app: scripts are bundled in Contents/Resources/scripts/
+    if let resourceURL = Bundle.main.resourceURL {
+        scriptsDirCandidates.append(resourceURL.appendingPathComponent("scripts").standardizedFileURL)
+    }
+
+    scriptsDirCandidates += [
+        // `swift run` from the package root: cwd is the package root
+        cwd.appendingPathComponent(".build/checkouts/UntoldEngine/scripts").standardizedFileURL,
+        // Local package override (Package.swift uses path: "../UntoldEngine")
+        cwd.appendingPathComponent("../UntoldEngine/scripts").standardizedFileURL,
     ]
 
-    return candidates.first { fm.isExecutableFile(atPath: $0.path) || fm.fileExists(atPath: $0.path) }
+    if let execURL = Bundle.main.executableURL {
+        // SPM CLI build: executable is at .build/<arch>/<config>/<name>
+        // Three levels up lands at .build/
+        let spmBuildDir = execURL
+            .deletingLastPathComponent()  // <config>/
+            .deletingLastPathComponent()  // <arch>/
+            .deletingLastPathComponent()  // .build/
+        scriptsDirCandidates.append(
+            spmBuildDir.appendingPathComponent("checkouts/UntoldEngine/scripts").standardizedFileURL
+        )
+
+        // Xcode build: executable is at DerivedData/<hash>/Build/Products/<config>/<name>
+        // Four levels up lands at DerivedData/<hash>/
+        let derivedDataDir = execURL
+            .deletingLastPathComponent()  // <config>/
+            .deletingLastPathComponent()  // Products/
+            .deletingLastPathComponent()  // Build/
+            .deletingLastPathComponent()  // DerivedData/<hash>/
+        scriptsDirCandidates.append(
+            derivedDataDir.appendingPathComponent("SourcePackages/checkouts/UntoldEngine/scripts").standardizedFileURL
+        )
+    }
+
+    return scriptsDirCandidates
+        .map { $0.appendingPathComponent(name) }
+        .first { fm.isExecutableFile(atPath: $0.path) || fm.fileExists(atPath: $0.path) }
+}
+
+func findExportUntoldScript(fileManager fm: FileManager = .default) -> URL? {
+    findUntoldEngineScript(named: "export-untold", fileManager: fm)
+}
+
+func findExportUntoldTilesScript(fileManager fm: FileManager = .default) -> URL? {
+    findUntoldEngineScript(named: "export-untold-tiles", fileManager: fm)
 }
 
 enum AssetCategory: String, CaseIterable {
@@ -247,6 +295,12 @@ struct AssetBrowserView: View {
     @State private var isExportingRuntimeAsset = false
     @State private var exportConvertOrientation = true
     @State private var exportSourceOrientation = "blender-native"
+    @State private var pendingTilesExport: TilesExportRequest?
+    @State private var tilesExportQueue: [TilesExportRequest] = []
+    @State private var isExportingTilesAsset = false
+    @State private var exportTileSizeX: String = "25"
+    @State private var exportTileSizeY: String = "10000"
+    @State private var exportTileSizeZ: String = "25"
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
         folderPathStack.last
@@ -506,6 +560,9 @@ struct AssetBrowserView: View {
         .sheet(item: $pendingRuntimeExport) { request in
             runtimeExportSheet(for: request)
         }
+        .sheet(item: $pendingTilesExport) { request in
+            tilesExportSheet(for: request)
+        }
         .overlay(alignment: .bottom) {
             if let statusMessage {
                 Text(statusMessage)
@@ -536,7 +593,7 @@ struct AssetBrowserView: View {
                 UTType(filenameExtension: $0)
             }
         case .streamModels:
-            openPanel.allowedContentTypes = [UTType(filenameExtension: "json")!]
+            openPanel.allowedContentTypes = ([UTType(filenameExtension: "json")!] + sourceAssetExtensions.sorted().compactMap { UTType(filenameExtension: $0) })
         case .scripts:
             openPanel.allowedContentTypes = [UTType(filenameExtension: "uscript")!]
         case .scenes:
@@ -610,7 +667,12 @@ struct AssetBrowserView: View {
                         }
 
                     case "StreamModels":
-                        if sourceURL.hasDirectoryPath {
+                        let sourceExtension = sourceURL.pathExtension.lowercased()
+                        if sourceAssetExtensions.contains(sourceExtension) {
+                            let baseName = sourceURL.deletingPathExtension().lastPathComponent
+                            let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
+                            queueTilesExport(sourceURL: sourceURL, destinationFolder: destFolder)
+                        } else if sourceURL.hasDirectoryPath {
                             guard primaryTiledSceneManifest(in: sourceURL, fileManager: fm) != nil else {
                                 showStatus("No tiled scene manifest found in selected folder", isError: true)
                                 continue
@@ -649,7 +711,9 @@ struct AssetBrowserView: View {
             }
 
             loadAssets()
-            if runtimeExportQueue.isEmpty, pendingRuntimeExport == nil {
+            if runtimeExportQueue.isEmpty, pendingRuntimeExport == nil,
+               tilesExportQueue.isEmpty, pendingTilesExport == nil
+            {
                 showStatus("Queued import of \(openPanel.urls.count) item(s) (see Console)")
             }
         }
@@ -756,7 +820,7 @@ struct AssetBrowserView: View {
         guard !isExportingRuntimeAsset else { return }
         guard let exporterScript = findExportUntoldScript() else {
             showStatus("export-untold script not found", isError: true)
-            Logger.log(message: "❌ export-untold script not found. Expected ../UntoldEngine/scripts/export-untold")
+            Logger.log(message: "❌ export-untold script not found. Expected at .build/checkouts/UntoldEngine/scripts/export-untold")
             pendingRuntimeExport = nil
             presentNextRuntimeExportIfNeeded()
             return
@@ -838,6 +902,194 @@ struct AssetBrowserView: View {
                     Logger.log(message: "❌ Export failed: \(error)")
                     showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
                     presentNextRuntimeExportIfNeeded()
+                }
+            }
+        }
+    }
+
+    private func queueTilesExport(sourceURL: URL, destinationFolder: URL) {
+        let outputDirURL = destinationFolder.appendingPathComponent("tile_exports", isDirectory: true)
+        let request = TilesExportRequest(
+            sourceURL: sourceURL,
+            destinationFolder: destinationFolder,
+            outputDirURL: outputDirURL
+        )
+        tilesExportQueue.append(request)
+        presentNextTilesExportIfNeeded()
+    }
+
+    private func presentNextTilesExportIfNeeded() {
+        guard pendingTilesExport == nil, !tilesExportQueue.isEmpty else { return }
+        pendingTilesExport = tilesExportQueue.removeFirst()
+    }
+
+    private func tilesExportSheet(for request: TilesExportRequest) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Convert to Tiled Stream Model")
+                .font(.title2)
+                .bold()
+
+            Text("This USD file will be partitioned into tile payloads and a manifest JSON using export-untold-tiles.")
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Source")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(request.sourceURL.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(2)
+
+                Text("Output directory")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 6)
+                Text(request.outputDirURL.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(2)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Tile size (world units)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("X").font(.caption)
+                        TextField("25", text: $exportTileSizeX)
+                            .frame(width: 70)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Y").font(.caption)
+                        TextField("10000", text: $exportTileSizeY)
+                            .frame(width: 70)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Z").font(.caption)
+                        TextField("25", text: $exportTileSizeZ)
+                            .frame(width: 70)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+            }
+
+            if isExportingTilesAsset {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Exporting tiles...")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    pendingTilesExport = nil
+                    presentNextTilesExportIfNeeded()
+                }
+                .disabled(isExportingTilesAsset)
+
+                Button("Export") {
+                    exportTilesAsset(request)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(isExportingTilesAsset)
+            }
+        }
+        .padding(20)
+        .frame(width: 560)
+    }
+
+    private func exportTilesAsset(_ request: TilesExportRequest) {
+        guard !isExportingTilesAsset else { return }
+        guard let exporterScript = findExportUntoldTilesScript() else {
+            showStatus("export-untold-tiles script not found", isError: true)
+            Logger.log(message: "❌ export-untold-tiles script not found. Expected at .build/checkouts/UntoldEngine/scripts/export-untold-tiles")
+            pendingTilesExport = nil
+            presentNextTilesExportIfNeeded()
+            return
+        }
+
+        isExportingTilesAsset = true
+        showStatus("Exporting tiles for \(request.sourceURL.lastPathComponent)...")
+        let tileSizeX = exportTileSizeX
+        let tileSizeY = exportTileSizeY
+        let tileSizeZ = exportTileSizeZ
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            let tempDirectory = FileManager.default.temporaryDirectory
+            let outputLogURL = tempDirectory.appendingPathComponent("untold-tiles-export-\(UUID().uuidString).out")
+            let errorLogURL = tempDirectory.appendingPathComponent("untold-tiles-export-\(UUID().uuidString).err")
+
+            do {
+                try FileManager.default.createDirectory(at: request.destinationFolder, withIntermediateDirectories: true)
+                FileManager.default.createFile(atPath: outputLogURL.path, contents: nil)
+                FileManager.default.createFile(atPath: errorLogURL.path, contents: nil)
+                let outputHandle = try FileHandle(forWritingTo: outputLogURL)
+                let errorHandle = try FileHandle(forWritingTo: errorLogURL)
+                defer {
+                    try? outputHandle.close()
+                    try? errorHandle.close()
+                    try? FileManager.default.removeItem(at: outputLogURL)
+                    try? FileManager.default.removeItem(at: errorLogURL)
+                }
+
+                process.executableURL = exporterScript
+                var arguments = [
+                    "--input", request.sourceURL.path,
+                    "--output-dir", request.outputDirURL.path,
+                ]
+                if let x = Double(tileSizeX), x > 0 {
+                    arguments.append(contentsOf: ["--tile-size-x", tileSizeX])
+                }
+                if let y = Double(tileSizeY), y > 0 {
+                    arguments.append(contentsOf: ["--tile-size-y", tileSizeY])
+                }
+                if let z = Double(tileSizeZ), z > 0 {
+                    arguments.append(contentsOf: ["--tile-size-z", tileSizeZ])
+                }
+                process.arguments = arguments
+                process.standardOutput = outputHandle
+                process.standardError = errorHandle
+
+                try process.run()
+                process.waitUntilExit()
+
+                let stdout = (try? String(contentsOf: outputLogURL, encoding: .utf8)) ?? ""
+                let stderr = (try? String(contentsOf: errorLogURL, encoding: .utf8)) ?? ""
+
+                DispatchQueue.main.async {
+                    if !stdout.isEmpty {
+                        Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                    if !stderr.isEmpty {
+                        Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+
+                    isExportingTilesAsset = false
+                    pendingTilesExport = nil
+
+                    if process.terminationStatus == 0 {
+                        loadAssets()
+                        showStatus("Exported tiles for \(request.sourceURL.deletingPathExtension().lastPathComponent)")
+                    } else {
+                        showStatus("Tiles export failed for \(request.sourceURL.lastPathComponent)", isError: true)
+                    }
+
+                    presentNextTilesExportIfNeeded()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    isExportingTilesAsset = false
+                    pendingTilesExport = nil
+                    Logger.log(message: "❌ Tiles export failed: \(error)")
+                    showStatus("Tiles export failed for \(request.sourceURL.lastPathComponent)", isError: true)
+                    presentNextTilesExportIfNeeded()
                 }
             }
         }
