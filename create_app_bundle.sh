@@ -69,6 +69,7 @@ if [ -d "$SCRIPTS_SRC" ]; then
     mkdir -p "$APP_BUNDLE/Contents/Resources/scripts"
     cp "$SCRIPTS_SRC/export-untold" "$APP_BUNDLE/Contents/Resources/scripts/"
     cp "$SCRIPTS_SRC/export-untold-tiles" "$APP_BUNDLE/Contents/Resources/scripts/"
+    cp "$SCRIPTS_SRC/texbake.py" "$APP_BUNDLE/Contents/Resources/scripts/"
     chmod +x "$APP_BUNDLE/Contents/Resources/scripts/export-untold"
     chmod +x "$APP_BUNDLE/Contents/Resources/scripts/export-untold-tiles"
 else

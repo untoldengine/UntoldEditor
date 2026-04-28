@@ -230,6 +230,52 @@ func findExportUntoldTilesScript(fileManager fm: FileManager = .default) -> URL?
     findUntoldEngineScript(named: "export-untold-tiles", fileManager: fm)
 }
 
+func findTexbakeScript(fileManager fm: FileManager = .default) -> URL? {
+    findUntoldEngineScript(named: "texbake.py", fileManager: fm)
+}
+
+/// Runs `python3 <script> <arguments>` synchronously on the calling thread.
+/// Returns the termination status plus captured stdout and stderr.
+/// Pass a non-empty `astcencBin` to set `ASTCENC_BIN` in the process environment.
+func runTexbakeStep(script: URL, arguments: [String], astcencBin: String = "") -> (status: Int32, stdout: String, stderr: String) {
+    let tempDir = FileManager.default.temporaryDirectory
+    let outURL = tempDir.appendingPathComponent("texbake-\(UUID().uuidString).out")
+    let errURL = tempDir.appendingPathComponent("texbake-\(UUID().uuidString).err")
+    defer {
+        try? FileManager.default.removeItem(at: outURL)
+        try? FileManager.default.removeItem(at: errURL)
+    }
+    FileManager.default.createFile(atPath: outURL.path, contents: nil)
+    FileManager.default.createFile(atPath: errURL.path, contents: nil)
+    guard let outHandle = try? FileHandle(forWritingTo: outURL),
+          let errHandle = try? FileHandle(forWritingTo: errURL) else {
+        return (-1, "", "Failed to open log file handles")
+    }
+    defer {
+        try? outHandle.close()
+        try? errHandle.close()
+    }
+    // Run through the user's login shell so ~/.zprofile / ~/.bash_profile are
+    // sourced and the correct python3 (with Pillow, lz4, etc.) is on PATH.
+    let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+    let quotedArgs = ([script.path] + arguments)
+        .map { "'\($0.replacingOccurrences(of: "'", with: "'\\''"))'" }
+        .joined(separator: " ")
+    let astcencPrefix = astcencBin.isEmpty ? "" : "ASTCENC_BIN='\(astcencBin)' "
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: shell)
+    process.arguments = ["-l", "-c", "\(astcencPrefix)python3 \(quotedArgs)"]
+    process.standardOutput = outHandle
+    process.standardError = errHandle
+    guard (try? process.run()) != nil else {
+        return (-1, "", "Failed to launch texbake.py")
+    }
+    process.waitUntilExit()
+    let stdout = (try? String(contentsOf: outURL, encoding: .utf8)) ?? ""
+    let stderr = (try? String(contentsOf: errURL, encoding: .utf8)) ?? ""
+    return (process.terminationStatus, stdout, stderr)
+}
+
 enum AssetCategory: String, CaseIterable {
     case models = "Models"
     case streamModels = "StreamModels"
@@ -301,6 +347,14 @@ struct AssetBrowserView: View {
     @State private var exportTileSizeX: String = "25"
     @State private var exportTileSizeY: String = "10000"
     @State private var exportTileSizeZ: String = "25"
+    @State private var exportCompressGeometry = false
+    @State private var exportCompressTextures = false
+    @State private var astcencBinPath: String = ""
+    @State private var exportQuadTree = false
+    @State private var exportAutoTileSize = false
+    @State private var exportGenerateHLOD = false
+    @State private var exportGenerateLOD = false
+    @State private var exportDryRun = false
     var editor_addEntityWithAsset: () -> Void
     private var currentFolderPath: URL? {
         folderPathStack.last
@@ -786,6 +840,53 @@ struct AssetBrowserView: View {
                     Text("Engine oriented").tag("engine-oriented")
                 }
                 .disabled(!exportConvertOrientation)
+
+                Toggle("Compress geometry (LZ4)", isOn: $exportCompressGeometry)
+                    .help("Compresses vertex and index data with LZ4. Requires the Python lz4 package.")
+                if exportCompressGeometry {
+                    Text("Requires: pip install lz4")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.leading, 20)
+                }
+
+                Toggle("Compress textures (ASTC)", isOn: $exportCompressTextures)
+                    .help("Converts textures to GPU-native ASTC format. Requires astcenc and the Python Pillow package.")
+                if exportCompressTextures {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 12) {
+                            Link("Install astcenc →", destination: URL(string: "https://github.com/ARM-software/astc-encoder/releases")!)
+                                .font(.caption)
+                            Text("·")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Also requires: pip install Pillow")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("astcenc path (optional)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack {
+                                TextField("/opt/homebrew/bin/astcenc", text: $astcencBinPath)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 12, design: .monospaced))
+                                Button("Browse…") {
+                                    let panel = NSOpenPanel()
+                                    panel.canChooseFiles = true
+                                    panel.canChooseDirectories = false
+                                    panel.allowsMultipleSelection = false
+                                    panel.title = "Select astcenc binary"
+                                    if panel.runModal() == .OK, let url = panel.url {
+                                        astcencBinPath = url.path
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
             }
 
             if isExportingRuntimeAsset {
@@ -830,6 +931,9 @@ struct AssetBrowserView: View {
         showStatus("Exporting \(request.sourceURL.lastPathComponent)...")
         let convertOrientation = exportConvertOrientation
         let sourceOrientation = exportSourceOrientation
+        let compressGeometry = exportCompressGeometry
+        let compressTextures = exportCompressTextures
+        let astcencBin = astcencBinPath.trimmingCharacters(in: .whitespacesAndNewlines)
 
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
@@ -865,6 +969,9 @@ struct AssetBrowserView: View {
                     arguments.append("--ConvertOrientation")
                     arguments.append(contentsOf: ["--source-orientation", sourceOrientation])
                 }
+                if compressGeometry {
+                    arguments.append("--compress-geometry")
+                }
                 process.arguments = arguments
                 process.standardOutput = outputHandle
                 process.standardError = errorHandle
@@ -876,23 +983,49 @@ struct AssetBrowserView: View {
                 let stderr = (try? String(contentsOf: errorLogURL, encoding: .utf8)) ?? ""
 
                 DispatchQueue.main.async {
-                    if !stdout.isEmpty {
-                        Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
-                    if !stderr.isEmpty {
-                        Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
+                    if !stdout.isEmpty { Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    if !stderr.isEmpty { Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                }
 
+                let exportSucceeded = process.terminationStatus == 0
+
+                if exportSucceeded && compressTextures {
+                    let texturesDir = request.destinationFolder.appendingPathComponent("Textures")
+                    if FileManager.default.fileExists(atPath: texturesDir.path),
+                       let texbakeScript = findTexbakeScript()
+                    {
+                        DispatchQueue.main.async { showStatus("Baking textures (ASTC)...") }
+                        let bakeResult = runTexbakeStep(script: texbakeScript, arguments: ["--dir", texturesDir.path], astcencBin: astcencBin)
+                        DispatchQueue.main.async {
+                            if !bakeResult.stdout.isEmpty { Logger.log(message: bakeResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !bakeResult.stderr.isEmpty { Logger.log(message: bakeResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+
+                        DispatchQueue.main.async { showStatus("Patching texture references...") }
+                        let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputURL.path], astcencBin: astcencBin)
+                        DispatchQueue.main.async {
+                            if !patchResult.stdout.isEmpty { Logger.log(message: patchResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !patchResult.stderr.isEmpty { Logger.log(message: patchResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if bakeResult.status != 0 || patchResult.status != 0 {
+                                Logger.log(message: "⚠️ ASTC compression had errors — asset imported without compressed textures")
+                            }
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            Logger.log(message: "⚠️ ASTC skipped — texbake.py not found or no Textures folder present")
+                        }
+                    }
+                }
+
+                DispatchQueue.main.async {
                     isExportingRuntimeAsset = false
                     pendingRuntimeExport = nil
-
-                    if process.terminationStatus == 0 {
+                    if exportSucceeded {
                         loadAssets()
                         showStatus("Exported \(request.outputURL.lastPathComponent)")
                     } else {
                         showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
                     }
-
                     presentNextRuntimeExportIfNeeded()
                 }
             } catch {
@@ -974,6 +1107,59 @@ struct AssetBrowserView: View {
                             .textFieldStyle(.roundedBorder)
                     }
                 }
+
+                Toggle("Auto tile size", isOn: $exportAutoTileSize)
+                Toggle("Generate HLOD", isOn: $exportGenerateHLOD)
+                Toggle("Generate LOD", isOn: $exportGenerateLOD)
+                Toggle("Compress geometry (LZ4)", isOn: $exportCompressGeometry)
+                    .help("Compresses vertex and index data with LZ4. Requires the Python lz4 package.")
+                if exportCompressGeometry {
+                    Text("Requires: pip install lz4")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.leading, 20)
+                }
+
+                Toggle("Compress textures (ASTC)", isOn: $exportCompressTextures)
+                    .help("Converts textures to GPU-native ASTC format. Requires astcenc and the Python Pillow package.")
+                if exportCompressTextures {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 12) {
+                            Link("Install astcenc →", destination: URL(string: "https://github.com/ARM-software/astc-encoder/releases")!)
+                                .font(.caption)
+                            Text("·")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Also requires: pip install Pillow")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("astcenc path (optional)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack {
+                                TextField("/opt/homebrew/bin/astcenc", text: $astcencBinPath)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 12, design: .monospaced))
+                                Button("Browse…") {
+                                    let panel = NSOpenPanel()
+                                    panel.canChooseFiles = true
+                                    panel.canChooseDirectories = false
+                                    panel.allowsMultipleSelection = false
+                                    panel.title = "Select astcenc binary"
+                                    if panel.runModal() == .OK, let url = panel.url {
+                                        astcencBinPath = url.path
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
+
+                Toggle("Quad-tree partitioning", isOn: $exportQuadTree)
+                Toggle("Dry run", isOn: $exportDryRun)
             }
 
             if isExportingTilesAsset {
@@ -1019,6 +1205,14 @@ struct AssetBrowserView: View {
         let tileSizeX = exportTileSizeX
         let tileSizeY = exportTileSizeY
         let tileSizeZ = exportTileSizeZ
+        let compressGeometry = exportCompressGeometry
+        let compressTextures = exportCompressTextures
+        let astcencBin = astcencBinPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let quadTree = exportQuadTree
+        let autoTileSize = exportAutoTileSize
+        let generateHLOD = exportGenerateHLOD
+        let generateLOD = exportGenerateLOD
+        let dryRun = exportDryRun
 
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
@@ -1053,6 +1247,24 @@ struct AssetBrowserView: View {
                 if let z = Double(tileSizeZ), z > 0 {
                     arguments.append(contentsOf: ["--tile-size-z", tileSizeZ])
                 }
+                if autoTileSize {
+                    arguments.append("--auto-tile-size")
+                }
+                if generateHLOD {
+                    arguments.append("--generate-hlod")
+                }
+                if generateLOD {
+                    arguments.append("--generate-lod")
+                }
+                if compressGeometry {
+                    arguments.append("--compress-geometry")
+                }
+                if quadTree {
+                    arguments.append("--quadtree")
+                }
+                if dryRun {
+                    arguments.append("--dry-run")
+                }
                 process.arguments = arguments
                 process.standardOutput = outputHandle
                 process.standardError = errorHandle
@@ -1064,23 +1276,49 @@ struct AssetBrowserView: View {
                 let stderr = (try? String(contentsOf: errorLogURL, encoding: .utf8)) ?? ""
 
                 DispatchQueue.main.async {
-                    if !stdout.isEmpty {
-                        Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
-                    if !stderr.isEmpty {
-                        Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
+                    if !stdout.isEmpty { Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    if !stderr.isEmpty { Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                }
 
+                let exportSucceeded = process.terminationStatus == 0
+
+                if exportSucceeded && compressTextures {
+                    let texturesDir = request.outputDirURL.appendingPathComponent("Textures")
+                    if FileManager.default.fileExists(atPath: texturesDir.path),
+                       let texbakeScript = findTexbakeScript()
+                    {
+                        DispatchQueue.main.async { showStatus("Baking textures (ASTC)...") }
+                        let bakeResult = runTexbakeStep(script: texbakeScript, arguments: ["--dir", texturesDir.path], astcencBin: astcencBin)
+                        DispatchQueue.main.async {
+                            if !bakeResult.stdout.isEmpty { Logger.log(message: bakeResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !bakeResult.stderr.isEmpty { Logger.log(message: bakeResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+
+                        DispatchQueue.main.async { showStatus("Patching texture references...") }
+                        let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputDirURL.path], astcencBin: astcencBin)
+                        DispatchQueue.main.async {
+                            if !patchResult.stdout.isEmpty { Logger.log(message: patchResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !patchResult.stderr.isEmpty { Logger.log(message: patchResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if bakeResult.status != 0 || patchResult.status != 0 {
+                                Logger.log(message: "⚠️ ASTC compression had errors — tiles imported without compressed textures")
+                            }
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            Logger.log(message: "⚠️ ASTC skipped — texbake.py not found or no Textures folder present")
+                        }
+                    }
+                }
+
+                DispatchQueue.main.async {
                     isExportingTilesAsset = false
                     pendingTilesExport = nil
-
-                    if process.terminationStatus == 0 {
+                    if exportSucceeded {
                         loadAssets()
                         showStatus("Exported tiles for \(request.sourceURL.deletingPathExtension().lastPathComponent)")
                     } else {
                         showStatus("Tiles export failed for \(request.sourceURL.lastPathComponent)", isError: true)
                     }
-
                     presentNextTilesExportIfNeeded()
                 }
             } catch {
