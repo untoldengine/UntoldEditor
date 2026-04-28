@@ -327,6 +327,28 @@ struct SSAOEditorView: View {
 }
 
 struct PostProcessingEditorView: View {
+    private enum PresetOption: String, CaseIterable, Identifiable {
+        case neutral = "Neutral"
+        case cinematic = "Cinematic"
+        case highContrast = "High Contrast"
+        case softAO = "Soft AO"
+        case archviz = "Archviz"
+
+        var id: String { rawValue }
+
+        var enginePreset: PostFXPreset {
+            switch self {
+            case .neutral: return .neutral
+            case .cinematic: return .cinematic
+            case .highContrast: return .highContrast
+            case .softAO: return .softAO
+            case .archviz: return .archviz
+            }
+        }
+    }
+
+    @State private var showPresets = true
+    @State private var selectedPreset: PresetOption = .neutral
     @State private var showToneMapping = false
     @State private var showWhiteBalance = false
     @State private var showColorGrading = false
@@ -340,6 +362,21 @@ struct PostProcessingEditorView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                DisclosureGroup("Presets", isExpanded: $showPresets) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Preset", selection: $selectedPreset) {
+                            ForEach(PresetOption.allCases) { preset in
+                                Text(preset.rawValue).tag(preset)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: selectedPreset) { _, newValue in
+                            PostFX.apply(newValue.enginePreset)
+                        }
+                    }
+                    .padding()
+                }
+
                 DisclosureGroup("Depth of Field", isExpanded: $showDoF) {
                     DepthOfFieldEditorView()
                 }
