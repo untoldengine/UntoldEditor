@@ -334,7 +334,9 @@ struct PostProcessingEditorView: View {
         case softAO = "Soft AO"
         case archviz = "Archviz"
 
-        var id: String { rawValue }
+        var id: String {
+            rawValue
+        }
 
         var enginePreset: PostFXPreset {
             switch self {

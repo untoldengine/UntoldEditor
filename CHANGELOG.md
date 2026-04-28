@@ -1,4 +1,18 @@
 # Changelog
+## v0.12.8 - 2026-04-28
+### 🐞 Fixes
+- [Patch] Updated script to follow engine dependency tag version (761dc47…)
+- [Patch] make app bundle script copy 'usdz-untold' script (0df0207…)
+- [Patch] added support to export tile scenes (943c3e8…)
+- [Patch] Added support for astc and lz4 optimization. (8a403a3…)
+- [Patch] Added post fx preset to Effects View (7beb4ff…)
+## v0.12.8 - 2026-04-28
+### 🐞 Fixes
+- [Patch] Updated script to follow engine dependency tag version (761dc47…)
+- [Patch] make app bundle script copy 'usdz-untold' script (0df0207…)
+- [Patch] added support to export tile scenes (943c3e8…)
+- [Patch] Added support for astc and lz4 optimization. (8a403a3…)
+- [Patch] Added post fx preset to Effects View (7beb4ff…)
 ## v0.12.7 - 2026-04-25
 ### 🐞 Fixes
 - [Patch] AssetBrowserView now accepts untold files (f972fa2…)

@@ -13,7 +13,7 @@
 #  Optional Flags:
 #    --with-v   : Print version with 'v' prefix (e.g. v0.12.7)
 #    --cliff    : Run git-cliff to prepend a changelog section,
-#                 then update version strings in main.swift
+#                 then update version strings in main.swift and ToolbarView.swift
 #    --docs     : Run Docusaurus docs:version command to
 #                 snapshot documentation for the new release
 #
@@ -78,6 +78,11 @@ if [[ "${DO_CLIFF}" == "true" ]]; then
   sed -i '' 's/window\.title = "Untold Engine Editor v[^"]*"/window.title = "Untold Engine Editor v'"${NEXT}"'"/' \
     Sources/UntoldEditor/main.swift
   echo "Updated version to ${NEXT} in UntoldEditor/main.swift."
+
+  # Update editorVersionLabel in ToolbarView.swift
+  sed -i '' 's/private let editorVersionLabel = "v[^"]*"/private let editorVersionLabel = "v'"${NEXT}"'"/' \
+    Sources/UntoldEditor/Editor/ToolbarView.swift
+  echo "Updated editorVersionLabel to v${NEXT} in ToolbarView.swift."
 fi
 
 # Optionally run Docusaurus docs:version

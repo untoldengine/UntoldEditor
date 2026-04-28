@@ -198,9 +198,9 @@ func findUntoldEngineScript(named name: String, fileManager fm: FileManager = .d
         // SPM CLI build: executable is at .build/<arch>/<config>/<name>
         // Three levels up lands at .build/
         let spmBuildDir = execURL
-            .deletingLastPathComponent()  // <config>/
-            .deletingLastPathComponent()  // <arch>/
-            .deletingLastPathComponent()  // .build/
+            .deletingLastPathComponent() // <config>/
+            .deletingLastPathComponent() // <arch>/
+            .deletingLastPathComponent() // .build/
         scriptsDirCandidates.append(
             spmBuildDir.appendingPathComponent("checkouts/UntoldEngine/scripts").standardizedFileURL
         )
@@ -208,10 +208,10 @@ func findUntoldEngineScript(named name: String, fileManager fm: FileManager = .d
         // Xcode build: executable is at DerivedData/<hash>/Build/Products/<config>/<name>
         // Four levels up lands at DerivedData/<hash>/
         let derivedDataDir = execURL
-            .deletingLastPathComponent()  // <config>/
-            .deletingLastPathComponent()  // Products/
-            .deletingLastPathComponent()  // Build/
-            .deletingLastPathComponent()  // DerivedData/<hash>/
+            .deletingLastPathComponent() // <config>/
+            .deletingLastPathComponent() // Products/
+            .deletingLastPathComponent() // Build/
+            .deletingLastPathComponent() // DerivedData/<hash>/
         scriptsDirCandidates.append(
             derivedDataDir.appendingPathComponent("SourcePackages/checkouts/UntoldEngine/scripts").standardizedFileURL
         )
@@ -248,7 +248,8 @@ func runTexbakeStep(script: URL, arguments: [String], astcencBin: String = "") -
     FileManager.default.createFile(atPath: outURL.path, contents: nil)
     FileManager.default.createFile(atPath: errURL.path, contents: nil)
     guard let outHandle = try? FileHandle(forWritingTo: outURL),
-          let errHandle = try? FileHandle(forWritingTo: errURL) else {
+          let errHandle = try? FileHandle(forWritingTo: errURL)
+    else {
         return (-1, "", "Failed to open log file handles")
     }
     defer {
@@ -989,7 +990,7 @@ struct AssetBrowserView: View {
 
                 let exportSucceeded = process.terminationStatus == 0
 
-                if exportSucceeded && compressTextures {
+                if exportSucceeded, compressTextures {
                     let texturesDir = request.destinationFolder.appendingPathComponent("Textures")
                     if FileManager.default.fileExists(atPath: texturesDir.path),
                        let texbakeScript = findTexbakeScript()
@@ -1282,7 +1283,7 @@ struct AssetBrowserView: View {
 
                 let exportSucceeded = process.terminationStatus == 0
 
-                if exportSucceeded && compressTextures {
+                if exportSucceeded, compressTextures {
                     let texturesDir = request.outputDirURL.appendingPathComponent("Textures")
                     if FileManager.default.fileExists(atPath: texturesDir.path),
                        let texbakeScript = findTexbakeScript()
