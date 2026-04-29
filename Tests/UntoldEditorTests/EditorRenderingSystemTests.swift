@@ -18,6 +18,7 @@ final class EditorRenderingSystemTests: XCTestCase {
     private var originalRenderEnvironment: Bool!
     private var originalVisualDebug: Bool!
     private var originalGameMode: Bool!
+    private var originalFXAAEnabled: Bool!
 
     override func setUp() {
         super.setUp()
@@ -26,6 +27,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         originalRenderEnvironment = renderEnvironment
         originalVisualDebug = visualDebug
         originalGameMode = gameMode
+        originalFXAAEnabled = FXAAParams.shared.enabled
 
         // Set up Metal device
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -41,6 +43,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         renderEnvironment = false
         visualDebug = false
         gameMode = false
+        FXAAParams.shared.enabled = false
     }
 
     override func tearDown() {
@@ -48,6 +51,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         renderEnvironment = originalRenderEnvironment
         visualDebug = originalVisualDebug
         gameMode = originalGameMode
+        FXAAParams.shared.enabled = originalFXAAEnabled
 
         super.tearDown()
     }

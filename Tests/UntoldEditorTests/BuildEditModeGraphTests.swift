@@ -50,10 +50,14 @@ final class BuildEditModeGraphTests: XCTestCase {
 
     // MARK: - Tests
 
-    func test_buildEditModeGraph_withEnvironmentRoot() {
-        let original = renderEnvironment
+    func test_buildEditModeGraph_withEnvironmentRoot_fxaaDisabled() {
+        let originalEnv = renderEnvironment
         renderEnvironment = true
-        defer { renderEnvironment = original }
+        defer { renderEnvironment = originalEnv }
+
+        let originalFXAA = FXAAParams.shared.enabled
+        FXAAParams.shared.enabled = false
+        defer { FXAAParams.shared.enabled = originalFXAA }
 
         let (graph, finalID) = buildEditModeGraph()
 
@@ -80,14 +84,55 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "look", ["precomp"])
         assertDeps(graph, "outputTransform", ["look"])
 
-        // Sanity: no cycles
         assertNoCycles(graph)
     }
 
-    func test_buildEditModeGraph_withGridRoot() {
-        let original = renderEnvironment
+    func test_buildEditModeGraph_withEnvironmentRoot_fxaaEnabled() {
+        let originalEnv = renderEnvironment
+        renderEnvironment = true
+        defer { renderEnvironment = originalEnv }
+
+        let originalFXAA = FXAAParams.shared.enabled
+        FXAAParams.shared.enabled = true
+        defer { FXAAParams.shared.enabled = originalFXAA }
+
+        let (graph, finalID) = buildEditModeGraph()
+
+        XCTAssertEqual(finalID, "outputTransform")
+
+        let expectedIDs: Set = [
+            "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
+            "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "fxaa", "outputTransform",
+        ]
+        XCTAssertEqual(Set(graph.keys), expectedIDs)
+
+        assertDeps(graph, "environment", [])
+        assertDeps(graph, "shadow", ["environment"])
+        assertDeps(graph, "batchedShadow", ["shadow"])
+        assertDeps(graph, "model", ["batchedShadow"])
+        assertDeps(graph, "batchedModel", ["model"])
+        assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "transparency", ["lightPass"])
+        assertDeps(graph, "outline", ["batchedModel"])
+        assertDeps(graph, "lightVisualPass", ["outline"])
+        assertDeps(graph, "gizmo", ["lightVisualPass"])
+        assertDeps(graph, "gaussian", ["model"])
+        assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
+        assertDeps(graph, "look", ["precomp"])
+        assertDeps(graph, "fxaa", ["look"])
+        assertDeps(graph, "outputTransform", ["fxaa"])
+
+        assertNoCycles(graph)
+    }
+
+    func test_buildEditModeGraph_withGridRoot_fxaaDisabled() {
+        let originalEnv = renderEnvironment
         renderEnvironment = false
-        defer { renderEnvironment = original }
+        defer { renderEnvironment = originalEnv }
+
+        let originalFXAA = FXAAParams.shared.enabled
+        FXAAParams.shared.enabled = false
+        defer { FXAAParams.shared.enabled = originalFXAA }
 
         let (graph, finalID) = buildEditModeGraph()
 
@@ -113,6 +158,44 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
         assertDeps(graph, "look", ["precomp"])
         assertDeps(graph, "outputTransform", ["look"])
+
+        assertNoCycles(graph)
+    }
+
+    func test_buildEditModeGraph_withGridRoot_fxaaEnabled() {
+        let originalEnv = renderEnvironment
+        renderEnvironment = false
+        defer { renderEnvironment = originalEnv }
+
+        let originalFXAA = FXAAParams.shared.enabled
+        FXAAParams.shared.enabled = true
+        defer { FXAAParams.shared.enabled = originalFXAA }
+
+        let (graph, finalID) = buildEditModeGraph()
+
+        XCTAssertEqual(finalID, "outputTransform")
+
+        let expectedIDs: Set = [
+            "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
+            "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "fxaa", "outputTransform",
+        ]
+        XCTAssertEqual(Set(graph.keys), expectedIDs)
+
+        assertDeps(graph, "grid", [])
+        assertDeps(graph, "shadow", ["grid"])
+        assertDeps(graph, "batchedShadow", ["shadow"])
+        assertDeps(graph, "model", ["batchedShadow"])
+        assertDeps(graph, "batchedModel", ["model"])
+        assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "transparency", ["lightPass"])
+        assertDeps(graph, "outline", ["batchedModel"])
+        assertDeps(graph, "lightVisualPass", ["outline"])
+        assertDeps(graph, "gizmo", ["lightVisualPass"])
+        assertDeps(graph, "gaussian", ["model"])
+        assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
+        assertDeps(graph, "look", ["precomp"])
+        assertDeps(graph, "fxaa", ["look"])
+        assertDeps(graph, "outputTransform", ["fxaa"])
 
         assertNoCycles(graph)
     }
