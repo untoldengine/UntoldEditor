@@ -145,9 +145,22 @@ func buildEditModeGraph() -> RenderGraphResult {
     )
     graph[lookPass.id] = lookPass
 
+    let outputDependency: String
+    if FXAAParams.shared.enabled {
+        let fxaaPass = RenderPass(
+            id: "fxaa",
+            dependencies: [lookPass.id],
+            execute: fxaaRenderPass
+        )
+        graph[fxaaPass.id] = fxaaPass
+        outputDependency = fxaaPass.id
+    } else {
+        outputDependency = lookPass.id
+    }
+
     let outputPass = RenderPass(
         id: "outputTransform",
-        dependencies: [lookPass.id],
+        dependencies: [outputDependency],
         execute: outputTransformRenderPass
     )
     graph[outputPass.id] = outputPass

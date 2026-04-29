@@ -1,4 +1,7 @@
 # Changelog
+## v0.12.10 - 2026-04-29
+### 🐞 Fixes
+- [Patch] Fixed bundle script to include required helper scripts (8bec369…)
 ## v0.12.8 - 2026-04-28
 ### 🐞 Fixes
 - [Patch] Updated script to follow engine dependency tag version (761dc47…)
