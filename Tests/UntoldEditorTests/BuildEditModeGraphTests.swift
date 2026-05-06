@@ -65,7 +65,7 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         let expectedIDs: Set = [
             "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
-            "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
+            "transparency", "spatialDebug", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
@@ -76,11 +76,12 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "batchedModel", ["model"])
         assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
         assertDeps(graph, "transparency", ["lightPass"])
+        assertDeps(graph, "spatialDebug", ["transparency"])
         assertDeps(graph, "outline", ["batchedModel"])
         assertDeps(graph, "lightVisualPass", ["outline"])
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
-        assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
+        assertDeps(graph, "precomp", ["model", "gizmo", "spatialDebug", "gaussian"])
         assertDeps(graph, "look", ["precomp"])
         assertDeps(graph, "outputTransform", ["look"])
 
@@ -102,7 +103,7 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         let expectedIDs: Set = [
             "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
-            "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "fxaa", "outputTransform",
+            "transparency", "spatialDebug", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "fxaa", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
@@ -113,11 +114,12 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "batchedModel", ["model"])
         assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
         assertDeps(graph, "transparency", ["lightPass"])
+        assertDeps(graph, "spatialDebug", ["transparency"])
         assertDeps(graph, "outline", ["batchedModel"])
         assertDeps(graph, "lightVisualPass", ["outline"])
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
-        assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
+        assertDeps(graph, "precomp", ["model", "gizmo", "spatialDebug", "gaussian"])
         assertDeps(graph, "look", ["precomp"])
         assertDeps(graph, "fxaa", ["look"])
         assertDeps(graph, "outputTransform", ["fxaa"])
@@ -140,7 +142,7 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         let expectedIDs: Set = [
             "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
-            "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
+            "transparency", "spatialDebug", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
@@ -151,11 +153,12 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "batchedModel", ["model"])
         assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
         assertDeps(graph, "transparency", ["lightPass"])
+        assertDeps(graph, "spatialDebug", ["transparency"])
         assertDeps(graph, "outline", ["batchedModel"])
         assertDeps(graph, "lightVisualPass", ["outline"])
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
-        assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
+        assertDeps(graph, "precomp", ["model", "gizmo", "spatialDebug", "gaussian"])
         assertDeps(graph, "look", ["precomp"])
         assertDeps(graph, "outputTransform", ["look"])
 
@@ -177,7 +180,7 @@ final class BuildEditModeGraphTests: XCTestCase {
 
         let expectedIDs: Set = [
             "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
-            "transparency", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "fxaa", "outputTransform",
+            "transparency", "spatialDebug", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "fxaa", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
 
@@ -188,11 +191,12 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "batchedModel", ["model"])
         assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
         assertDeps(graph, "transparency", ["lightPass"])
+        assertDeps(graph, "spatialDebug", ["transparency"])
         assertDeps(graph, "outline", ["batchedModel"])
         assertDeps(graph, "lightVisualPass", ["outline"])
         assertDeps(graph, "gizmo", ["lightVisualPass"])
         assertDeps(graph, "gaussian", ["model"])
-        assertDeps(graph, "precomp", ["model", "gizmo", "transparency", "gaussian"])
+        assertDeps(graph, "precomp", ["model", "gizmo", "spatialDebug", "gaussian"])
         assertDeps(graph, "look", ["precomp"])
         assertDeps(graph, "fxaa", ["look"])
         assertDeps(graph, "outputTransform", ["fxaa"])

@@ -94,6 +94,9 @@ public struct EditorView: View {
                     VStack(spacing: 0) {
                         EditorSceneView(renderer: renderer!)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .overlay(alignment: .topLeading) {
+                                EngineStatsOverlayView()
+                            }
                         TransformManipulationToolbar(controller: editorController!)
                             .frame(height: 40)
                         TabView {

@@ -14,6 +14,7 @@
     struct ToolbarView: View {
         @ObservedObject var selectionManager: SelectionManager
         @ObservedObject var editorBasePath = EditorAssetBasePath.shared
+        @ObservedObject private var statsStore = EditorEngineStatsStore.shared
         private let editorVersionLabel = "v0.12.10"
 
         var onSave: () -> Void
@@ -149,6 +150,8 @@
                 .scaleEffect(0.85)
                 .frame(height: 20)
 
+                Divider().frame(height: 24)
+
                 Menu {
                     Button("Save Scene", systemImage: "square.and.arrow.down.on.square", action: onSave)
                     Button("Save Scene As…", systemImage: "square.and.arrow.down", action: onSaveAs)
@@ -165,6 +168,42 @@
                 }
                 .menuStyle(.borderlessButton)
                 .focusable(false)
+
+                Divider().frame(height: 24)
+
+                Toggle(isOn: Binding(
+                    get: { statsStore.overlayMode != .off },
+                    set: { enabled in
+                        if enabled {
+                            statsStore.setOverlaySimplifiedEnabled(true)
+                        } else {
+                            statsStore.setOverlaySimplifiedEnabled(false)
+                            statsStore.setOverlayAdvancedEnabled(false)
+                        }
+                    }
+                )) {
+                    Text("FPS")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .toggleStyle(.switch)
+                .scaleEffect(0.85)
+                .frame(height: 20)
+
+                Toggle(isOn: Binding(
+                    get: { statsStore.overlayMode == .advanced },
+                    set: { enabled in
+                        if enabled {
+                            statsStore.setOverlayAdvancedEnabled(true)
+                        } else if statsStore.overlayMode != .off {
+                            statsStore.setOverlaySimplifiedEnabled(true)
+                        }
+                    }
+                )) {
+                    Text("FPS Advanced")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .toggleStyle(.checkbox)
+                .disabled(statsStore.overlayMode == .off)
             }
         }
 

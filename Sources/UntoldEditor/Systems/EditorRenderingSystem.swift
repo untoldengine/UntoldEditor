@@ -7,6 +7,7 @@
 //  See the LICENSE file or <https://www.gnu.org/licenses/> for details.
 //
 import MetalKit
+import QuartzCore
 import UntoldEngine
 
 func EditorUpdateRenderingSystem(in view: MTKView) {
@@ -14,11 +15,31 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
     commandBufferSemaphore.wait()
 
     if let commandBuffer = renderInfo.commandQueue.makeCommandBuffer() {
+        #if ENGINE_STATS_ENABLED
+            let renderTotalStart = CACurrentMediaTime()
+        #endif
         renderInfo.lastCommandBuffer = commandBuffer
+
+        #if ENGINE_STATS_ENABLED
+            let renderPrepStart = CACurrentMediaTime()
+            let cullingStart = CACurrentMediaTime()
+        #endif
         performFrustumCulling(commandBuffer: commandBuffer)
+        #if ENGINE_STATS_ENABLED
+            let cullingMs = (CACurrentMediaTime() - cullingStart) * 1000.0
+            EngineStatsMonitor.shared.update { snapshot in
+                snapshot.timing.cullingMs += cullingMs
+            }
+        #endif
 
         executeGaussianDepth(commandBuffer)
         executeBitonicSort(commandBuffer)
+        #if ENGINE_STATS_ENABLED
+            let renderPrepMs = (CACurrentMediaTime() - renderPrepStart) * 1000.0
+            EngineStatsMonitor.shared.update { snapshot in
+                snapshot.timing.renderPrepMs += renderPrepMs
+            }
+        #endif
         if let renderPassDescriptor = view.currentRenderPassDescriptor {
             renderInfo.renderPassDescriptor = renderPassDescriptor
 
@@ -45,14 +66,30 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             let sortedPasses = try! topologicalSortGraph(graph: graph)
 
             // execute it
+            #if ENGINE_STATS_ENABLED
+                let encodeStart = CACurrentMediaTime()
+            #endif
             executeGraph(graph, sortedPasses, commandBuffer)
+            // Keep editor in sync with runtime temporal HZB:
+            // render depth this frame -> build HZB -> consume next frame during culling
+            buildHZBDepthPyramid(commandBuffer)
+            #if ENGINE_STATS_ENABLED
+                let encodeMs = (CACurrentMediaTime() - encodeStart) * 1000.0
+                EngineStatsMonitor.shared.update { snapshot in
+                    snapshot.timing.encodeMs += encodeMs
+                }
+            #endif
         }
 
         if let drawable = view.currentDrawable {
             commandBuffer.present(drawable)
         }
 
-        commandBuffer.addCompletedHandler { _ in
+        commandBuffer.addCompletedHandler { cb in
+            #if ENGINE_STATS_ENABLED
+                let gpuExecutionMs = (cb.gpuEndTime - cb.gpuStartTime) * 1000.0
+                EngineStatsMonitor.shared.recordGPUCompletion(executionMs: gpuExecutionMs)
+            #endif
             // Release the in-flight slot
             commandBufferSemaphore.signal()
             DispatchQueue.main.async {
@@ -61,7 +98,18 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             }
         }
 
+        #if ENGINE_STATS_ENABLED
+            let submitStart = CACurrentMediaTime()
+        #endif
         commandBuffer.commit()
+        #if ENGINE_STATS_ENABLED
+            let submitMs = (CACurrentMediaTime() - submitStart) * 1000.0
+            let renderTotalMs = (CACurrentMediaTime() - renderTotalStart) * 1000.0
+            EngineStatsMonitor.shared.update { snapshot in
+                snapshot.timing.submitMs += submitMs
+                snapshot.timing.renderTotalMs += renderTotalMs
+            }
+        #endif
     } else {
         // Failed to create command buffer - release slot
         commandBufferSemaphore.signal()
@@ -116,6 +164,14 @@ func buildEditModeGraph() -> RenderGraphResult {
     )
     graph[transparencyPass.id] = transparencyPass
 
+    // Spatial debug overlays are rendered on top of lit scene color.
+    let spatialDebugPass = RenderPass(
+        id: "spatialDebug",
+        dependencies: [transparencyPass.id],
+        execute: RenderPasses.spatialDebugBoundsExecution
+    )
+    graph[spatialDebugPass.id] = spatialDebugPass
+
     let highlightPass = RenderPass(
         id: "outline", dependencies: [batchedModelPass.id], execute: RenderPasses.highlightExecution
     )
@@ -134,7 +190,7 @@ func buildEditModeGraph() -> RenderGraphResult {
     graph[gaussianPass.id] = gaussianPass
 
     let preCompPass = RenderPass(
-        id: "precomp", dependencies: [modelPass.id, gizmoPass.id, transparencyPass.id, gaussianPass.id], execute: RenderPasses.preCompositeExecution
+        id: "precomp", dependencies: [modelPass.id, gizmoPass.id, spatialDebugPass.id, gaussianPass.id], execute: RenderPasses.preCompositeExecution
     )
     graph[preCompPass.id] = preCompPass
 

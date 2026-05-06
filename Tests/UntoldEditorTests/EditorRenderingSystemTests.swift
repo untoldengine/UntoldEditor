@@ -78,6 +78,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNotNil(graph["outline"], "Highlight/outline pass should exist")
         XCTAssertNotNil(graph["lightVisualPass"], "Light visual pass should exist")
         XCTAssertNotNil(graph["gizmo"], "Gizmo pass should exist")
+        XCTAssertNotNil(graph["spatialDebug"], "Spatial debug pass should exist")
         XCTAssertNotNil(graph["precomp"], "Pre-composite pass should exist")
         XCTAssertNotNil(graph["look"], "Look pass should exist")
         XCTAssertNotNil(graph["outputTransform"], "Output transform pass should exist")
@@ -106,6 +107,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNotNil(graph["outline"], "Highlight/outline pass should exist")
         XCTAssertNotNil(graph["lightVisualPass"], "Light visual pass should exist")
         XCTAssertNotNil(graph["gizmo"], "Gizmo pass should exist")
+        XCTAssertNotNil(graph["spatialDebug"], "Spatial debug pass should exist")
         XCTAssertNotNil(graph["precomp"], "Pre-composite pass should exist")
         XCTAssertNotNil(graph["look"], "Look pass should exist")
         XCTAssertNotNil(graph["outputTransform"], "Output transform pass should exist")
@@ -134,11 +136,12 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertEqual(graph["lightVisualPass"]?.dependencies, ["outline"], "Light visual pass should depend on outline")
         XCTAssertEqual(graph["gizmo"]?.dependencies, ["lightVisualPass"], "Gizmo should depend on light visual pass")
         XCTAssertEqual(graph["transparency"]?.dependencies, ["lightPass"], "Transparency should depend on light pass")
+        XCTAssertEqual(graph["spatialDebug"]?.dependencies, ["transparency"], "Spatial debug should depend on transparency")
 
         let precompDeps = graph["precomp"]?.dependencies ?? []
         XCTAssertTrue(precompDeps.contains("model"), "Precomp should depend on model")
         XCTAssertTrue(precompDeps.contains("gizmo"), "Precomp should depend on gizmo")
-        XCTAssertTrue(precompDeps.contains("transparency"), "Precomp should depend on transparency")
+        XCTAssertTrue(precompDeps.contains("spatialDebug"), "Precomp should depend on spatialDebug")
 
         XCTAssertEqual(graph["look"]?.dependencies, ["precomp"], "Look should depend on precomp")
         XCTAssertEqual(graph["outputTransform"]?.dependencies, ["look"], "Output transform should depend on look")
@@ -191,6 +194,8 @@ final class EditorRenderingSystemTests: XCTestCase {
             ("model", "outline"),
             ("outline", "lightVisualPass"),
             ("lightVisualPass", "gizmo"),
+            ("transparency", "spatialDebug"),
+            ("spatialDebug", "precomp"),
             ("gizmo", "precomp"),
             ("lightPass", "precomp"),
             ("precomp", "look"),
@@ -291,7 +296,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertEqual(precompPass.dependencies.count, 4, "Precomp should have exactly 4 dependencies")
         XCTAssertTrue(precompPass.dependencies.contains("model"), "Precomp should depend on model")
         XCTAssertTrue(precompPass.dependencies.contains("gizmo"), "Precomp should depend on gizmo")
-        XCTAssertTrue(precompPass.dependencies.contains("transparency"), "Precomp should depend on transparency")
+        XCTAssertTrue(precompPass.dependencies.contains("spatialDebug"), "Precomp should depend on spatialDebug")
         XCTAssertTrue(precompPass.dependencies.contains("gaussian"), "Precomp should depend on gaussian")
     }
 
