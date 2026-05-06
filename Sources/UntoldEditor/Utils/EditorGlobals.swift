@@ -26,10 +26,6 @@ let gizmoDesiredScreenSize: Float = 75.0 // pixels
 
 var spawnDistance: Float = 2.0
 
-var accelStructResources = AccelStructResources()
-
-var rayModelIntersectPipeline = ComputePipeline()
-
 /// Visual Debugger
 enum DebugSelection: Int {
     case normalOutput

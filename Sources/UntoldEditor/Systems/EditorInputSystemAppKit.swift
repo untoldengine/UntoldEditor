@@ -476,62 +476,12 @@
             guard let hit = pickEntity(
                 rayOrigin: rayContext.rayOrigin,
                 rayDirection: rayContext.rayDirection,
-                options: ScenePickOptions(isGizmoActive: gizmoActive)
+                options: ScenePickOptions(isGizmoActive: gizmoActive, backend: .octreeGPUPreferred)
             ) else {
                 return (.invalid, false)
             }
 
             return (hit.entityId, true)
-        }
-
-        /// The gpu ray cast is not working for large scenes. TODO: fix getRaycasterdEntityGPU
-        internal func getRaycastedEntityGPU(currentLocation: NSPoint, view: NSView) -> (entityId: EntityID, hit: Bool) {
-            var hitEntityId: EntityID = .invalid
-            var hitEntity = false
-
-            guard let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera()) else {
-                handleError(.noActiveCamera)
-                return (hitEntityId, hitEntity)
-            }
-
-            let currentCGPoint = simd_float2(Float(currentLocation.x), Float(currentLocation.y))
-
-            let rayDirection: simd_float3 = rayDirectionInWorldSpace(uMouseLocation: currentCGPoint, uViewPortDim: simd_float2(Float(view.bounds.width), Float(view.bounds.height)), uPerspectiveSpace: renderInfo.perspectiveSpace, uViewSpace: cameraComponent.viewSpace)
-
-            if getAllGameEntitiesWithMeshes().count == 0 {
-                return (hitEntityId, hitEntity)
-            }
-
-            if let rtxCommandBuffer = renderInfo.commandQueue.makeCommandBuffer() {
-                executeRayVsModelHit(rtxCommandBuffer, cameraComponent.localPosition, rayDirection)
-
-                rtxCommandBuffer.addCompletedHandler { commandBuffer in
-                    if let error = commandBuffer.error {
-                        // Handle error if any
-                        print("Command buffer completed with error: \(error)")
-                    } else {
-                        if let data = bufferResources.rayModelInstanceBuffer?.contents().assumingMemoryBound(to: Int32.self) {
-                            let value = data.pointee
-
-                            if value != -1 {
-                                hitEntityId = accelStructResources.entityIDIndex[Int(value)]
-                                hitEntity = true
-                            }
-                        }
-                    }
-
-                    cleanUpAccelStructures()
-                }
-
-                rtxCommandBuffer.commit()
-                rtxCommandBuffer.waitUntilCompleted()
-            }
-
-            if hitEntity {
-                return (hitEntityId, hitEntity)
-            }
-
-            return (hitEntityId, hitEntity)
         }
     }
 #endif

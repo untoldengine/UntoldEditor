@@ -26,9 +26,6 @@ struct EditorSceneView: View, UntoldRendererDelegate {
 
                 CameraSystem.shared.activeCamera = sceneCamera
 
-                // Initialize ray vs model pipeline
-                initRayPickerCompute()
-
                 // Load Debug meshes and other editor / debug resources
                 loadLightDebugMeshes()
             }
