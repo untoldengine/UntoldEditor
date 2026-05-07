@@ -45,7 +45,9 @@ struct EditorNameChangeCommand: EditorUndoCommand {
     let oldName: String
     let newName: String
 
-    var name: String { "Rename Entity" }
+    var name: String {
+        "Rename Entity"
+    }
 
     func undo() {
         setEntityName(entityId: entityId, name: oldName)
@@ -61,7 +63,9 @@ struct EditorTransformChangeCommand: EditorUndoCommand {
     let before: EditorTransformSnapshot
     let after: EditorTransformSnapshot
 
-    var name: String { "Transform Entity" }
+    var name: String {
+        "Transform Entity"
+    }
 
     func undo() {
         before.apply(to: entityId)

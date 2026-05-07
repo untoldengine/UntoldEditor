@@ -102,7 +102,6 @@ struct EngineStatsOverlayView: View {
         }
     }
 
-    @ViewBuilder
     private func simplifiedOverlay(_ snapshot: EngineStatsSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Engine Stats")
@@ -127,7 +126,6 @@ struct EngineStatsOverlayView: View {
         .padding(12)
     }
 
-    @ViewBuilder
     private func advancedOverlay(_ snapshot: EngineStatsSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Engine Stats (Advanced)")
