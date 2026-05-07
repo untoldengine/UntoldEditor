@@ -360,6 +360,31 @@ struct InspectorView: View {
                                 }
                                 Divider()
                             }
+
+                            let addableComponents = availableComponentsWithFlags()
+                            if addableComponents.isEmpty == false {
+                                Menu {
+                                    ForEach(addableComponents, id: \.id) { component in
+                                        Button(component.name) {
+                                            addComponentToEntity_Editor(componentType: component.type)
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "plus.circle.fill")
+                                        Text("Add Component")
+                                            .fontWeight(.regular)
+                                    }
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 10)
+                                    .background(Color.accentColor)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(6)
+                                }
+                                .menuStyle(.borderlessButton)
+                                .padding(.top, 8)
+                            }
+
                         } else {
                             Text("No entity selected").foregroundColor(.gray)
                         }
@@ -382,7 +407,11 @@ struct InspectorView: View {
 
         let key = ObjectIdentifier(componentType)
 
-        if let component = availableComponents_Editor.first(where: { ObjectIdentifier($0.type) == key }) {
+        var allComponents = availableComponents_Editor
+        if EditorFeatureFlags.enableScriptComponent, EditorAuthoringMode.sceneCompositionOnly == false {
+            allComponents.append(scriptComponent_Editor)
+        }
+        if let component = allComponents.first(where: { ObjectIdentifier($0.type) == key }) {
             // Ensure the entity has an entry in the dictionary
             if editorComponentsState.components[entityId] == nil {
                 editorComponentsState.components[entityId] = [:]

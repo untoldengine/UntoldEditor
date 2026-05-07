@@ -318,6 +318,42 @@ enum AssetCategory: String, CaseIterable {
     }
 }
 
+private struct RemoteStreamImportSheet: View {
+    @Binding var urlString: String
+    var onImport: () -> Void
+    var onCancel: () -> Void
+
+    @FocusState private var isURLFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Import Remote Stream")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Manifest URL")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                TextField("https://cdn.example.com/dungeon/dungeon.json", text: $urlString)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .focused($isURLFocused)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.bordered)
+                Button("Import", action: onImport)
+                    .disabled(urlString.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
+        .onAppear { isURLFocused = true }
+    }
+}
+
 struct AssetBrowserView: View {
     @Binding var assets: [String: [Asset]]
     @Binding var selectedAsset: Asset?
@@ -337,6 +373,8 @@ struct AssetBrowserView: View {
     @State private var statusIsError = false
     @State private var targetEntityName: String = "None"
     @State private var showImportMenu = false
+    @State private var showRemoteStreamSheet = false
+    @State private var remoteStreamURLString = ""
     @State private var pendingRuntimeExport: RuntimeExportRequest?
     @State private var runtimeExportQueue: [RuntimeExportRequest] = []
     @State private var isExportingRuntimeAsset = false
@@ -381,6 +419,13 @@ struct AssetBrowserView: View {
                                     Image(systemName: category.iconName)
                                     Text("Import \(category.displayName)")
                                 }
+                            }
+                        }
+                        Divider()
+                        Button(action: { showRemoteStreamSheet = true }) {
+                            HStack {
+                                Image(systemName: "globe")
+                                Text("Import Remote Stream")
                             }
                         }
                     } label: {
@@ -617,6 +662,15 @@ struct AssetBrowserView: View {
         }
         .sheet(item: $pendingTilesExport) { request in
             tilesExportSheet(for: request)
+        }
+        .sheet(isPresented: $showRemoteStreamSheet) {
+            RemoteStreamImportSheet(urlString: $remoteStreamURLString) {
+                saveRemoteStream()
+                showRemoteStreamSheet = false
+            } onCancel: {
+                remoteStreamURLString = ""
+                showRemoteStreamSheet = false
+            }
         }
         .overlay(alignment: .bottom) {
             if let statusMessage {
@@ -1406,6 +1460,11 @@ struct AssetBrowserView: View {
                                                             category: category.rawValue,
                                                             path: item,
                                                             isFolder: false))
+                            } else if item.pathExtension.lowercased() == "remotestream" {
+                                categoryAssets.append(Asset(name: item.deletingPathExtension().lastPathComponent,
+                                                            category: category.rawValue,
+                                                            path: item,
+                                                            isFolder: false))
                             }
                         } else if category == .scenes {
                             // For Scenes, allow files directly in the Scenes folder
@@ -1462,9 +1521,10 @@ struct AssetBrowserView: View {
     }
 
     private func assetRow(_ asset: Asset) -> some View {
-        HStack {
-            Image(systemName: asset.isFolder ? "folder.fill" : "cube.fill")
-                .foregroundColor(.gray)
+        let isRemote = asset.path.pathExtension.lowercased() == "remotestream"
+        return HStack {
+            Image(systemName: asset.isFolder ? "folder.fill" : isRemote ? "globe" : "cube.fill")
+                .foregroundColor(isRemote ? .blue : .gray)
             Text(asset.name)
                 .font(.system(size: 14, weight: .regular, design: .monospaced))
             Spacer()
@@ -1486,7 +1546,7 @@ struct AssetBrowserView: View {
                     if isDir.boolValue {
                         return Asset(name: item.lastPathComponent, category: selectedCategory ?? "", path: item, isFolder: true)
                     } else {
-                        let allowedExtensions: Set<String> = [runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "tif", "tiff", "ply", "json", "uscript"]
+                        let allowedExtensions: Set<String> = [runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "tif", "tiff", "ply", "json", "uscript", "remotestream"]
                         guard allowedExtensions.contains(item.pathExtension.lowercased()) else { return nil }
 
                         return Asset(name: item.lastPathComponent,
@@ -1635,9 +1695,77 @@ struct AssetBrowserView: View {
         showStatus("Loading stream model: \(sceneName)...")
     }
 
+    private func saveRemoteStream() {
+        guard let basePath = assetBasePath else {
+            showStatus("No project loaded", isError: true)
+            return
+        }
+
+        let urlStr = remoteStreamURLString.trimmingCharacters(in: .whitespaces)
+
+        guard let remoteURL = URL(string: urlStr),
+              remoteURL.scheme?.lowercased() == "https",
+              let host = remoteURL.host, !host.isEmpty,
+              remoteURL.pathExtension.lowercased() == "json"
+        else {
+            showStatus("URL must be a valid https:// link ending in .json", isError: true)
+            return
+        }
+
+        let baseName = remoteURL.deletingPathExtension().lastPathComponent
+        // Hash the full URL to avoid collisions between manifests with the same filename on different hosts.
+        let urlHash = String(format: "%08x", urlStr.utf8.reduce(UInt32(5381)) { ($0 &* 31) &+ UInt32($1) })
+        let name = "\(baseName)-\(urlHash)"
+
+        let streamModelsFolder = basePath.appendingPathComponent("StreamModels", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: streamModelsFolder, withIntermediateDirectories: true)
+            let fileURL = streamModelsFolder
+                .appendingPathComponent(name)
+                .appendingPathExtension("remotestream")
+            try urlStr.write(to: fileURL, atomically: true, encoding: .utf8)
+            remoteStreamURLString = ""
+            loadAssets()
+            showStatus("Remote stream '\(baseName)' added")
+        } catch {
+            showStatus("Failed to save remote stream: \(error.localizedDescription)", isError: true)
+        }
+    }
+
+    private func loadRemoteStreamModel(from asset: Asset) {
+        guard let urlStr = try? String(contentsOf: asset.path, encoding: .utf8),
+              let url = URL(string: urlStr.trimmingCharacters(in: .whitespacesAndNewlines))
+        else {
+            showStatus("Invalid URL in \(asset.name)", isError: true)
+            return
+        }
+
+        let sceneRoot = createEntity()
+        let sceneName = asset.name
+        setEntityName(entityId: sceneRoot, name: sceneName)
+
+        setEntityStreamScene(entityId: sceneRoot, url: url) { success in
+            DispatchQueue.main.async {
+                if success {
+                    showStatus("Loaded remote stream: \(sceneName)")
+                } else {
+                    showStatus("Failed to load remote stream: \(sceneName)", isError: true)
+                }
+                sceneGraphModel.refreshHierarchy()
+            }
+        }
+
+        selectionManager.selectedEntity = sceneRoot
+        showStatus("Loading remote stream: \(sceneName)...")
+    }
+
     private func handle_add_model_double_click(asset: Asset) {
         if asset.category == AssetCategory.streamModels.rawValue {
-            loadStreamModel(from: asset)
+            if asset.path.pathExtension.lowercased() == "remotestream" {
+                loadRemoteStreamModel(from: asset)
+            } else {
+                loadStreamModel(from: asset)
+            }
             return
         }
 
