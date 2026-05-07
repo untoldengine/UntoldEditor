@@ -137,30 +137,83 @@ struct EnvironmentView: View {
     }
 }
 
+private struct UndoableEffectToggle<Label: View>: View {
+    let undoName: String
+    @Binding var isOn: Bool
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        Toggle(isOn: Binding(
+            get: { isOn },
+            set: { newValue in
+                let oldValue = isOn
+                isOn = newValue
+                DispatchQueue.main.async {
+                    EditorUndoManager.shared.registerValueChange(
+                        name: undoName,
+                        oldValue: oldValue,
+                        newValue: newValue,
+                        apply: { isOn = $0 }
+                    )
+                }
+            }
+        ), label: label)
+    }
+}
+
+private struct UndoableEffectSlider: View {
+    let label: String
+    let undoName: String
+    let range: ClosedRange<Float>
+    var format: String = "%.2f"
+    let get: () -> Float
+    let set: (Float) -> Void
+
+    @State private var editStartValue: Float?
+
+    var body: some View {
+        Text(label)
+        Slider(
+            value: Binding(
+                get: get,
+                set: set
+            ),
+            in: range,
+            onEditingChanged: { isEditing in
+                if isEditing {
+                    editStartValue = get()
+                } else if let oldValue = editStartValue {
+                    let newValue = get()
+                    EditorUndoManager.shared.registerValueChange(
+                        name: undoName,
+                        oldValue: oldValue,
+                        newValue: newValue,
+                        apply: set
+                    )
+                    editStartValue = nil
+                }
+            }
+        )
+        Text(String(format: format, get()))
+    }
+}
+
 struct ColorGradingEditorView: View {
     @ObservedObject var settings = ColorGradingParams.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: $settings.enabled) {
+            UndoableEffectToggle(
+                undoName: "Toggle Color Grading",
+                isOn: $settings.enabled
+            ) {
                 Text("Enable Color Grading")
             }
 
-            Text("Exposure")
-            Slider(value: $settings.exposure, in: -5.0 ... 5.0)
-            Text(String(format: "%.2f", settings.exposure))
-
-            Text("Brightness")
-            Slider(value: $settings.brightness, in: -1.0 ... 1.0)
-            Text(String(format: "%.2f", settings.brightness))
-
-            Text("Contrast")
-            Slider(value: $settings.contrast, in: -5.0 ... 5.0)
-            Text(String(format: "%.2f", settings.contrast))
-
-            Text("Saturation")
-            Slider(value: $settings.saturation, in: 0.0 ... 5.0)
-            Text(String(format: "%.2f", settings.saturation))
+            UndoableEffectSlider(label: "Exposure", undoName: "Change Exposure", range: -5.0 ... 5.0, get: { settings.exposure }, set: { settings.exposure = $0 })
+            UndoableEffectSlider(label: "Brightness", undoName: "Change Brightness", range: -1.0 ... 1.0, get: { settings.brightness }, set: { settings.brightness = $0 })
+            UndoableEffectSlider(label: "Contrast", undoName: "Change Contrast", range: -5.0 ... 5.0, get: { settings.contrast }, set: { settings.contrast = $0 })
+            UndoableEffectSlider(label: "Saturation", undoName: "Change Saturation", range: 0.0 ... 5.0, get: { settings.saturation }, set: { settings.saturation = $0 })
         }
         .padding()
     }
@@ -171,13 +224,8 @@ struct WhiteBalanceEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Temperature")
-            Slider(value: $settings.temperature, in: -100.0 ... 100.0)
-            Text(String(format: "%.2f", settings.temperature))
-
-            Text("Tint")
-            Slider(value: $settings.tint, in: -100.0 ... 100.0)
-            Text(String(format: "%.2f", settings.tint))
+            UndoableEffectSlider(label: "Temperature", undoName: "Change Temperature", range: -100.0 ... 100.0, get: { settings.temperature }, set: { settings.temperature = $0 })
+            UndoableEffectSlider(label: "Tint", undoName: "Change Tint", range: -100.0 ... 100.0, get: { settings.tint }, set: { settings.tint = $0 })
 
 //            TextInputVectorView(label: "Lift", value: Binding(
 //                get: { settings.lift },
@@ -206,17 +254,15 @@ struct BloomEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: $settings.enabled) {
+            UndoableEffectToggle(
+                undoName: "Toggle Bloom",
+                isOn: $settings.enabled
+            ) {
                 Text("Enable Bloom")
             }
 
-            Text("Threshold")
-            Slider(value: $settings.threshold, in: 0.0 ... 5.0)
-            Text(String(format: "%.2f", settings.threshold))
-
-            Text("Intensity")
-            Slider(value: $settings.intensity, in: 0.0 ... 100.0)
-            Text(String(format: "%.2f", settings.intensity))
+            UndoableEffectSlider(label: "Threshold", undoName: "Change Bloom Threshold", range: 0.0 ... 5.0, get: { settings.threshold }, set: { settings.threshold = $0 })
+            UndoableEffectSlider(label: "Intensity", undoName: "Change Bloom Intensity", range: 0.0 ... 100.0, get: { settings.intensity }, set: { settings.intensity = $0 })
         }
         .padding()
     }
@@ -227,21 +273,16 @@ struct VignetteEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: $settings.enabled) {
+            UndoableEffectToggle(
+                undoName: "Toggle Vignette",
+                isOn: $settings.enabled
+            ) {
                 Text("Enable Vignette")
             }
 
-            Text("Intensity")
-            Slider(value: $settings.intensity, in: 0.0 ... 1.0)
-            Text(String(format: "%.2f", settings.intensity))
-
-            Text("Radius")
-            Slider(value: $settings.radius, in: 0.0 ... 1.0)
-            Text(String(format: "%.2f", settings.radius))
-
-            Text("Softness")
-            Slider(value: $settings.softness, in: 0.0 ... 1.0)
-            Text(String(format: "%.2f", settings.softness))
+            UndoableEffectSlider(label: "Intensity", undoName: "Change Vignette Intensity", range: 0.0 ... 1.0, get: { settings.intensity }, set: { settings.intensity = $0 })
+            UndoableEffectSlider(label: "Radius", undoName: "Change Vignette Radius", range: 0.0 ... 1.0, get: { settings.radius }, set: { settings.radius = $0 })
+            UndoableEffectSlider(label: "Softness", undoName: "Change Vignette Softness", range: 0.0 ... 1.0, get: { settings.softness }, set: { settings.softness = $0 })
 
 //            TextInputVectorView(label: "Center", value: Binding(
 //                get: { settings.center },
@@ -258,13 +299,14 @@ struct ChromaticAberrationEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: $settings.enabled) {
+            UndoableEffectToggle(
+                undoName: "Toggle Chromatic Aberration",
+                isOn: $settings.enabled
+            ) {
                 Text("Enable Chromatic Aberration")
             }
 
-            Text("Intensity")
-            Slider(value: $settings.intensity, in: 0.0 ... 0.01)
-            Text(String(format: "%.4f", settings.intensity))
+            UndoableEffectSlider(label: "Intensity", undoName: "Change Chromatic Aberration Intensity", range: 0.0 ... 0.01, format: "%.4f", get: { settings.intensity }, set: { settings.intensity = $0 })
 
 //            TextInputVectorView(label: "Center", value: Binding(
 //                get: { settings.center },
@@ -281,21 +323,16 @@ struct DepthOfFieldEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: $settings.enabled) {
+            UndoableEffectToggle(
+                undoName: "Toggle Depth of Field",
+                isOn: $settings.enabled
+            ) {
                 Text("Enable Depth of Field")
             }
 
-            Text("Focus Distance")
-            Slider(value: $settings.focusDistance, in: 0.0 ... 10.0)
-            Text(String(format: "%.2f", settings.focusDistance))
-
-            Text("Focus Range")
-            Slider(value: $settings.focusRange, in: 0.0 ... 10.0)
-            Text(String(format: "%.4f", settings.focusRange))
-
-            Text("Max Blur")
-            Slider(value: $settings.maxBlur, in: 0.0 ... 0.05)
-            Text(String(format: "%.4f", settings.maxBlur))
+            UndoableEffectSlider(label: "Focus Distance", undoName: "Change Focus Distance", range: 0.0 ... 10.0, get: { settings.focusDistance }, set: { settings.focusDistance = $0 })
+            UndoableEffectSlider(label: "Focus Range", undoName: "Change Focus Range", range: 0.0 ... 10.0, format: "%.4f", get: { settings.focusRange }, set: { settings.focusRange = $0 })
+            UndoableEffectSlider(label: "Max Blur", undoName: "Change Max Blur", range: 0.0 ... 0.05, format: "%.4f", get: { settings.maxBlur }, set: { settings.maxBlur = $0 })
         }
         .padding()
     }
@@ -306,13 +343,14 @@ struct SSAOEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: $settings.enabled) {
+            UndoableEffectToggle(
+                undoName: "Toggle SSAO",
+                isOn: $settings.enabled
+            ) {
                 Text("Enable SSAO")
             }
 
-            Text("Radius")
-            Slider(value: $settings.radius, in: 0.1 ... 1.0)
-            Text(String(format: "%.2f", settings.radius))
+            UndoableEffectSlider(label: "Radius", undoName: "Change SSAO Radius", range: 0.1 ... 1.0, get: { settings.radius }, set: { settings.radius = $0 })
 
 //            Text("Bias")
 //            Slider(value: $settings.bias, in: 0.0 ... 0.1)
@@ -373,7 +411,13 @@ struct PostProcessingEditorView: View {
                         }
                         .pickerStyle(.menu)
                         .onChange(of: selectedPreset) { _, newValue in
+                            let before = EditorPostFXSnapshot()
                             PostFX.apply(newValue.enginePreset)
+                            EditorUndoManager.shared.registerPostFXChange(
+                                name: "Apply \(newValue.rawValue) Preset",
+                                before: before,
+                                after: EditorPostFXSnapshot()
+                            )
                         }
                     }
                     .padding()

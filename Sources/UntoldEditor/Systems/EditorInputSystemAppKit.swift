@@ -37,6 +37,18 @@
             }
 
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if self?.shouldHandleKey(event) == true,
+                   event.modifierFlags.contains(.command),
+                   event.charactersIgnoringModifiers?.lowercased() == "z"
+                {
+                    if event.modifierFlags.contains(.shift) {
+                        EditorUndoManager.shared.redo()
+                    } else {
+                        EditorUndoManager.shared.undo()
+                    }
+                    return nil
+                }
+
                 if self?.shouldHandleKey(event) == true {
                     self?.keyPressed(event.keyCode)
                     return nil // Mark event as handled
@@ -239,6 +251,9 @@
                     let (hitEntityId, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
                     if hit {
                         activeHitGizmoEntity = hitEntityId
+                        if activeEntity != .invalid {
+                            EditorUndoManager.shared.beginTransformEdit(entityId: activeEntity)
+                        }
                     } else {
                         activeHitGizmoEntity = .invalid
                         editorController?.activeMode = .none
@@ -279,6 +294,13 @@
                 orbitAround(entityId: findSceneCamera(), uPosition: InputSystem.shared.panDelta * 0.005)
 
             case .ended, .cancelled, .failed:
+                if isEditorEnabled,
+                   activeHitGizmoEntity != .invalid,
+                   activeEntity != .invalid
+                {
+                    EditorUndoManager.shared.commitTransformEdit(entityId: activeEntity)
+                }
+
                 // Reset
                 panDelta = simd_float2(0, 0)
                 initialPanLocation = nil

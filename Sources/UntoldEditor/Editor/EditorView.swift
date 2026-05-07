@@ -154,6 +154,12 @@ public struct EditorView: View {
                 .allowsHitTesting(false)
         }
         .onAppear {
+            EditorUndoManager.shared.onStateRestored = {
+                editor_entities = getAllGameEntities()
+                selectionManager.objectWillChange.send()
+                sceneGraphModel.refreshHierarchy()
+            }
+
             sceneGraphModel.refreshHierarchy()
 
             // Listen for asset instance loading completion
@@ -343,6 +349,7 @@ public struct EditorView: View {
             destroyAllEntities()
             removeGizmo()
             EditorComponentsState.shared.clear()
+            EditorUndoManager.shared.clear()
             deserializeScene(sceneData: sceneData)
             editorController?.currentSceneURL = nil
             editor_entities = getAllGameEntities()
@@ -360,6 +367,7 @@ public struct EditorView: View {
         destroyAllEntities()
         removeGizmo()
         EditorComponentsState.shared.clear()
+        EditorUndoManager.shared.clear()
 
         let light = createEntity()
         setEntityName(entityId: light, name: "Directional Light")

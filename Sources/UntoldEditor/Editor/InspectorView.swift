@@ -253,6 +253,7 @@ struct InspectorView: View {
     var onAddName_Editor: () -> Void
     // @State private var editor_entityComponents: [EntityID: [ObjectIdentifier: ComponentOption_Editor]] = [:]
     @FocusState private var isNameTextFieldFocused: Bool
+    @State private var nameEditStartValue: String?
     @Binding var selectedAsset: Asset?
 
     var body: some View {
@@ -279,9 +280,30 @@ struct InspectorView: View {
                             .focused($isNameTextFieldFocused)
                             .disabled(isDerivedAssetNode(entityId))
                             .onSubmit {
+                                if let oldName = nameEditStartValue {
+                                    EditorUndoManager.shared.registerNameChange(
+                                        entityId: entityId,
+                                        oldName: oldName,
+                                        newName: getEntityName(entityId: entityId)
+                                    )
+                                }
+                                nameEditStartValue = nil
                                 onAddName_Editor()
                                 refreshView()
                                 isNameTextFieldFocused = false
+                            }
+                            .onChange(of: isNameTextFieldFocused) { _, isFocused in
+                                if isFocused {
+                                    nameEditStartValue = getEntityName(entityId: entityId)
+                                } else if let oldName = nameEditStartValue {
+                                    EditorUndoManager.shared.registerNameChange(
+                                        entityId: entityId,
+                                        oldName: oldName,
+                                        newName: getEntityName(entityId: entityId)
+                                    )
+                                    nameEditStartValue = nil
+                                    refreshView()
+                                }
                             }
                         }
 
@@ -1009,8 +1031,14 @@ struct TransformationEditorView: View {
                 TextInputVectorView(label: "Position", value: Binding(
                     get: { position },
                     set: { newPosition in
+                        let before = EditorTransformSnapshot(entityId: entityId)
                         handleTransformChange()
                         translateTo(entityId: entityId, position: newPosition)
+                        EditorUndoManager.shared.registerTransformChange(
+                            entityId: entityId,
+                            before: before,
+                            after: EditorTransformSnapshot(entityId: entityId)
+                        )
                         refreshView()
                     }
                 ))
@@ -1018,8 +1046,14 @@ struct TransformationEditorView: View {
                 TextInputVectorView(label: "Orientation", value: Binding(
                     get: { orientation },
                     set: { newOrientation in
+                        let before = EditorTransformSnapshot(entityId: entityId)
                         handleTransformChange()
                         applyAxisRotations(entityId: entityId, axis: newOrientation)
+                        EditorUndoManager.shared.registerTransformChange(
+                            entityId: entityId,
+                            before: before,
+                            after: EditorTransformSnapshot(entityId: entityId)
+                        )
                         refreshView()
                     }
                 ))
@@ -1027,8 +1061,14 @@ struct TransformationEditorView: View {
                 TextInputVectorView(label: "Scale", value: Binding(
                     get: { scale },
                     set: { newScale in
+                        let before = EditorTransformSnapshot(entityId: entityId)
                         handleTransformChange()
                         scaleTo(entityId: entityId, scale: newScale)
+                        EditorUndoManager.shared.registerTransformChange(
+                            entityId: entityId,
+                            before: before,
+                            after: EditorTransformSnapshot(entityId: entityId)
+                        )
                         refreshView()
                     }
                 ))
