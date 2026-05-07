@@ -181,7 +181,7 @@ final class EditorUndoManagerTests: XCTestCase {
         XCTAssertTrue(ColorGradingParams.shared.enabled)
         XCTAssertTrue(SSAOParams.shared.enabled)
         XCTAssertEqual(ColorGradingParams.shared.exposure, -0.2, accuracy: 0.0001)
-        XCTAssertEqual(SSAOParams.shared.intensity, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(SSAOParams.shared.intensity, PostFXPreset.cinematic.ssaoIntensity, accuracy: 0.0001)
     }
 
     func test_noopChangesAreNotRegistered() {

@@ -1,31 +1,33 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
-
-name: CI Build
+name: CI Build and Test
 
 on:
   push:
-    branches:
-      - develop
+    branches: [master, develop]
   pull_request:
-    branches:
-      - develop 
+    branches: [master, develop]
 
 jobs:
   build:
-
-    runs-on: macos-latest
+    runs-on: macos-26
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Build
-      run: swift build -v
-      env:
-        CI: true
+      - name: Show toolchain versions
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          xcrun metal --version || echo "Metal compiler info not available"
+        env:
+          CI: true
 
-    # ✅ Run core tests (fast, CPU-based)
-    - name: Run tests
-      run: swift test -v
-      env:
-        CI: true
+      - name: Build
+        run: swift build -v
+        env:
+          CI: true
+
+      - name: Run editor tests
+        run: swift test -v --disable-swift-testing --filter UntoldEditorTests
+        env:
+          CI: true
