@@ -31,7 +31,7 @@
         var onCreatePlane: () -> Void
         var onCreateCylinder: () -> Void
         var onCreateCone: () -> Void
-        var onQuickPreview: () -> Void
+        var onQuickPreview: (QuickPreviewImportMode) -> Void
 
         @State private var isPlaying = false
         @State private var showCreateProject = false
@@ -102,10 +102,20 @@
                 .buttonStyle(.plain)
                 .focusable(false)
 
-                Button(action: onQuickPreview) {
+                Menu {
+                    ForEach(QuickPreviewImportMode.allCases, id: \.self) { mode in
+                        Button {
+                            onQuickPreview(mode)
+                        } label: {
+                            Label(mode.menuTitle, systemImage: mode.systemImageName)
+                        }
+                    }
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "eye.fill")
-                        Text("Quick Preview")
+                        Text("Load Preview")
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
                     }
                     .padding(.vertical, 6)
                     .padding(.horizontal, 12)
@@ -113,9 +123,9 @@
                     .foregroundColor(.white)
                     .cornerRadius(6)
                 }
-                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton)
                 .focusable(false)
-                .help("Preview a 3D file without creating a project")
+                .help("Load a preview asset without creating a project")
 
                 Divider().frame(height: 24)
             }

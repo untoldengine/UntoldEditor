@@ -713,17 +713,13 @@ public struct EditorView: View {
 
     // MARK: - Quick Preview
 
-    private func editor_handleQuickPreview() {
+    private func editor_handleQuickPreview(mode: QuickPreviewImportMode) {
         let openPanel = NSOpenPanel()
-        openPanel.title = "Quick Preview - Select 3D File"
-        openPanel.allowedContentTypes = [
-            UTType(filenameExtension: "untold")!,
-            UTType(filenameExtension: "ply")!,
-            UTType(filenameExtension: "json")!,
-        ]
+        openPanel.title = mode.filePickerTitle
+        openPanel.allowedContentTypes = mode.allowedContentTypes
         openPanel.allowsMultipleSelection = false
         openPanel.canChooseDirectories = false
-        openPanel.message = "Select an Untold asset, PLY Gaussian, or tiled scene manifest to preview"
+        openPanel.message = mode.filePickerMessage
 
         guard openPanel.runModal() == .OK, let fileURL = openPanel.url else {
             return
@@ -736,6 +732,8 @@ public struct EditorView: View {
             Logger.log(message: "⚠️ Quick Preview JSON is not a tiled scene manifest: \(fileURL.lastPathComponent)")
             return
         }
+
+        deleteExistingQuickPreviewEntities()
 
         // Create a new entity for the preview
         removeGizmo()
@@ -753,6 +751,9 @@ public struct EditorView: View {
         }
 
         if fileExtension == "untold" {
+            clearSceneBatches()
+            GeometryStreamingSystem.shared.enabled = false
+
             // Load Untold runtime asset using absolute path
             setEntityMeshAsync(entityId: entityId, filename: absolutePath, withExtension: fileExtension) { success in
                 if success {
@@ -762,10 +763,16 @@ public struct EditorView: View {
                 }
             }
         } else if fileExtension == "ply" {
+            clearSceneBatches()
+            GeometryStreamingSystem.shared.enabled = false
+
             // Load Gaussian PLY using absolute path
             setEntityGaussian(entityId: entityId, filename: absolutePath, withExtension: fileExtension)
             print("✅ Quick Preview Gaussian loaded: \(fileName).\(fileExtension)")
         } else if fileExtension == "json" {
+            clearSceneBatches()
+            GeometryStreamingSystem.shared.enabled = true
+
             setEntityStreamScene(entityId: entityId, url: fileURL) { success in
                 DispatchQueue.main.async {
                     if success {
@@ -807,6 +814,30 @@ public struct EditorView: View {
 
         print("ℹ️ Quick Preview mode: File loaded with absolute path")
         print("⚠️ Note: Quick Preview entities cannot be saved to scenes (absolute paths not serialized)")
+    }
+
+    private func deleteExistingQuickPreviewEntities() {
+        let previewEntityIds = getAllGameEntities()
+            .filter { hasComponent(entityId: $0, componentType: QuickPreviewComponent.self) }
+
+        guard previewEntityIds.isEmpty == false else {
+            return
+        }
+
+        for entityId in previewEntityIds {
+            destroyEntity(entityId: entityId)
+        }
+
+        if let selectedId = selectionManager.selectedEntity,
+           previewEntityIds.contains(selectedId)
+        {
+            selectionManager.selectedEntity = nil
+            activeEntity = .invalid
+        }
+
+        editor_entities = getAllGameEntities()
+        selectionManager.objectWillChange.send()
+        sceneGraphModel.refreshHierarchy()
     }
 
     // MARK: - Quick Preview Save Validation
