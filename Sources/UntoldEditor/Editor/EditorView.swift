@@ -11,6 +11,12 @@ public struct Asset: Identifiable {
     var isFolder: Bool = false
 }
 
+private struct QuickPreviewRuntimeExportRequest: Identifiable, Equatable {
+    let id = UUID()
+    let sourceURL: URL
+    let outputURL: URL
+}
+
 public struct EditorView: View {
     @State private var editor_entities: [EntityID] = getAllGameEntities()
     @StateObject private var selectionManager = SelectionManager()
@@ -27,6 +33,13 @@ public struct EditorView: View {
     @State private var useSceneCameraDuringPlay = false
     @State private var showQuickPreviewWarning = false
     @State private var quickPreviewEntities: [(EntityID, String)] = []
+    @State private var pendingQuickPreviewExport: QuickPreviewRuntimeExportRequest?
+    @State private var isExportingQuickPreviewAsset = false
+    @State private var quickPreviewConvertOrientation = false
+    @State private var quickPreviewSourceOrientation = "blender-native"
+    @State private var quickPreviewCompressGeometry = false
+    @State private var quickPreviewCompressTextures = false
+    @State private var quickPreviewAstcencBinPath = ""
 
     var renderer: UntoldRenderer?
 
@@ -234,6 +247,9 @@ public struct EditorView: View {
             let count = quickPreviewEntities.count
             let entityWord = count == 1 ? "entity" : "entities"
             return Text("Your scene contains \(count) Quick Preview \(entityWord):\n\n\(entityNames)\n\nQuick Preview entities use absolute file paths and cannot be saved to scenes. To include these assets permanently, use the Import button in the Asset Browser to copy them into your project first.\n\nYou can delete the Quick Preview entities and save the rest of your scene, or cancel to keep working.")
+        }
+        .sheet(item: $pendingQuickPreviewExport) { request in
+            quickPreviewRuntimeExportSheet(for: request)
         }
     }
 
@@ -728,6 +744,11 @@ public struct EditorView: View {
         let fileExtension = fileURL.pathExtension.lowercased()
         let absolutePath = fileURL.path
 
+        if isUSDSourceAsset(fileURL) {
+            queueQuickPreviewRuntimeExport(sourceURL: fileURL)
+            return
+        }
+
         if fileExtension == "json", !isTiledSceneManifest(fileURL) {
             Logger.log(message: "⚠️ Quick Preview JSON is not a tiled scene manifest: \(fileURL.lastPathComponent)")
             return
@@ -816,6 +837,303 @@ public struct EditorView: View {
         print("⚠️ Note: Quick Preview entities cannot be saved to scenes (absolute paths not serialized)")
     }
 
+    private func isUSDSourceAsset(_ url: URL) -> Bool {
+        ["usd", "usda", "usdc", "usdz"].contains(url.pathExtension.lowercased())
+    }
+
+    private func queueQuickPreviewRuntimeExport(sourceURL: URL) {
+        let cacheDirectory = QuickPreviewRuntimeExportCache.cacheDirectory(for: sourceURL)
+        let outputURL = QuickPreviewRuntimeExportCache.outputURL(for: sourceURL, in: cacheDirectory)
+
+        QuickPreviewRuntimeExportCache.pruneStaleCaches(preserving: [cacheDirectory])
+
+        pendingQuickPreviewExport = QuickPreviewRuntimeExportRequest(
+            sourceURL: sourceURL,
+            outputURL: outputURL
+        )
+    }
+
+    private func quickPreviewRuntimeExportSheet(for request: QuickPreviewRuntimeExportRequest) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Convert to Untold Preview Asset")
+                .font(.title2)
+                .bold()
+
+            Text("This USD file needs to be converted to Untold Engine's .untold runtime format before it can be previewed.")
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Source")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(request.sourceURL.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(2)
+
+                Text("Output")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 6)
+                Text(request.outputURL.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(2)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Convert orientation", isOn: $quickPreviewConvertOrientation)
+
+                Picker("Source orientation", selection: $quickPreviewSourceOrientation) {
+                    Text("Blender native").tag("blender-native")
+                    Text("Engine oriented").tag("engine-oriented")
+                }
+                .disabled(!quickPreviewConvertOrientation)
+
+                Toggle("Compress geometry (LZ4)", isOn: $quickPreviewCompressGeometry)
+                    .help("Compresses vertex and index data with LZ4. Requires the Python lz4 package.")
+                if quickPreviewCompressGeometry {
+                    Text("Requires: pip install lz4")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.leading, 20)
+                }
+
+                Toggle("Compress textures (ASTC)", isOn: $quickPreviewCompressTextures)
+                    .help("Converts textures to GPU-native ASTC format. Requires astcenc and the Python Pillow package.")
+                if quickPreviewCompressTextures {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 12) {
+                            Link("Install astcenc ->", destination: URL(string: "https://github.com/ARM-software/astc-encoder/releases")!)
+                                .font(.caption)
+                            Text("-")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Also requires: pip install Pillow")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("astcenc path (optional)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack {
+                                TextField("/opt/homebrew/bin/astcenc", text: $quickPreviewAstcencBinPath)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 12, design: .monospaced))
+                                Button("Browse...") {
+                                    let panel = NSOpenPanel()
+                                    panel.canChooseFiles = true
+                                    panel.canChooseDirectories = false
+                                    panel.allowsMultipleSelection = false
+                                    panel.title = "Select astcenc binary"
+                                    if panel.runModal() == .OK, let url = panel.url {
+                                        quickPreviewAstcencBinPath = url.path
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
+            }
+
+            if isExportingQuickPreviewAsset {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Exporting...")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    pendingQuickPreviewExport = nil
+                }
+                .disabled(isExportingQuickPreviewAsset)
+
+                Button("Export and Load") {
+                    exportAndLoadQuickPreviewRuntimeAsset(request)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(isExportingQuickPreviewAsset)
+            }
+        }
+        .padding(20)
+        .frame(width: 560)
+    }
+
+    private func exportAndLoadQuickPreviewRuntimeAsset(_ request: QuickPreviewRuntimeExportRequest) {
+        guard !isExportingQuickPreviewAsset else { return }
+        guard let exporterScript = findExportUntoldScript() else {
+            Logger.log(message: "❌ export-untold script not found. Expected at .build/checkouts/UntoldEngine/scripts/export-untold")
+            pendingQuickPreviewExport = nil
+            return
+        }
+
+        isExportingQuickPreviewAsset = true
+        let convertOrientation = quickPreviewConvertOrientation
+        let sourceOrientation = quickPreviewSourceOrientation
+        let compressGeometry = quickPreviewCompressGeometry
+        let compressTextures = quickPreviewCompressTextures
+        let astcencBin = quickPreviewAstcencBinPath.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            let tempDirectory = FileManager.default.temporaryDirectory
+            let outputLogURL = tempDirectory.appendingPathComponent("quick-preview-export-\(UUID().uuidString).out")
+            let errorLogURL = tempDirectory.appendingPathComponent("quick-preview-export-\(UUID().uuidString).err")
+
+            do {
+                try FileManager.default.createDirectory(at: request.outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                if FileManager.default.fileExists(atPath: request.outputURL.path) {
+                    try FileManager.default.removeItem(at: request.outputURL)
+                }
+                FileManager.default.createFile(atPath: outputLogURL.path, contents: nil)
+                FileManager.default.createFile(atPath: errorLogURL.path, contents: nil)
+                let outputHandle = try FileHandle(forWritingTo: outputLogURL)
+                let errorHandle = try FileHandle(forWritingTo: errorLogURL)
+                defer {
+                    try? outputHandle.close()
+                    try? errorHandle.close()
+                    try? FileManager.default.removeItem(at: outputLogURL)
+                    try? FileManager.default.removeItem(at: errorLogURL)
+                }
+
+                process.executableURL = exporterScript
+                var arguments = [
+                    "--input", request.sourceURL.path,
+                    "--output", request.outputURL.path,
+                ]
+                if convertOrientation {
+                    arguments.append("--ConvertOrientation")
+                    arguments.append(contentsOf: ["--source-orientation", sourceOrientation])
+                }
+                if compressGeometry {
+                    arguments.append("--compress-geometry")
+                }
+                process.arguments = arguments
+                process.standardOutput = outputHandle
+                process.standardError = errorHandle
+
+                try process.run()
+                process.waitUntilExit()
+
+                let stdout = (try? String(contentsOf: outputLogURL, encoding: .utf8)) ?? ""
+                let stderr = (try? String(contentsOf: errorLogURL, encoding: .utf8)) ?? ""
+                let exportSucceeded = process.terminationStatus == 0
+
+                DispatchQueue.main.async {
+                    if !stdout.isEmpty { Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    if !stderr.isEmpty { Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                }
+
+                if exportSucceeded, compressTextures {
+                    let texturesDir = request.outputURL.deletingLastPathComponent().appendingPathComponent("Textures")
+                    if FileManager.default.fileExists(atPath: texturesDir.path),
+                       let texbakeScript = findTexbakeScript()
+                    {
+                        let bakeResult = runTexbakeStep(script: texbakeScript, arguments: ["--dir", texturesDir.path], astcencBin: astcencBin)
+                        let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputURL.path], astcencBin: astcencBin)
+                        DispatchQueue.main.async {
+                            if !bakeResult.stdout.isEmpty { Logger.log(message: bakeResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !bakeResult.stderr.isEmpty { Logger.log(message: bakeResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !patchResult.stdout.isEmpty { Logger.log(message: patchResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !patchResult.stderr.isEmpty { Logger.log(message: patchResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if bakeResult.status != 0 || patchResult.status != 0 {
+                                Logger.log(message: "⚠️ ASTC compression had errors — preview asset exported without compressed textures")
+                            }
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            Logger.log(message: "⚠️ ASTC skipped — texbake.py not found or no Textures folder present")
+                        }
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    isExportingQuickPreviewAsset = false
+                    pendingQuickPreviewExport = nil
+                    if exportSucceeded {
+                        editor_loadQuickPreviewAsset(from: request.outputURL, originalSourceURL: request.sourceURL)
+                    } else {
+                        QuickPreviewRuntimeExportCache.removeCacheDirectory(at: request.outputURL.deletingLastPathComponent())
+                        Logger.log(message: "❌ Quick Preview export failed for \(request.sourceURL.lastPathComponent)")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    isExportingQuickPreviewAsset = false
+                    pendingQuickPreviewExport = nil
+                    QuickPreviewRuntimeExportCache.removeCacheDirectory(at: request.outputURL.deletingLastPathComponent())
+                    Logger.log(message: "❌ Quick Preview export failed: \(error)")
+                }
+            }
+        }
+    }
+
+    private func editor_loadQuickPreviewAsset(from loadURL: URL, originalSourceURL: URL? = nil) {
+        let sourceURL = originalSourceURL ?? loadURL
+        let fileExtension = loadURL.pathExtension.lowercased()
+        let absolutePath = loadURL.path
+        let fileName = sourceURL.deletingPathExtension().lastPathComponent
+
+        deleteExistingQuickPreviewEntities()
+        removeGizmo()
+
+        let entityId = createEntity()
+        let uniqueName = "QuickPreview-\(fileName)-\(entityId)"
+        setEntityName(entityId: entityId, name: uniqueName)
+
+        if let quickPreviewComp = scene.assign(to: entityId, component: QuickPreviewComponent.self) {
+            quickPreviewComp.absoluteFilePath = sourceURL.path
+            quickPreviewComp.fileExtension = sourceURL.pathExtension.lowercased()
+            quickPreviewComp.originalFileName = fileName
+            if originalSourceURL != nil {
+                quickPreviewComp.runtimePreviewDirectoryPath = loadURL.deletingLastPathComponent().path
+            }
+        }
+
+        if fileExtension == "untold" {
+            clearSceneBatches()
+            GeometryStreamingSystem.shared.enabled = false
+
+            setEntityMeshAsync(entityId: entityId, filename: absolutePath, withExtension: fileExtension) { success in
+                if success {
+                    print("✅ Quick Preview loaded: \(loadURL.lastPathComponent)")
+                } else {
+                    print("⚠️ Failed to load Quick Preview, using fallback: \(loadURL.lastPathComponent)")
+                }
+            }
+        } else if fileExtension == "ply" {
+            clearSceneBatches()
+            GeometryStreamingSystem.shared.enabled = false
+
+            setEntityGaussian(entityId: entityId, filename: absolutePath, withExtension: fileExtension)
+            print("✅ Quick Preview Gaussian loaded: \(loadURL.lastPathComponent)")
+        }
+
+        guard let camera = CameraSystem.shared.activeCamera,
+              let cameraComponent = scene.get(component: CameraComponent.self, for: camera)
+        else {
+            handleError(.noActiveCamera)
+            return
+        }
+
+        var forward = forwardDirectionVector(from: cameraComponent.rotation)
+        forward *= -1.0
+        let camPosition = cameraComponent.localPosition
+        let spawnPosition = camPosition + forward * spawnDistance
+        translateTo(entityId: entityId, position: spawnPosition)
+
+        selectionManager.selectedEntity = entityId
+        editor_entities = getAllGameEntities()
+        sceneGraphModel.refreshHierarchy()
+
+        print("ℹ️ Quick Preview mode: File loaded with absolute path")
+        print("⚠️ Note: Quick Preview entities cannot be saved to scenes (absolute paths not serialized)")
+    }
+
     private func deleteExistingQuickPreviewEntities() {
         let previewEntityIds = getAllGameEntities()
             .filter { hasComponent(entityId: $0, componentType: QuickPreviewComponent.self) }
@@ -825,6 +1143,11 @@ public struct EditorView: View {
         }
 
         for entityId in previewEntityIds {
+            if let quickPreviewComp = scene.get(component: QuickPreviewComponent.self, for: entityId),
+               quickPreviewComp.runtimePreviewDirectoryPath.isEmpty == false
+            {
+                QuickPreviewRuntimeExportCache.removeCacheDirectory(at: URL(fileURLWithPath: quickPreviewComp.runtimePreviewDirectoryPath))
+            }
             destroyEntity(entityId: entityId)
         }
 
@@ -869,6 +1192,11 @@ public struct EditorView: View {
     private func deleteQuickPreviewEntitiesAndSave() {
         // Delete all Quick Preview entities
         for (entityId, entityName) in quickPreviewEntities {
+            if let quickPreviewComp = scene.get(component: QuickPreviewComponent.self, for: entityId),
+               quickPreviewComp.runtimePreviewDirectoryPath.isEmpty == false
+            {
+                QuickPreviewRuntimeExportCache.removeCacheDirectory(at: URL(fileURLWithPath: quickPreviewComp.runtimePreviewDirectoryPath))
+            }
             destroyEntity(entityId: entityId)
             print("🗑️ Deleted Quick Preview entity: \(entityName)")
         }
