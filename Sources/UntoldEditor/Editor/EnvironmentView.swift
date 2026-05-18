@@ -364,6 +364,120 @@ struct SSAOEditorView: View {
     }
 }
 
+private enum EditorAntiAliasingOption: String, CaseIterable, Hashable, Identifiable {
+    case off = "Off"
+    case fxaa = "FXAA"
+    case smaa = "SMAA"
+
+    var id: String {
+        rawValue
+    }
+
+    var engineMode: AntiAliasingMode {
+        switch self {
+        case .off:
+            return .none
+        case .fxaa:
+            return .fxaa
+        case .smaa:
+            return .smaa
+        }
+    }
+
+    static func currentEngineMode() -> EditorAntiAliasingOption {
+        switch antiAliasingMode {
+        case .none:
+            return .off
+        case .fxaa:
+            return .fxaa
+        case .smaa:
+            return .smaa
+        }
+    }
+}
+
+struct AntiAliasingEditorView: View {
+    @ObservedObject var fxaaSettings = FXAAParams.shared
+    @ObservedObject var smaaSettings = SMAAParams.shared
+    @State private var selectedMode = EditorAntiAliasingOption.currentEngineMode()
+    @State private var showAdvanced = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Mode", selection: $selectedMode) {
+                ForEach(EditorAntiAliasingOption.allCases) { option in
+                    Text(option.rawValue).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: selectedMode) { oldValue, newValue in
+                antiAliasingMode = newValue.engineMode
+                EditorUndoManager.shared.registerValueChange(
+                    name: "Change Anti-Aliasing",
+                    oldValue: oldValue,
+                    newValue: newValue,
+                    apply: { option in
+                        antiAliasingMode = option.engineMode
+                        selectedMode = option
+                    }
+                )
+            }
+
+            switch selectedMode {
+            case .off:
+                EmptyView()
+            case .fxaa:
+                DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        UndoableEffectSlider(
+                            label: "Subpixel Quality",
+                            undoName: "Change FXAA Subpixel Quality",
+                            range: 0.0 ... 1.0,
+                            get: { fxaaSettings.subpixelQuality },
+                            set: { fxaaSettings.subpixelQuality = $0 }
+                        )
+                        UndoableEffectSlider(
+                            label: "Edge Threshold",
+                            undoName: "Change FXAA Edge Threshold",
+                            range: 0.0312 ... 0.3333,
+                            format: "%.4f",
+                            get: { fxaaSettings.edgeThreshold },
+                            set: { fxaaSettings.edgeThreshold = $0 }
+                        )
+                        UndoableEffectSlider(
+                            label: "Minimum Edge Threshold",
+                            undoName: "Change FXAA Minimum Edge Threshold",
+                            range: 0.0 ... 0.125,
+                            format: "%.4f",
+                            get: { fxaaSettings.edgeThresholdMin },
+                            set: { fxaaSettings.edgeThresholdMin = $0 }
+                        )
+                    }
+                    .padding(.top, 4)
+                }
+            case .smaa:
+                DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        UndoableEffectSlider(
+                            label: "Edge Threshold",
+                            undoName: "Change SMAA Edge Threshold",
+                            range: 0.01 ... 0.5,
+                            format: "%.4f",
+                            get: { smaaSettings.edgeThreshold },
+                            set: { smaaSettings.edgeThreshold = $0 }
+                        )
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+        .padding()
+        .onAppear {
+            selectedMode = EditorAntiAliasingOption.currentEngineMode()
+        }
+    }
+}
+
 struct PostProcessingEditorView: View {
     private enum PresetOption: String, CaseIterable, Identifiable {
         case neutral = "Neutral"
@@ -389,6 +503,7 @@ struct PostProcessingEditorView: View {
 
     @State private var showPresets = true
     @State private var selectedPreset: PresetOption = .neutral
+    @State private var showAntiAliasing = false
     @State private var showToneMapping = false
     @State private var showWhiteBalance = false
     @State private var showColorGrading = false
@@ -421,6 +536,10 @@ struct PostProcessingEditorView: View {
                         }
                     }
                     .padding()
+                }
+
+                DisclosureGroup("Anti-Aliasing", isExpanded: $showAntiAliasing) {
+                    AntiAliasingEditorView()
                 }
 
                 DisclosureGroup("Depth of Field", isExpanded: $showDoF) {
