@@ -23,6 +23,7 @@ private enum GizmoDimensions {
     static let rotateRingSegments: Int = 48
     static let rotateHitRingSegments: Int = 36
     static let directionHandleRadius: Float = 0.08
+    static let directionHandleHitRadius: Float = 0.2
     static let directionHandleOffsetY: Float = -1.0
 }
 
@@ -370,24 +371,35 @@ private func createGizmoHandle(
 @discardableResult
 private func makeDirectionHandle() -> EntityID {
     let handleColor = simd_float4(1.0, 1.0, 0.0, 1.0)
-    return createGizmoHandle(
+    let localPosition = initialLightDirectionHandleOffset()
+    let visibleHandle = createGizmoHandle(
         parentId: parentEntityIdGizmo,
         name: "directionHandle",
         meshes: BasicPrimitives.createSphere(extent: GizmoDimensions.directionHandleRadius, segments: [24, 12]),
-        localPosition: initialLightDirectionHandleOffset(),
+        localPosition: localPosition,
         color: handleColor,
         descriptor: GizmoHandleDescriptor(mode: .lightRotate, axis: .none)
     )
+
+    createGizmoHandle(
+        parentId: parentEntityIdGizmo,
+        name: "directionHandleHitProxy",
+        meshes: BasicPrimitives.createSphere(extent: GizmoDimensions.directionHandleHitRadius, segments: [16, 8]),
+        localPosition: localPosition,
+        color: simd_float4(0.0, 0.0, 0.0, 0.0),
+        descriptor: GizmoHandleDescriptor(mode: .lightRotate, axis: .none),
+        isHitProxy: true
+    )
+
+    return visibleHandle
 }
 
 private func initialLightDirectionHandleOffset() -> simd_float3 {
-    guard activeEntity != .invalid,
-          let localTransform = scene.get(component: LocalTransformComponent.self, for: activeEntity)
-    else {
+    guard activeEntity != .invalid else {
         return simd_float3(0.0, GizmoDimensions.directionHandleOffsetY, 0.0)
     }
 
-    let forward = forwardDirectionVector(from: localTransform.rotation)
+    let forward = -1.0 * getForwardAxisVector(entityId: activeEntity)
     let handleDirection = simd_length(forward) > 0.0001 ? simd_normalize(forward) : simd_float3(0.0, -1.0, 0.0)
     return handleDirection * abs(GizmoDimensions.directionHandleOffsetY)
 }

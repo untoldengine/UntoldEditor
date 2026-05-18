@@ -376,6 +376,47 @@ final class GizmoSystemTests: XCTestCase {
         }
     }
 
+    func test_createGizmo_addsHiddenHitProxyForLightDirectionHandle() {
+        let light = makeEntity(name: "DirectionalLight", pos: SIMD3<Float>(0, 0, 0), isLight: true)
+        activeEntity = light
+
+        createGizmo(mode: .translate)
+
+        let children = getEntityChildren(parentId: parentEntityIdGizmo)
+        let proxies = children.filter {
+            guard hasComponent(entityId: $0, componentType: GizmoHitProxyComponent.self),
+                  let handle = scene.get(component: GizmoHandleComponent.self, for: $0)
+            else {
+                return false
+            }
+
+            return handle.mode == .lightRotate && handle.axis == .none
+        }
+
+        XCTAssertFalse(proxies.isEmpty, "Expected hidden hit proxy for the light direction handle.")
+    }
+
+    func test_createGizmo_placesLightDirectionHandleAlongCurrentLightForwardAfterReselect() {
+        let light = makeEntity(name: "DirectionalLight", pos: SIMD3<Float>(0, 0, 0), isLight: true)
+        activeEntity = light
+        rotateTo(entityId: light, angle: 35.0, axis: SIMD3<Float>(0.0, 1.0, 0.0))
+        rotateTo(entityId: light, angle: -20.0, axis: SIMD3<Float>(1.0, 0.0, 0.0))
+
+        createGizmo(mode: .translate)
+        removeGizmo()
+
+        createGizmo(mode: .translate)
+
+        let directionHandle = findGizmoHandle(mode: .lightRotate, axis: .none)
+        guard directionHandle != .invalid else {
+            XCTFail("Expected light direction handle.")
+            return
+        }
+
+        let expectedOffset = simd_normalize(-1.0 * getForwardAxisVector(entityId: light))
+        assertNearlyEqual(getLocalPosition(entityId: directionHandle), expectedOffset, accuracy: 0.0002)
+    }
+
     func test_gizmoRootWorldPosition_usesGizmoParentWhenAvailable() {
         let active = makeEntity(name: "OffsetBox", pos: SIMD3<Float>(1, 2, 3))
         activeEntity = active
