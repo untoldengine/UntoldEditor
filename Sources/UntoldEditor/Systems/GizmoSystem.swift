@@ -19,9 +19,250 @@ private enum GizmoDimensions {
     static let scaleCubeExtent: Float = 0.16
     static let rotateRingRadius: Float = 0.9
     static let rotateRingThickness: Float = 0.01
+    static let rotateHitRingThickness: Float = 0.08
     static let rotateRingSegments: Int = 48
+    static let rotateHitRingSegments: Int = 36
     static let directionHandleRadius: Float = 0.08
     static let directionHandleOffsetY: Float = -1.0
+}
+
+enum GizmoMode: String {
+    case translate
+    case rotate
+    case scale
+
+    init(name: String) {
+        switch name {
+        case "rotateGizmo":
+            self = .rotate
+        case "scaleGizmo":
+            self = .scale
+        default:
+            self = .translate
+        }
+    }
+}
+
+final class GizmoHandleComponent: Component {
+    var mode: TransformManipulationMode = .none
+    var axis: TransformAxis = .none
+
+    required init() {}
+}
+
+final class GizmoHitProxyComponent: Component {
+    required init() {}
+}
+
+private struct GizmoHandleDescriptor {
+    let mode: TransformManipulationMode
+    let axis: TransformAxis
+}
+
+struct GizmoDragRay {
+    let origin: simd_float3
+    let direction: simd_float3
+}
+
+private struct GizmoDragState {
+    let mode: TransformManipulationMode
+    let axis: TransformAxis
+    let axisWorldDirection: simd_float3
+    let startAxisParameter: Float
+    let startActiveLocalPosition: simd_float3
+    let startGizmoWorldPosition: simd_float3
+    var appliedAxisAmount: Float = 0.0
+
+    var isAxisDriven: Bool {
+        mode == .translate || mode == .scale
+    }
+}
+
+private var gizmoDragState: GizmoDragState?
+
+func gizmoRootWorldPosition() -> simd_float3 {
+    guard parentEntityIdGizmo != .invalid else {
+        return activeEntity == .invalid ? .zero : getPosition(entityId: activeEntity)
+    }
+
+    return getPosition(entityId: parentEntityIdGizmo)
+}
+
+func beginGizmoDrag(ray: GizmoDragRay) {
+    guard activeEntity != .invalid,
+          parentEntityIdGizmo != .invalid,
+          let handleComponent = scene.get(component: GizmoHandleComponent.self, for: activeHitGizmoEntity)
+    else {
+        gizmoDragState = nil
+        return
+    }
+
+    let axisDirection = worldDirection(for: handleComponent.axis)
+    guard handleComponent.mode == .translate || handleComponent.mode == .scale,
+          simd_length_squared(axisDirection) > 0.0001
+    else {
+        gizmoDragState = nil
+        return
+    }
+
+    let normalizedRayDirection = normalizeOrNil(ray.direction) ?? ray.direction
+    guard let startParameter = closestParameterOnAxis(
+        axisPoint: gizmoRootWorldPosition(),
+        axisDirection: axisDirection,
+        rayOrigin: ray.origin,
+        rayDirection: normalizedRayDirection
+    ) else {
+        gizmoDragState = nil
+        return
+    }
+
+    gizmoDragState = GizmoDragState(
+        mode: handleComponent.mode,
+        axis: handleComponent.axis,
+        axisWorldDirection: axisDirection,
+        startAxisParameter: startParameter,
+        startActiveLocalPosition: getLocalPosition(entityId: activeEntity),
+        startGizmoWorldPosition: gizmoRootWorldPosition()
+    )
+}
+
+func updateGizmoDrag(ray: GizmoDragRay) {
+    guard var state = gizmoDragState,
+          state.isAxisDriven
+    else {
+        return
+    }
+
+    let normalizedRayDirection = normalizeOrNil(ray.direction) ?? ray.direction
+    guard let currentParameter = closestParameterOnAxis(
+        axisPoint: state.startGizmoWorldPosition,
+        axisDirection: state.axisWorldDirection,
+        rayOrigin: ray.origin,
+        rayDirection: normalizedRayDirection
+    ) else {
+        return
+    }
+
+    let axisAmount = currentParameter - state.startAxisParameter
+    let incrementalAmount = axisAmount - state.appliedAxisAmount
+    guard incrementalAmount.isFinite else {
+        return
+    }
+
+    switch state.mode {
+    case .translate:
+        let translation = state.axisWorldDirection * axisAmount
+        translateTo(entityId: activeEntity, position: state.startActiveLocalPosition + translation)
+        translateTo(entityId: parentEntityIdGizmo, position: state.startGizmoWorldPosition + translation)
+
+    case .scale:
+        if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
+            handleLightScaleInput(projectedAmount: incrementalAmount, axis: state.axisWorldDirection)
+        } else {
+            applyWorldSpaceScaleDelta(
+                entityId: activeEntity,
+                worldAxis: state.axisWorldDirection,
+                projectedAmount: incrementalAmount
+            )
+        }
+
+    default:
+        break
+    }
+
+    state.appliedAxisAmount = axisAmount
+    gizmoDragState = state
+}
+
+func endGizmoDrag() {
+    gizmoDragState = nil
+}
+
+func hasActiveAxisGizmoDrag() -> Bool {
+    gizmoDragState?.isAxisDriven == true
+}
+
+func applyGizmoRotationDelta(entityId: EntityID, axis: simd_float3, degrees: Float) {
+    guard entityId != .invalid,
+          degrees.isFinite,
+          simd_length_squared(axis) > 0.0001,
+          let localTransform = scene.get(component: LocalTransformComponent.self, for: entityId)
+    else {
+        return
+    }
+
+    let delta = simd_quatf(angle: degreesToRadians(degrees: degrees), axis: simd_normalize(axis))
+    let currentRotation = normalizedRotationOrIdentity(localTransform.rotation)
+    localTransform.rotation = simd_normalize(simd_mul(delta, currentRotation))
+    translateTo(entityId: entityId, position: localTransform.position)
+    syncStoredAxisRotationsFromQuaternion(entityId: entityId)
+}
+
+private func normalizedRotationOrIdentity(_ rotation: simd_quatf) -> simd_quatf {
+    let lengthSquared = rotation.real * rotation.real + simd_length_squared(rotation.vector)
+    guard lengthSquared.isFinite, lengthSquared > 0.0001 else {
+        return simd_quatf(real: 1.0, imag: .zero)
+    }
+
+    return simd_normalize(rotation)
+}
+
+private func syncStoredAxisRotationsFromQuaternion(entityId: EntityID) {
+    guard let localTransform = scene.get(component: LocalTransformComponent.self, for: entityId) else {
+        return
+    }
+
+    let euler = transformQuaternionToEulerAngles(q: localTransform.rotation)
+    localTransform.rotationX = euler.pitch
+    localTransform.rotationY = euler.yaw
+    localTransform.rotationZ = euler.roll
+}
+
+private func worldDirection(for axis: TransformAxis) -> simd_float3 {
+    switch axis {
+    case .x:
+        return simd_float3(1.0, 0.0, 0.0)
+    case .y:
+        return simd_float3(0.0, 1.0, 0.0)
+    case .z:
+        return simd_float3(0.0, 0.0, 1.0)
+    case .none:
+        return .zero
+    }
+}
+
+private func normalizeOrNil(_ value: simd_float3) -> simd_float3? {
+    let lengthSquared = simd_length_squared(value)
+    guard lengthSquared.isFinite, lengthSquared > 0.0001 else {
+        return nil
+    }
+    return value / sqrt(lengthSquared)
+}
+
+private func closestParameterOnAxis(
+    axisPoint: simd_float3,
+    axisDirection: simd_float3,
+    rayOrigin: simd_float3,
+    rayDirection: simd_float3
+) -> Float? {
+    guard let axis = normalizeOrNil(axisDirection),
+          let ray = normalizeOrNil(rayDirection)
+    else {
+        return nil
+    }
+
+    let w = axisPoint - rayOrigin
+    let axisRayDot = simd_dot(axis, ray)
+    let axisPointDot = simd_dot(axis, w)
+    let rayPointDot = simd_dot(ray, w)
+    let denominator = 1.0 - axisRayDot * axisRayDot
+
+    guard abs(denominator) > 0.0001 else {
+        return nil
+    }
+
+    let parameter = (axisRayDot * rayPointDot - axisPointDot) / denominator
+    return parameter.isFinite ? parameter : nil
 }
 
 private func applyGizmoHandleColor(entityId: EntityID, color: simd_float4) {
@@ -102,7 +343,9 @@ private func createGizmoHandle(
     meshes: [Mesh],
     localPosition: simd_float3,
     color: simd_float4,
-    rotation: (angle: Float, axis: simd_float3)? = nil
+    descriptor: GizmoHandleDescriptor,
+    rotation: (angle: Float, axis: simd_float3)? = nil,
+    isHitProxy: Bool = false
 ) -> EntityID {
     let handle = createEntity()
     setEntityName(entityId: handle, name: name)
@@ -113,6 +356,13 @@ private func createGizmoHandle(
         rotateTo(entityId: handle, angle: rotation.angle, axis: rotation.axis)
     }
     registerComponent(entityId: handle, componentType: GizmoComponent.self)
+    if let handleComponent = scene.assign(to: handle, component: GizmoHandleComponent.self) {
+        handleComponent.mode = descriptor.mode
+        handleComponent.axis = descriptor.axis
+    }
+    if isHitProxy {
+        registerComponent(entityId: handle, componentType: GizmoHitProxyComponent.self)
+    }
     applyGizmoHandleColor(entityId: handle, color: color)
     return handle
 }
@@ -124,9 +374,22 @@ private func makeDirectionHandle() -> EntityID {
         parentId: parentEntityIdGizmo,
         name: "directionHandle",
         meshes: BasicPrimitives.createSphere(extent: GizmoDimensions.directionHandleRadius, segments: [24, 12]),
-        localPosition: simd_float3(0.0, GizmoDimensions.directionHandleOffsetY, 0.0),
-        color: handleColor
+        localPosition: initialLightDirectionHandleOffset(),
+        color: handleColor,
+        descriptor: GizmoHandleDescriptor(mode: .lightRotate, axis: .none)
     )
+}
+
+private func initialLightDirectionHandleOffset() -> simd_float3 {
+    guard activeEntity != .invalid,
+          let localTransform = scene.get(component: LocalTransformComponent.self, for: activeEntity)
+    else {
+        return simd_float3(0.0, GizmoDimensions.directionHandleOffsetY, 0.0)
+    }
+
+    let forward = forwardDirectionVector(from: localTransform.rotation)
+    let handleDirection = simd_length(forward) > 0.0001 ? simd_normalize(forward) : simd_float3(0.0, -1.0, 0.0)
+    return handleDirection * abs(GizmoDimensions.directionHandleOffsetY)
 }
 
 private func rotationFromYAxis(to direction: simd_float3) -> (angle: Float, axis: simd_float3)? {
@@ -195,8 +458,68 @@ private func makeRotationRing(
             meshes: makeRingSegmentMesh(),
             localPosition: localPos,
             color: color,
+            descriptor: GizmoHandleDescriptor(mode: .rotate, axis: axisForRotationHandleName(handleName)),
             rotation: rotation
         )
+    }
+}
+
+private func makeRotationHitRing(
+    handleName: String,
+    axisA: simd_float3,
+    axisB: simd_float3,
+    startAngle: Float = 0.0,
+    sweepAngle: Float = 2.0 * Float.pi
+) {
+    let fullTurn = 2.0 * Float.pi
+    let normalizedSweep = max(0.0001, abs(sweepAngle))
+    let segmentCount = max(1, Int(round(Float(GizmoDimensions.rotateHitRingSegments) * (normalizedSweep / fullTurn))))
+    let radius = GizmoDimensions.rotateRingRadius
+    let delta = sweepAngle / Float(segmentCount)
+    let segmentLength = 2.0 * radius * sin(abs(delta) * 0.5)
+    let descriptor = GizmoHandleDescriptor(mode: .rotate, axis: axisForRotationHandleName(handleName))
+
+    @inline(__always)
+    func makeHitSegmentMesh() -> [Mesh] {
+        BasicPrimitives.createCylinder(
+            height: segmentLength,
+            radius: GizmoDimensions.rotateHitRingThickness,
+            segments: [16, 1]
+        )
+    }
+
+    for i in 0 ..< segmentCount {
+        let theta = startAngle + (Float(i) + 0.5) * delta
+        let c = cos(theta)
+        let s = sin(theta)
+
+        let localPos = axisA * (radius * c) + axisB * (radius * s)
+        let tangent = axisA * -s + axisB * c
+        let rotation = rotationFromYAxis(to: tangent)
+
+        createGizmoHandle(
+            parentId: parentEntityIdGizmo,
+            name: "\(handleName)HitProxy",
+            meshes: makeHitSegmentMesh(),
+            localPosition: localPos,
+            color: simd_float4(0.0, 0.0, 0.0, 0.0),
+            descriptor: descriptor,
+            rotation: rotation,
+            isHitProxy: true
+        )
+    }
+}
+
+private func axisForRotationHandleName(_ handleName: String) -> TransformAxis {
+    switch handleName {
+    case "xAxisRotate":
+        return .x
+    case "yAxisRotate":
+        return .y
+    case "zAxisRotate":
+        return .z
+    default:
+        return .none
     }
 }
 
@@ -233,6 +556,7 @@ func makeTranslateGizmo() {
         meshes: makeShaftMeshes(),
         localPosition: simd_float3(halfShaft, 0.0, 0.0),
         color: xColor,
+        descriptor: GizmoHandleDescriptor(mode: .translate, axis: .x),
         rotation: (90.0, simd_float3(0.0, 0.0, 1.0))
     )
     createGizmoHandle(
@@ -241,6 +565,7 @@ func makeTranslateGizmo() {
         meshes: makeArrowMeshes(),
         localPosition: simd_float3(tipOffset, 0.0, 0.0),
         color: xColor,
+        descriptor: GizmoHandleDescriptor(mode: .translate, axis: .x),
         rotation: (-90.0, simd_float3(0.0, 0.0, 1.0))
     )
 
@@ -250,14 +575,16 @@ func makeTranslateGizmo() {
         name: "yAxisTranslate",
         meshes: makeShaftMeshes(),
         localPosition: simd_float3(0.0, halfShaft, 0.0),
-        color: yColor
+        color: yColor,
+        descriptor: GizmoHandleDescriptor(mode: .translate, axis: .y)
     )
     createGizmoHandle(
         parentId: parentEntityIdGizmo,
         name: "yAxisTranslate",
         meshes: makeArrowMeshes(),
         localPosition: simd_float3(0.0, tipOffset, 0.0),
-        color: yColor
+        color: yColor,
+        descriptor: GizmoHandleDescriptor(mode: .translate, axis: .y)
     )
 
     // Z axis
@@ -267,6 +594,7 @@ func makeTranslateGizmo() {
         meshes: makeShaftMeshes(),
         localPosition: simd_float3(0.0, 0.0, halfShaft),
         color: zColor,
+        descriptor: GizmoHandleDescriptor(mode: .translate, axis: .z),
         rotation: (90.0, simd_float3(1.0, 0.0, 0.0))
     )
     createGizmoHandle(
@@ -275,6 +603,7 @@ func makeTranslateGizmo() {
         meshes: makeArrowMeshes(),
         localPosition: simd_float3(0.0, 0.0, tipOffset),
         color: zColor,
+        descriptor: GizmoHandleDescriptor(mode: .translate, axis: .z),
         rotation: (90.0, simd_float3(1.0, 0.0, 0.0))
     )
 }
@@ -308,6 +637,7 @@ func makeScaleGizmo() {
         meshes: makeShaftMeshes(),
         localPosition: simd_float3(halfShaft, 0.0, 0.0),
         color: xColor,
+        descriptor: GizmoHandleDescriptor(mode: .scale, axis: .x),
         rotation: (90.0, simd_float3(0.0, 0.0, 1.0))
     )
     createGizmoHandle(
@@ -315,7 +645,8 @@ func makeScaleGizmo() {
         name: "xAxisScale",
         meshes: makeTipCubeMeshes(),
         localPosition: simd_float3(cubeCenterOffset, 0.0, 0.0),
-        color: xColor
+        color: xColor,
+        descriptor: GizmoHandleDescriptor(mode: .scale, axis: .x)
     )
 
     // Y axis
@@ -324,14 +655,16 @@ func makeScaleGizmo() {
         name: "yAxisScale",
         meshes: makeShaftMeshes(),
         localPosition: simd_float3(0.0, halfShaft, 0.0),
-        color: yColor
+        color: yColor,
+        descriptor: GizmoHandleDescriptor(mode: .scale, axis: .y)
     )
     createGizmoHandle(
         parentId: parentEntityIdGizmo,
         name: "yAxisScale",
         meshes: makeTipCubeMeshes(),
         localPosition: simd_float3(0.0, cubeCenterOffset, 0.0),
-        color: yColor
+        color: yColor,
+        descriptor: GizmoHandleDescriptor(mode: .scale, axis: .y)
     )
 
     // Z axis
@@ -341,6 +674,7 @@ func makeScaleGizmo() {
         meshes: makeShaftMeshes(),
         localPosition: simd_float3(0.0, 0.0, halfShaft),
         color: zColor,
+        descriptor: GizmoHandleDescriptor(mode: .scale, axis: .z),
         rotation: (90.0, simd_float3(1.0, 0.0, 0.0))
     )
     createGizmoHandle(
@@ -348,7 +682,8 @@ func makeScaleGizmo() {
         name: "zAxisScale",
         meshes: makeTipCubeMeshes(),
         localPosition: simd_float3(0.0, 0.0, cubeCenterOffset),
-        color: zColor
+        color: zColor,
+        descriptor: GizmoHandleDescriptor(mode: .scale, axis: .z)
     )
 }
 
@@ -368,11 +703,25 @@ func makeRotationGizmo() {
         startAngle: positiveArcStart,
         sweepAngle: positiveArcSweep
     )
+    makeRotationHitRing(
+        handleName: "xAxisRotate",
+        axisA: simd_float3(0.0, 1.0, 0.0),
+        axisB: simd_float3(0.0, 0.0, 1.0),
+        startAngle: positiveArcStart,
+        sweepAngle: positiveArcSweep
+    )
 
     // Y-axis rotation ring (XZ plane)
     makeRotationRing(
         handleName: "yAxisRotate",
         color: yColor,
+        axisA: simd_float3(1.0, 0.0, 0.0),
+        axisB: simd_float3(0.0, 0.0, 1.0),
+        startAngle: positiveArcStart,
+        sweepAngle: positiveArcSweep
+    )
+    makeRotationHitRing(
+        handleName: "yAxisRotate",
         axisA: simd_float3(1.0, 0.0, 0.0),
         axisB: simd_float3(0.0, 0.0, 1.0),
         startAngle: positiveArcStart,
@@ -388,9 +737,20 @@ func makeRotationGizmo() {
         startAngle: positiveArcStart,
         sweepAngle: positiveArcSweep
     )
+    makeRotationHitRing(
+        handleName: "zAxisRotate",
+        axisA: simd_float3(1.0, 0.0, 0.0),
+        axisB: simd_float3(0.0, 1.0, 0.0),
+        startAngle: positiveArcStart,
+        sweepAngle: positiveArcSweep
+    )
 }
 
 func createGizmo(name: String) {
+    createGizmo(mode: GizmoMode(name: name))
+}
+
+func createGizmo(mode: GizmoMode) {
     removeGizmo()
     directionHandleEntityId = .invalid
 
@@ -407,14 +767,13 @@ func createGizmo(name: String) {
 
     translateTo(entityId: parentEntityIdGizmo, position: gizmoAnchorWorldPosition(entityId: activeEntity))
 
-    if name == "translateGizmo" {
+    switch mode {
+    case .translate:
         makeTranslateGizmo()
-    } else if name == "rotateGizmo" {
+    case .rotate:
         makeRotationGizmo()
-    } else if name == "scaleGizmo" {
+    case .scale:
         makeScaleGizmo()
-    } else {
-        makeTranslateGizmo()
     }
 
     if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
@@ -430,41 +789,19 @@ func processGizmoAction(entityId: EntityID) {
             return
         }
 
-        if getEntityName(entityId: entityId) == "xAxisTranslate" {
-            editorController!.activeAxis = .x
-            editorController!.activeMode = .translate
-        } else if getEntityName(entityId: entityId) == "yAxisTranslate" {
-            editorController!.activeAxis = .y
-            editorController!.activeMode = .translate
-        } else if getEntityName(entityId: entityId) == "zAxisTranslate" {
-            editorController!.activeAxis = .z
-            editorController!.activeMode = .translate
-        } else if getEntityName(entityId: entityId) == "yAxisRotate" {
-            editorController!.activeAxis = .y
-            editorController!.activeMode = .rotate
-        } else if getEntityName(entityId: entityId) == "xAxisRotate" {
-            editorController!.activeAxis = .x
-            editorController!.activeMode = .rotate
-        } else if getEntityName(entityId: entityId) == "zAxisRotate" {
-            editorController!.activeAxis = .z
-            editorController!.activeMode = .rotate
-        } else if getEntityName(entityId: entityId) == "xAxisScale" {
-            editorController!.activeAxis = .x
-            editorController!.activeMode = .scale
-        } else if getEntityName(entityId: entityId) == "yAxisScale" {
-            editorController!.activeAxis = .y
-            editorController!.activeMode = .scale
-        } else if getEntityName(entityId: entityId) == "zAxisScale" {
-            editorController!.activeAxis = .z
-            editorController!.activeMode = .scale
-        } else if getEntityName(entityId: entityId) == "directionHandle" {
-            editorController!.activeMode = .lightRotate
-            editorController!.activeAxis = .none
-        } else {
-            activeHitGizmoEntity = .invalid
-            editorController?.activeMode = .none
-            editorController?.activeAxis = .none
+        guard let editorController else {
+            return
         }
+
+        guard let handleComponent = scene.get(component: GizmoHandleComponent.self, for: entityId) else {
+            activeHitGizmoEntity = .invalid
+            editorController.activeMode = .none
+            editorController.activeAxis = .none
+            return
+        }
+
+        editorController.activeAxis = handleComponent.axis
+        editorController.activeMode = handleComponent.mode
     #endif
 }
 
@@ -473,20 +810,7 @@ func hitGizmoToolAxis(entityId: EntityID) -> Bool {
         return false
     }
 
-    let name = getEntityName(entityId: entityId)
-
-    let validNames: Set = [
-        "xAxisTranslate", "yAxisTranslate", "zAxisTranslate",
-        "xAxisRotate", "yAxisRotate", "zAxisRotate",
-        "xAxisScale", "yAxisScale", "zAxisScale",
-        "directionHandle",
-    ]
-
-    if validNames.contains(name) {
-        return true
-    } else {
-        return false
-    }
+    return scene.get(component: GizmoHandleComponent.self, for: entityId) != nil
 }
 
 func removeGizmo() {

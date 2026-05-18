@@ -90,6 +90,10 @@ extension RenderPasses {
 
         // Iterate over the entities found by the component query
         for entityId in entities {
+            if hasComponent(entityId: entityId, componentType: GizmoHitProxyComponent.self) {
+                continue
+            }
+
             guard let renderComponent = scene.get(component: RenderComponent.self, for: entityId) else {
                 handleError(.noRenderComponent, entityId)
                 continue

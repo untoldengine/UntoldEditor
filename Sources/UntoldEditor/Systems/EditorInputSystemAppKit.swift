@@ -251,6 +251,15 @@
                     let (hitEntityId, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
                     if hit {
                         activeHitGizmoEntity = hitEntityId
+                        processGizmoAction(entityId: activeHitGizmoEntity)
+                        if let rayContext = raycastContext(currentLocation: currentLocation, view: view) {
+                            beginGizmoDrag(
+                                ray: GizmoDragRay(
+                                    origin: rayContext.rayOrigin,
+                                    direction: rayContext.rayDirection
+                                )
+                            )
+                        }
                         if activeEntity != .invalid {
                             EditorUndoManager.shared.beginTransformEdit(entityId: activeEntity)
                         }
@@ -264,6 +273,16 @@
             case .changed:
                 // Editor-only: process gizmo if we hit one
                 if isEditorEnabled {
+                    if activeHitGizmoEntity != .invalid,
+                       let rayContext = raycastContext(currentLocation: currentLocation, view: view)
+                    {
+                        updateGizmoDrag(
+                            ray: GizmoDragRay(
+                                origin: rayContext.rayOrigin,
+                                direction: rayContext.rayDirection
+                            )
+                        )
+                    }
                     processGizmoAction(entityId: activeHitGizmoEntity)
                     if activeHitGizmoEntity != .invalid {
                         // While dragging a gizmo, skip camera orbit updates
@@ -306,6 +325,7 @@
                 initialPanLocation = nil
                 currentPanGestureState = .ended
                 cameraControlMode = .idle
+                endGizmoDrag()
 
             default:
                 break

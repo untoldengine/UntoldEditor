@@ -18,6 +18,7 @@ final class GizmoSystemTests: XCTestCase {
     private var originalParentGizmo: EntityID!
     private var originalGizmoActive: Bool!
     private var originalActiveHitGizmoEntity: EntityID!
+    private var originalDirectionHandleEntityId: EntityID!
 
     #if canImport(AppKit)
         /// Editor controller mock up
@@ -35,12 +36,14 @@ final class GizmoSystemTests: XCTestCase {
         originalParentGizmo = parentEntityIdGizmo
         originalGizmoActive = gizmoActive
         originalActiveHitGizmoEntity = activeHitGizmoEntity
+        originalDirectionHandleEntityId = directionHandleEntityId
 
         // Put engine in a clean state
         activeEntity = .invalid
         parentEntityIdGizmo = .invalid
         gizmoActive = false
         activeHitGizmoEntity = .invalid
+        directionHandleEntityId = .invalid
 
         guard let device = MTLCreateSystemDefaultDevice() else {
             assertionFailure("Metal device is not available.")
@@ -58,10 +61,12 @@ final class GizmoSystemTests: XCTestCase {
         if parentEntityIdGizmo != .invalid {
             removeGizmo()
         }
+        endGizmoDrag()
         activeEntity = originalActiveEntity
         parentEntityIdGizmo = originalParentGizmo
         gizmoActive = originalGizmoActive
         activeHitGizmoEntity = originalActiveHitGizmoEntity
+        directionHandleEntityId = originalDirectionHandleEntityId
 
         super.tearDown()
     }
@@ -73,10 +78,74 @@ final class GizmoSystemTests: XCTestCase {
                             isLight: Bool = false) -> EntityID
     {
         let e = createEntity()
+        if !hasComponent(entityId: e, componentType: LocalTransformComponent.self) {
+            registerTransformComponent(entityId: e)
+        }
         if let name { setEntityName(entityId: e, name: name) }
         if let p = pos { translateTo(entityId: e, position: p) }
         if isLight { registerComponent(entityId: e, componentType: LightComponent.self) }
         return e
+    }
+
+    private func makeGizmoHandle(mode: TransformManipulationMode, axis: TransformAxis) -> EntityID {
+        let e = makeEntity(name: "metadataHandle")
+        registerComponent(entityId: e, componentType: GizmoComponent.self)
+        let handle = scene.assign(to: e, component: GizmoHandleComponent.self)
+        handle?.mode = mode
+        handle?.axis = axis
+        return e
+    }
+
+    private func findGizmoHandle(mode: TransformManipulationMode, axis: TransformAxis) -> EntityID {
+        getEntityChildren(parentId: parentEntityIdGizmo).first(where: {
+            guard let handle = scene.get(component: GizmoHandleComponent.self, for: $0) else { return false }
+            return handle.mode == mode && handle.axis == axis
+        }) ?? .invalid
+    }
+
+    private func rayThroughGizmoAxis(_ axis: TransformAxis, amount: Float) -> GizmoDragRay {
+        switch axis {
+        case .x:
+            return GizmoDragRay(origin: SIMD3<Float>(amount, 1.0, 0.0), direction: SIMD3<Float>(0.0, -1.0, 0.0))
+        case .y:
+            return GizmoDragRay(origin: SIMD3<Float>(1.0, amount, 0.0), direction: SIMD3<Float>(-1.0, 0.0, 0.0))
+        case .z:
+            return GizmoDragRay(origin: SIMD3<Float>(0.0, 1.0, amount), direction: SIMD3<Float>(0.0, -1.0, 0.0))
+        case .none:
+            return GizmoDragRay(origin: SIMD3<Float>(0.0, 1.0, 0.0), direction: SIMD3<Float>(0.0, -1.0, 0.0))
+        }
+    }
+
+    private func vector(for axis: TransformAxis, amount: Float) -> SIMD3<Float> {
+        switch axis {
+        case .x:
+            return SIMD3<Float>(amount, 0.0, 0.0)
+        case .y:
+            return SIMD3<Float>(0.0, amount, 0.0)
+        case .z:
+            return SIMD3<Float>(0.0, 0.0, amount)
+        case .none:
+            return .zero
+        }
+    }
+
+    private func component(of vector: SIMD3<Float>, along axis: TransformAxis) -> Float {
+        switch axis {
+        case .x:
+            return vector.x
+        case .y:
+            return vector.y
+        case .z:
+            return vector.z
+        case .none:
+            return 0.0
+        }
+    }
+
+    private func assertNearlyEqual(_ lhs: simd_float3, _ rhs: simd_float3, accuracy: Float = 0.0001, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(lhs.x, rhs.x, accuracy: accuracy, file: file, line: line)
+        XCTAssertEqual(lhs.y, rhs.y, accuracy: accuracy, file: file, line: line)
+        XCTAssertEqual(lhs.z, rhs.z, accuracy: accuracy, file: file, line: line)
     }
 
     // MARK: - createGizmo()
@@ -172,17 +241,12 @@ final class GizmoSystemTests: XCTestCase {
 
     // MARK: - hitGizmoToolAxis()
 
-    func test_hitGizmoToolAxis_validNamesReturnTrue_andInvalidReturnsFalse() {
-        let validNames = [
-            "xAxisTranslate", "yAxisTranslate", "zAxisTranslate",
-            "xAxisRotate", "yAxisRotate", "zAxisRotate",
-            "xAxisScale", "yAxisScale", "zAxisScale",
-            "directionHandle",
-        ]
-        for n in validNames {
-            let e = makeEntity(name: n)
-            XCTAssertTrue(hitGizmoToolAxis(entityId: e), "Expected \(n) to be recognized as a gizmo handle.")
-        }
+    func test_hitGizmoToolAxis_usesHandleMetadata() {
+        let valid = makeGizmoHandle(mode: .translate, axis: .x)
+        XCTAssertTrue(hitGizmoToolAxis(entityId: valid), "Expected metadata handle to be recognized.")
+
+        let legacyNameOnly = makeEntity(name: "xAxisTranslate")
+        XCTAssertFalse(hitGizmoToolAxis(entityId: legacyNameOnly), "Names alone should not make an entity a gizmo handle.")
 
         let invalid = makeEntity(name: "randomNode")
         XCTAssertFalse(hitGizmoToolAxis(entityId: invalid), "Non-gizmo nodes should return false.")
@@ -202,26 +266,25 @@ final class GizmoSystemTests: XCTestCase {
             let controller = makeEditorController()
             editorController = controller
 
-            // (name → expected axis, expected mode)
-            let cases: [(String, TransformAxis, TransformManipulationMode)] = [
-                ("xAxisTranslate", .x, .translate),
-                ("yAxisTranslate", .y, .translate),
-                ("zAxisTranslate", .z, .translate),
-                ("xAxisRotate", .x, .rotate),
-                ("yAxisRotate", .y, .rotate),
-                ("zAxisRotate", .z, .rotate),
-                ("xAxisScale", .x, .scale),
-                ("yAxisScale", .y, .scale),
-                ("zAxisScale", .z, .scale),
-                ("directionHandle", .none, .lightRotate),
+            let cases: [(TransformManipulationMode, TransformAxis)] = [
+                (.translate, .x),
+                (.translate, .y),
+                (.translate, .z),
+                (.rotate, .x),
+                (.rotate, .y),
+                (.rotate, .z),
+                (.scale, .x),
+                (.scale, .y),
+                (.scale, .z),
+                (.lightRotate, .none),
             ]
 
-            for (name, expAxis, expMode) in cases {
-                let e = makeEntity(name: name)
+            for (expMode, expAxis) in cases {
+                let e = makeGizmoHandle(mode: expMode, axis: expAxis)
                 processGizmoAction(entityId: e)
 
-                XCTAssertEqual(controller.activeAxis, expAxis, "Axis for \(name) incorrect.")
-                XCTAssertEqual(controller.activeMode, expMode, "Mode for \(name) incorrect.")
+                XCTAssertEqual(controller.activeAxis, expAxis)
+                XCTAssertEqual(controller.activeMode, expMode)
             }
 
             // Unknown handle → reset to none
@@ -229,6 +292,15 @@ final class GizmoSystemTests: XCTestCase {
             processGizmoAction(entityId: unknown)
             XCTAssertEqual(controller.activeAxis, .none)
             XCTAssertEqual(controller.activeMode, .none)
+        }
+
+        func test_processGizmoAction_withoutEditorControllerDoesNotCrash() {
+            editorController = nil
+            let e = makeGizmoHandle(mode: .translate, axis: .x)
+
+            processGizmoAction(entityId: e)
+
+            XCTAssertTrue(hitGizmoToolAxis(entityId: e))
         }
 
         func test_processGizmoAction_earlyReturnOnInvalid() {
@@ -266,5 +338,219 @@ final class GizmoSystemTests: XCTestCase {
         // Assert: back to defaults and parent entity gone
         XCTAssertEqual(parentEntityIdGizmo, .invalid)
         XCTAssertFalse(gizmoActive)
+    }
+
+    func test_createGizmo_addsTypedHandleMetadataToChildren() {
+        let active = makeEntity(name: "Box", pos: SIMD3<Float>(0, 0, 0))
+        activeEntity = active
+
+        createGizmo(mode: .translate)
+
+        let children = getEntityChildren(parentId: parentEntityIdGizmo)
+        XCTAssertFalse(children.isEmpty)
+        XCTAssertTrue(children.allSatisfy { hitGizmoToolAxis(entityId: $0) })
+        XCTAssertTrue(children.contains {
+            guard let handle = scene.get(component: GizmoHandleComponent.self, for: $0) else { return false }
+            return handle.mode == .translate && handle.axis == .x
+        })
+    }
+
+    func test_createRotateGizmo_addsHiddenHitProxyHandlesForEveryAxis() {
+        let active = makeEntity(name: "RotatableBox", pos: SIMD3<Float>(0, 0, 0))
+        activeEntity = active
+
+        createGizmo(mode: .rotate)
+
+        let children = getEntityChildren(parentId: parentEntityIdGizmo)
+        for axis in [TransformAxis.x, .y, .z] {
+            let proxies = children.filter {
+                guard hasComponent(entityId: $0, componentType: GizmoHitProxyComponent.self),
+                      let handle = scene.get(component: GizmoHandleComponent.self, for: $0)
+                else {
+                    return false
+                }
+                return handle.mode == .rotate && handle.axis == axis
+            }
+
+            XCTAssertFalse(proxies.isEmpty, "Expected hidden rotate hit proxies for \(axis)-axis.")
+        }
+    }
+
+    func test_gizmoRootWorldPosition_usesGizmoParentWhenAvailable() {
+        let active = makeEntity(name: "OffsetBox", pos: SIMD3<Float>(1, 2, 3))
+        activeEntity = active
+        createGizmo(mode: .translate)
+        translateTo(entityId: parentEntityIdGizmo, position: SIMD3<Float>(9, 8, 7))
+
+        XCTAssertEqual(gizmoRootWorldPosition(), SIMD3<Float>(9, 8, 7))
+    }
+
+    func test_axisGizmoDrag_translatesFromCurrentRayConstraint() {
+        let active = makeEntity(name: "DraggedBox", pos: SIMD3<Float>(0, 0, 0))
+        activeEntity = active
+        createGizmo(mode: .translate)
+
+        let xHandle = findGizmoHandle(mode: .translate, axis: .x)
+        guard xHandle != .invalid else {
+            XCTFail("Expected x-axis translate handle.")
+            return
+        }
+
+        activeHitGizmoEntity = xHandle
+        beginGizmoDrag(
+            ray: GizmoDragRay(
+                origin: SIMD3<Float>(0, 1, 0),
+                direction: SIMD3<Float>(0, -1, 0)
+            )
+        )
+        updateGizmoDrag(
+            ray: GizmoDragRay(
+                origin: SIMD3<Float>(2, 1, 0),
+                direction: SIMD3<Float>(0, -1, 0)
+            )
+        )
+
+        XCTAssertEqual(getLocalPosition(entityId: active), SIMD3<Float>(2, 0, 0))
+        XCTAssertEqual(getPosition(entityId: parentEntityIdGizmo), SIMD3<Float>(2, 0, 0))
+    }
+
+    func test_axisGizmoDrag_translationTracksAbsoluteAxisPositionForAllAxes() {
+        let axes: [TransformAxis] = [.x, .y, .z]
+
+        for axis in axes {
+            let startPosition = SIMD3<Float>(0.25, -0.5, 1.0)
+            let active = makeEntity(name: "AbsoluteTranslate-\(axis)", pos: startPosition)
+            activeEntity = active
+            createGizmo(mode: .translate)
+
+            let handle = findGizmoHandle(mode: .translate, axis: axis)
+            guard handle != .invalid else {
+                XCTFail("Expected translate handle for axis \(axis).")
+                return
+            }
+
+            activeHitGizmoEntity = handle
+            let startAxisAmount = component(of: startPosition, along: axis)
+            beginGizmoDrag(ray: rayThroughGizmoAxis(axis, amount: startAxisAmount))
+            updateGizmoDrag(ray: rayThroughGizmoAxis(axis, amount: startAxisAmount + 1.5))
+            updateGizmoDrag(ray: rayThroughGizmoAxis(axis, amount: startAxisAmount - 0.75))
+
+            let expectedEntityPosition = startPosition + vector(for: axis, amount: -0.75)
+            let expectedGizmoPosition = startPosition + vector(for: axis, amount: -0.75)
+            assertNearlyEqual(getLocalPosition(entityId: active), expectedEntityPosition)
+            assertNearlyEqual(getPosition(entityId: parentEntityIdGizmo), expectedGizmoPosition)
+
+            endGizmoDrag()
+            removeGizmo()
+        }
+    }
+
+    func test_axisGizmoDrag_scalesFromCurrentRayConstraint() {
+        let active = makeEntity(name: "ScaledBox", pos: SIMD3<Float>(0, 0, 0))
+        activeEntity = active
+        createGizmo(mode: .scale)
+
+        let xHandle = findGizmoHandle(mode: .scale, axis: .x)
+        guard xHandle != .invalid else {
+            XCTFail("Expected x-axis scale handle.")
+            return
+        }
+
+        activeHitGizmoEntity = xHandle
+        beginGizmoDrag(
+            ray: GizmoDragRay(
+                origin: SIMD3<Float>(0, 1, 0),
+                direction: SIMD3<Float>(0, -1, 0)
+            )
+        )
+        updateGizmoDrag(
+            ray: GizmoDragRay(
+                origin: SIMD3<Float>(0.5, 1, 0),
+                direction: SIMD3<Float>(0, -1, 0)
+            )
+        )
+
+        let scale = scene.get(component: LocalTransformComponent.self, for: active)?.scale
+        XCTAssertEqual(scale, SIMD3<Float>(1.5, 1.0, 1.0))
+    }
+
+    func test_axisGizmoDrag_scaleTracksAbsoluteAxisPositionForAllAxes() {
+        let axes: [TransformAxis] = [.x, .y, .z]
+
+        for axis in axes {
+            let active = makeEntity(name: "AbsoluteScale-\(axis)", pos: SIMD3<Float>(0, 0, 0))
+            activeEntity = active
+            createGizmo(mode: .scale)
+
+            let handle = findGizmoHandle(mode: .scale, axis: axis)
+            guard handle != .invalid else {
+                XCTFail("Expected scale handle for axis \(axis).")
+                return
+            }
+
+            activeHitGizmoEntity = handle
+            beginGizmoDrag(ray: rayThroughGizmoAxis(axis, amount: 0.0))
+            updateGizmoDrag(ray: rayThroughGizmoAxis(axis, amount: 0.4))
+            updateGizmoDrag(ray: rayThroughGizmoAxis(axis, amount: 1.25))
+
+            let expectedScale = SIMD3<Float>(repeating: 1.0) + vector(for: axis, amount: 1.25)
+            guard let scale = scene.get(component: LocalTransformComponent.self, for: active)?.scale else {
+                XCTFail("Expected LocalTransformComponent for scaled entity.")
+                return
+            }
+            assertNearlyEqual(scale, expectedScale)
+
+            endGizmoDrag()
+            removeGizmo()
+        }
+    }
+
+    func test_applyGizmoRotationDelta_repeatedYAxisRotationsStayOnYAxis() {
+        let active = makeEntity(name: "RepeatedYRotation", pos: SIMD3<Float>(0, 0, 0))
+
+        applyGizmoRotationDelta(entityId: active, axis: SIMD3<Float>(0, 1, 0), degrees: 30)
+        applyGizmoRotationDelta(entityId: active, axis: SIMD3<Float>(0, 1, 0), degrees: 15)
+
+        let orientation = getLocalOrientation(entityId: active)
+        let forward = simd_normalize(orientation * SIMD3<Float>(0, 0, 1))
+        let expectedForward = simd_normalize(
+            simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 1, 0)).act(SIMD3<Float>(0, 0, 1))
+        )
+
+        assertNearlyEqual(forward, expectedForward, accuracy: 0.0002)
+        XCTAssertEqual(forward.y, 0.0, accuracy: 0.0002)
+    }
+
+    func test_applyGizmoRotationDelta_afterExistingRotationUsesWorldAxis() {
+        let active = makeEntity(name: "WorldAxisRotation", pos: SIMD3<Float>(0, 0, 0))
+
+        applyGizmoRotationDelta(entityId: active, axis: SIMD3<Float>(1, 0, 0), degrees: 45)
+        let beforeUp = getLocalOrientation(entityId: active) * SIMD3<Float>(0, 1, 0)
+
+        applyGizmoRotationDelta(entityId: active, axis: SIMD3<Float>(0, 1, 0), degrees: 30)
+        let afterUp = getLocalOrientation(entityId: active) * SIMD3<Float>(0, 1, 0)
+
+        let expectedAfterUp = simd_quatf(angle: Float.pi / 6, axis: SIMD3<Float>(0, 1, 0)).act(beforeUp)
+        assertNearlyEqual(afterUp, expectedAfterUp, accuracy: 0.0002)
+    }
+
+    func test_applyGizmoRotationDelta_usesExplicitWorldAxisForEveryAxis() {
+        let cases: [(TransformAxis, SIMD3<Float>, Float)] = [
+            (.x, SIMD3<Float>(1.0, 0.0, 0.0), 20.0),
+            (.y, SIMD3<Float>(0.0, 1.0, 0.0), -35.0),
+            (.z, SIMD3<Float>(0.0, 0.0, 1.0), 50.0),
+        ]
+
+        for (axisName, axisVector, degrees) in cases {
+            let active = makeEntity(name: "WorldRotation-\(axisName)", pos: SIMD3<Float>(0, 0, 0))
+
+            applyGizmoRotationDelta(entityId: active, axis: axisVector, degrees: degrees)
+
+            let orientation = getLocalOrientation(entityId: active)
+            let expected = simd_quatf(angle: degreesToRadians(degrees: degrees), axis: axisVector)
+            assertNearlyEqual(simd_mul(orientation, SIMD3<Float>(1.0, 0.0, 0.0)), expected.act(SIMD3<Float>(1.0, 0.0, 0.0)), accuracy: 0.0002)
+            assertNearlyEqual(simd_mul(orientation, SIMD3<Float>(0.0, 1.0, 0.0)), expected.act(SIMD3<Float>(0.0, 1.0, 0.0)), accuracy: 0.0002)
+            assertNearlyEqual(simd_mul(orientation, SIMD3<Float>(0.0, 0.0, 1.0)), expected.act(SIMD3<Float>(0.0, 0.0, 1.0)), accuracy: 0.0002)
+        }
     }
 }
