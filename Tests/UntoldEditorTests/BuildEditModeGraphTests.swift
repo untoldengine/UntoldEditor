@@ -55,9 +55,9 @@ final class BuildEditModeGraphTests: XCTestCase {
         renderEnvironment = true
         defer { renderEnvironment = originalEnv }
 
-        let originalFXAA = FXAAParams.shared.enabled
-        FXAAParams.shared.enabled = false
-        defer { FXAAParams.shared.enabled = originalFXAA }
+        let originalAntiAliasingMode = antiAliasingMode
+        antiAliasingMode = .none
+        defer { antiAliasingMode = originalAntiAliasingMode }
 
         let (graph, finalID) = buildEditModeGraph()
 
@@ -93,9 +93,9 @@ final class BuildEditModeGraphTests: XCTestCase {
         renderEnvironment = true
         defer { renderEnvironment = originalEnv }
 
-        let originalFXAA = FXAAParams.shared.enabled
-        FXAAParams.shared.enabled = true
-        defer { FXAAParams.shared.enabled = originalFXAA }
+        let originalAntiAliasingMode = antiAliasingMode
+        antiAliasingMode = .fxaa
+        defer { antiAliasingMode = originalAntiAliasingMode }
 
         let (graph, finalID) = buildEditModeGraph()
 
@@ -132,9 +132,9 @@ final class BuildEditModeGraphTests: XCTestCase {
         renderEnvironment = false
         defer { renderEnvironment = originalEnv }
 
-        let originalFXAA = FXAAParams.shared.enabled
-        FXAAParams.shared.enabled = false
-        defer { FXAAParams.shared.enabled = originalFXAA }
+        let originalAntiAliasingMode = antiAliasingMode
+        antiAliasingMode = .none
+        defer { antiAliasingMode = originalAntiAliasingMode }
 
         let (graph, finalID) = buildEditModeGraph()
 
@@ -170,9 +170,9 @@ final class BuildEditModeGraphTests: XCTestCase {
         renderEnvironment = false
         defer { renderEnvironment = originalEnv }
 
-        let originalFXAA = FXAAParams.shared.enabled
-        FXAAParams.shared.enabled = true
-        defer { FXAAParams.shared.enabled = originalFXAA }
+        let originalAntiAliasingMode = antiAliasingMode
+        antiAliasingMode = .fxaa
+        defer { antiAliasingMode = originalAntiAliasingMode }
 
         let (graph, finalID) = buildEditModeGraph()
 

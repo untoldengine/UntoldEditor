@@ -46,7 +46,7 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             commandBuffer.label = "Rendering Command Buffer"
 
             // build a render graph
-            var (graph, _) = gameMode ? buildGameModeGraph() : buildEditModeGraph()
+            let (graph, _) = gameMode ? buildGameModeGraph() : buildEditModeGraph()
 
 //            if visualDebug == false {
 //                let compositePass = RenderPass(
@@ -202,16 +202,81 @@ func buildEditModeGraph() -> RenderGraphResult {
     graph[lookPass.id] = lookPass
 
     let outputDependency: String
-    if FXAAParams.shared.enabled {
-        let fxaaPass = RenderPass(
-            id: "fxaa",
-            dependencies: [lookPass.id],
-            execute: fxaaRenderPass
+    if renderDebugViewMode == .fxaaEdgeDebug {
+        let fxaaEdgeDebugPass = RenderPass(id: "fxaaEdgeDebug", dependencies: [lookPass.id], execute: fxaaEdgeDebugRenderPass)
+        graph[fxaaEdgeDebugPass.id] = fxaaEdgeDebugPass
+        outputDependency = fxaaEdgeDebugPass.id
+    } else if renderDebugViewMode == .smaaEdges {
+        let smaaEdgesPass = RenderPass(id: "smaaEdges", dependencies: [lookPass.id], execute: smaaEdgesRenderPass)
+        graph[smaaEdgesPass.id] = smaaEdgesPass
+        outputDependency = smaaEdgesPass.id
+    } else if renderDebugViewMode == .smaaBlend {
+        let smaaEdgesPass = RenderPass(id: "smaaEdges", dependencies: [lookPass.id], execute: smaaEdgesRenderPass)
+        graph[smaaEdgesPass.id] = smaaEdgesPass
+
+        let smaaBlendWeightsPass = RenderPass(
+            id: "smaaBlendWeights",
+            dependencies: [smaaEdgesPass.id],
+            execute: smaaBlendWeightsRenderPass
         )
-        graph[fxaaPass.id] = fxaaPass
-        outputDependency = fxaaPass.id
+        graph[smaaBlendWeightsPass.id] = smaaBlendWeightsPass
+        outputDependency = smaaBlendWeightsPass.id
+    } else if renderDebugViewMode == .smaaDifference {
+        let smaaEdgesPass = RenderPass(id: "smaaEdges", dependencies: [lookPass.id], execute: smaaEdgesRenderPass)
+        graph[smaaEdgesPass.id] = smaaEdgesPass
+
+        let smaaBlendWeightsPass = RenderPass(
+            id: "smaaBlendWeights",
+            dependencies: [smaaEdgesPass.id],
+            execute: smaaBlendWeightsRenderPass
+        )
+        graph[smaaBlendWeightsPass.id] = smaaBlendWeightsPass
+
+        let smaaNeighborhoodPass = RenderPass(
+            id: "smaaNeighborhood",
+            dependencies: [smaaBlendWeightsPass.id],
+            execute: smaaNeighborhoodRenderPass
+        )
+        graph[smaaNeighborhoodPass.id] = smaaNeighborhoodPass
+
+        let smaaDifferencePass = RenderPass(
+            id: "smaaDifference",
+            dependencies: [smaaNeighborhoodPass.id],
+            execute: smaaDifferenceRenderPass
+        )
+        graph[smaaDifferencePass.id] = smaaDifferencePass
+        outputDependency = smaaDifferencePass.id
     } else {
-        outputDependency = lookPass.id
+        switch antiAliasingMode {
+        case .fxaa:
+            let fxaaPass = RenderPass(
+                id: "fxaa",
+                dependencies: [lookPass.id],
+                execute: fxaaRenderPass
+            )
+            graph[fxaaPass.id] = fxaaPass
+            outputDependency = fxaaPass.id
+        case .smaa:
+            let smaaEdgesPass = RenderPass(id: "smaaEdges", dependencies: [lookPass.id], execute: smaaEdgesRenderPass)
+            graph[smaaEdgesPass.id] = smaaEdgesPass
+
+            let smaaBlendWeightsPass = RenderPass(
+                id: "smaaBlendWeights",
+                dependencies: [smaaEdgesPass.id],
+                execute: smaaBlendWeightsRenderPass
+            )
+            graph[smaaBlendWeightsPass.id] = smaaBlendWeightsPass
+
+            let smaaNeighborhoodPass = RenderPass(
+                id: "smaaNeighborhood",
+                dependencies: [smaaBlendWeightsPass.id],
+                execute: smaaNeighborhoodRenderPass
+            )
+            graph[smaaNeighborhoodPass.id] = smaaNeighborhoodPass
+            outputDependency = smaaNeighborhoodPass.id
+        case .none:
+            outputDependency = lookPass.id
+        }
     }
 
     let outputPass = RenderPass(
