@@ -20,17 +20,21 @@ func editableAssetRootEntity(for entityId: EntityID) -> EntityID {
     assetRootEntityId(for: entityId) ?? entityId
 }
 
+func sceneTransformEntity(for entityId: EntityID) -> EntityID {
+    entityId
+}
+
 func isAssetInstanceRoot(_ entityId: EntityID) -> Bool {
     scene.get(component: AssetInstanceComponent.self, for: entityId) != nil
 }
 
 func canEditSceneTransform(entityId: EntityID) -> Bool {
-    isDerivedAssetNode(entityId) == false
+    hasComponent(entityId: entityId, componentType: LocalTransformComponent.self)
 }
 
 func selectableTransformEntity(for entityId: EntityID) -> EntityID {
-    let editableRoot = editableAssetRootEntity(for: entityId)
-    return canEditSceneTransform(entityId: editableRoot) ? editableRoot : .invalid
+    let transformEntity = sceneTransformEntity(for: entityId)
+    return canEditSceneTransform(entityId: transformEntity) ? transformEntity : .invalid
 }
 
 func isBindableAssetMeshNode(_ entityId: EntityID) -> Bool {
@@ -55,7 +59,8 @@ func canShowComponentInInspector(componentType: Any.Type, for entityId: EntityID
 
     if EditorAuthoringMode.sceneCompositionOnly {
         if isDerivedAssetNode(entityId) {
-            return false
+            return key == ObjectIdentifier(RenderComponent.self)
+                || key == ObjectIdentifier(LocalTransformComponent.self)
         }
 
         return key == ObjectIdentifier(RenderComponent.self)

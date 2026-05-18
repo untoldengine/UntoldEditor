@@ -188,13 +188,8 @@
             activeHitGizmoEntity = .invalid
 
             if hit {
-                let transformEntityId = hasComponent(entityId: entityId, componentType: GizmoComponent.self)
-                    ? entityId
-                    : editableAssetRootEntity(for: entityId)
-
-                activeEntity = selectableTransformEntity(for: transformEntityId)
-
                 if hasComponent(entityId: entityId, componentType: GizmoComponent.self) {
+                    activeEntity = selectableTransformEntity(for: entityId)
                     selectionDelegate?.didSelectEntity(entityId)
                 } else if keyState.shiftPressed,
                           let rayContext,
@@ -204,9 +199,12 @@
                               rayDirection: rayContext.rayDirection
                           )
                 {
+                    activeEntity = selectableTransformEntity(for: entityId)
                     selectionDelegate?.didInspectMesh(entityId, meshIndex: meshIndex)
                 } else {
-                    selectionDelegate?.didInspectEntity(entityId)
+                    let transformEntityId = editableAssetRootEntity(for: entityId)
+                    activeEntity = selectableTransformEntity(for: transformEntityId)
+                    selectionDelegate?.didSelectEntity(entityId)
                 }
                 selectionDelegate?.resetActiveAxis()
 

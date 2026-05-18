@@ -270,15 +270,12 @@ struct InspectorView: View {
                             TextField("Set Entity Name", text: Binding(
                                 get: { getEntityName(entityId: entityId) },
                                 set: {
-                                    if isDerivedAssetNode(entityId) == false {
-                                        setEntityName(entityId: entityId, name: $0)
-                                    }
+                                    setEntityName(entityId: entityId, name: $0)
                                 }
                             ))
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .padding()
                             .focused($isNameTextFieldFocused)
-                            .disabled(isDerivedAssetNode(entityId))
                             .onSubmit {
                                 if let oldName = nameEditStartValue {
                                     EditorUndoManager.shared.registerNameChange(
@@ -1031,10 +1028,8 @@ struct TransformationEditorView: View {
     var body: some View {
         Text("Transform Properties")
 
-        let isReadOnlyAssetNode = isDerivedAssetNode(entityId)
-
         // Warning banner if entity is marked as static
-        if !isReadOnlyAssetNode, hasComponent(entityId: entityId, componentType: StaticBatchComponent.self) {
+        if hasComponent(entityId: entityId, componentType: StaticBatchComponent.self) {
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(.orange)
@@ -1052,56 +1047,50 @@ struct TransformationEditorView: View {
             let orientation = simd_float3(localTransformComponent.rotationX, localTransformComponent.rotationY, localTransformComponent.rotationZ)
             let scale = getScale(entityId: entityId)
 
-            if isReadOnlyAssetNode {
-                ReadOnlyVectorView(label: "Position", value: position)
-                ReadOnlyVectorView(label: "Orientation", value: orientation)
-                ReadOnlyVectorView(label: "Scale", value: scale)
-            } else {
-                TextInputVectorView(label: "Position", value: Binding(
-                    get: { position },
-                    set: { newPosition in
-                        let before = EditorTransformSnapshot(entityId: entityId)
-                        handleTransformChange()
-                        translateTo(entityId: entityId, position: newPosition)
-                        EditorUndoManager.shared.registerTransformChange(
-                            entityId: entityId,
-                            before: before,
-                            after: EditorTransformSnapshot(entityId: entityId)
-                        )
-                        refreshView()
-                    }
-                ))
+            TextInputVectorView(label: "Position", value: Binding(
+                get: { position },
+                set: { newPosition in
+                    let before = EditorTransformSnapshot(entityId: entityId)
+                    handleTransformChange()
+                    translateTo(entityId: entityId, position: newPosition)
+                    EditorUndoManager.shared.registerTransformChange(
+                        entityId: entityId,
+                        before: before,
+                        after: EditorTransformSnapshot(entityId: entityId)
+                    )
+                    refreshView()
+                }
+            ))
 
-                TextInputVectorView(label: "Orientation", value: Binding(
-                    get: { orientation },
-                    set: { newOrientation in
-                        let before = EditorTransformSnapshot(entityId: entityId)
-                        handleTransformChange()
-                        applyAxisRotations(entityId: entityId, axis: newOrientation)
-                        EditorUndoManager.shared.registerTransformChange(
-                            entityId: entityId,
-                            before: before,
-                            after: EditorTransformSnapshot(entityId: entityId)
-                        )
-                        refreshView()
-                    }
-                ))
+            TextInputVectorView(label: "Orientation", value: Binding(
+                get: { orientation },
+                set: { newOrientation in
+                    let before = EditorTransformSnapshot(entityId: entityId)
+                    handleTransformChange()
+                    applyAxisRotations(entityId: entityId, axis: newOrientation)
+                    EditorUndoManager.shared.registerTransformChange(
+                        entityId: entityId,
+                        before: before,
+                        after: EditorTransformSnapshot(entityId: entityId)
+                    )
+                    refreshView()
+                }
+            ))
 
-                TextInputVectorView(label: "Scale", value: Binding(
-                    get: { scale },
-                    set: { newScale in
-                        let before = EditorTransformSnapshot(entityId: entityId)
-                        handleTransformChange()
-                        scaleTo(entityId: entityId, scale: newScale)
-                        EditorUndoManager.shared.registerTransformChange(
-                            entityId: entityId,
-                            before: before,
-                            after: EditorTransformSnapshot(entityId: entityId)
-                        )
-                        refreshView()
-                    }
-                ))
-            }
+            TextInputVectorView(label: "Scale", value: Binding(
+                get: { scale },
+                set: { newScale in
+                    let before = EditorTransformSnapshot(entityId: entityId)
+                    handleTransformChange()
+                    scaleTo(entityId: entityId, scale: newScale)
+                    EditorUndoManager.shared.registerTransformChange(
+                        entityId: entityId,
+                        before: before,
+                        after: EditorTransformSnapshot(entityId: entityId)
+                    )
+                    refreshView()
+                }
+            ))
         } else {
             Text("No transform data")
                 .font(.caption)

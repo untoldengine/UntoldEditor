@@ -55,9 +55,7 @@ class SceneGraphModel: ObservableObject {
     @Published var childrenMap: [EntityID: [EntityID]] = [:]
 
     func refreshHierarchy() {
-        let allEntities = getAllGameEntities().filter { entityId in
-            EditorAuthoringMode.sceneCompositionOnly == false || isDerivedAssetNode(entityId) == false
-        }
+        let allEntities = getAllGameEntities()
 
         childrenMap = Dictionary(grouping: allEntities) { entityId in
             // If there's no ScenegraphComponent (e.g., camera), treat as root
@@ -81,16 +79,17 @@ class SelectionManager: ObservableObject {
 
     func selectEntity(entityId: EntityID) {
         inspectedMesh = nil
-        selectEntity(entityId: editableAssetRootEntity(for: entityId), inspectEntityId: editableAssetRootEntity(for: entityId))
+        let selectedEntityId = editableAssetRootEntity(for: entityId)
+        selectEntity(entityId: selectedEntityId, inspectEntityId: selectedEntityId)
     }
 
     func inspectEntity(entityId: EntityID) {
         inspectedMesh = nil
-        selectEntity(entityId: editableAssetRootEntity(for: entityId), inspectEntityId: entityId)
+        selectEntity(entityId: sceneTransformEntity(for: entityId), inspectEntityId: entityId)
     }
 
     func inspectMesh(entityId: EntityID, meshIndex: Int) {
-        let transformEntityId = editableAssetRootEntity(for: entityId)
+        let transformEntityId = sceneTransformEntity(for: entityId)
         selectedEntity = entityId
         inspectedMesh = MeshInspectionSelection(
             transformEntityId: transformEntityId,
