@@ -294,10 +294,8 @@ class SelectionManager: ObservableObject {
 }
 
 func meshLocalBounds(_ mesh: Mesh) -> (min: simd_float3, max: simd_float3) {
-    let bounds = mesh.modelMDLMesh.boundingBox
-    let minBounds = simd_float3(bounds.minBounds.x, bounds.minBounds.y, bounds.minBounds.z)
-    let maxBounds = simd_float3(bounds.maxBounds.x, bounds.maxBounds.y, bounds.maxBounds.z)
-    return (min: simd_min(minBounds, maxBounds), max: simd_max(minBounds, maxBounds))
+    let bounds = mesh.localBounds
+    return (min: simd_min(bounds.min, bounds.max), max: simd_max(bounds.min, bounds.max))
 }
 
 func transformedBoundingBox(

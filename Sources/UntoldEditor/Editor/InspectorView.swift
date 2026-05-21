@@ -925,7 +925,7 @@ struct RenderingEditorView: View {
         }
 
         let mesh = renderComponent.mesh[meshIndex]
-        let name = mesh.modelMDLMesh.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = mesh.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if inspectionOnly, !name.isEmpty {
             return name
         }

@@ -512,7 +512,6 @@ struct PostProcessingEditorView: View {
     @State private var showChromatic = false
     @State private var showDoF = false
     @State private var showSSAO = false
-    @State private var showDebugPostProccessTexture = false
 
     var body: some View {
         ScrollView {
@@ -569,131 +568,8 @@ struct PostProcessingEditorView: View {
                 DisclosureGroup("SSAO", isExpanded: $showSSAO) {
                     SSAOEditorView()
                 }
-
-                DisclosureGroup("Debug", isExpanded: $showDebugPostProccessTexture) {
-                    DebuggerEditorView()
-                }
             }
             .padding()
         }
-    }
-}
-
-struct DebuggerEditorView: View {
-    @ObservedObject var settings = DebugSettings.shared
-    @State private var spatialEnabled = false
-    @State private var showOctreeLeafBounds = false
-    @State private var occupiedOnly = true
-    @State private var maxLeafNodeCount = 2000
-    @State private var leafColorMode: SpatialDebugLeafColorMode = .plain
-    @State private var colorRenderablesByLOD = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Debugger ").font(.headline)
-
-            Picker("Debug Texture", selection: $settings.selectedName) {
-                ForEach(DebugTextureRegistry.allNames(), id: \.self) { name in
-                    Text(name)
-                }
-            }
-
-            Divider()
-
-            Text("Spatial Debugger")
-                .font(.headline)
-
-            Toggle("Enable Spatial Debug", isOn: $spatialEnabled)
-                .onChange(of: spatialEnabled) { _, enabled in
-                    if enabled, !showOctreeLeafBounds, !colorRenderablesByLOD {
-                        showOctreeLeafBounds = true
-                    }
-                    applySpatialDebugSettings()
-                }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Show Octree Leaf Bounds", isOn: $showOctreeLeafBounds)
-                    .onChange(of: showOctreeLeafBounds) { _, _ in
-                        applySpatialDebugSettings()
-                    }
-
-                Picker("Leaf Color Mode", selection: $leafColorMode) {
-                    Text("Plain").tag(SpatialDebugLeafColorMode.plain)
-                    Text("Residency").tag(SpatialDebugLeafColorMode.residency)
-                    Text("Culling").tag(SpatialDebugLeafColorMode.culling)
-                }
-                .onChange(of: leafColorMode) { _, _ in
-                    applySpatialDebugSettings()
-                }
-
-                Toggle("Occupied Leaves Only", isOn: $occupiedOnly)
-                    .onChange(of: occupiedOnly) { _, _ in
-                        applySpatialDebugSettings()
-                    }
-
-                HStack(spacing: 8) {
-                    Text("Max Leaf Nodes")
-                        .font(.system(size: 12))
-
-                    CommitAndDefocusIntField(value: Binding(
-                        get: { maxLeafNodeCount },
-                        set: { newValue in
-                            maxLeafNodeCount = max(0, newValue)
-                        }
-                    ))
-                    .frame(width: 80)
-                    .onChange(of: maxLeafNodeCount) { _, _ in
-                        applySpatialDebugSettings()
-                    }
-                }
-            }
-            .disabled(!spatialEnabled)
-
-            Toggle("Color Renderables by LOD", isOn: $colorRenderablesByLOD)
-                .onChange(of: colorRenderablesByLOD) { _, _ in
-                    applySpatialDebugSettings()
-                }
-                .disabled(!spatialEnabled)
-
-            Button("Disable All Spatial Debug") {
-                disableSpatialDebugVisualization()
-                syncSpatialDebugSettingsFromEngine()
-            }
-
-            Divider()
-
-            Text("Stats overlay controls are in the top toolbar.")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-        .onAppear {
-            syncSpatialDebugSettingsFromEngine()
-        }
-    }
-
-    private func applySpatialDebugSettings() {
-        guard spatialEnabled else {
-            disableSpatialDebugVisualization()
-            return
-        }
-
-        setOctreeLeafBoundsDebug(
-            enabled: showOctreeLeafBounds,
-            maxLeafNodeCount: maxLeafNodeCount,
-            occupiedOnly: occupiedOnly,
-            colorMode: leafColorMode
-        )
-        setLODLevelDebug(enabled: colorRenderablesByLOD)
-    }
-
-    private func syncSpatialDebugSettingsFromEngine() {
-        let spatialDebug = SpatialDebugVisualization.shared
-        spatialEnabled = spatialDebug.enabled
-        showOctreeLeafBounds = spatialDebug.showOctreeLeafBounds
-        occupiedOnly = spatialDebug.octreeLeafOccupiedOnly
-        maxLeafNodeCount = spatialDebug.maxLeafNodeCount
-        leafColorMode = spatialDebug.octreeLeafColorMode
-        colorRenderablesByLOD = spatialDebug.colorRenderablesByLOD
     }
 }
