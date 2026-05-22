@@ -272,9 +272,9 @@ import XCTest
         func test_quickPreviewModes_exposeExpectedPickerConfiguration() {
             XCTAssertEqual(QuickPreviewImportMode.allCases, [.untoldAsset, .tiledScene, .gaussian])
 
-            XCTAssertEqual(QuickPreviewImportMode.untoldAsset.menuTitle, "Load Untold Asset (.untold, USD)")
+            XCTAssertEqual(QuickPreviewImportMode.untoldAsset.menuTitle, "Load Untold Asset (.untold)")
             let runtimePreviewExtensions = Set(QuickPreviewImportMode.untoldAsset.allowedContentTypes.compactMap(\.preferredFilenameExtension))
-            XCTAssertTrue(runtimePreviewExtensions.isSuperset(of: ["untold", "usd", "usda", "usdc", "usdz"]))
+            XCTAssertEqual(runtimePreviewExtensions, ["untold"])
 
             XCTAssertEqual(QuickPreviewImportMode.tiledScene.menuTitle, "Load Tiled Stream (.json)")
             XCTAssertEqual(QuickPreviewImportMode.tiledScene.allowedContentTypes, [.json])
@@ -283,60 +283,5 @@ import XCTest
             XCTAssertEqual(QuickPreviewImportMode.gaussian.allowedContentTypes.first?.preferredFilenameExtension, "ply")
         }
 
-        func test_quickPreviewRuntimeExportCache_buildsIsolatedUntoldOutputPath() throws {
-            let rootURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("QuickPreviewCacheTests-\(UUID().uuidString)", isDirectory: true)
-            defer { try? FileManager.default.removeItem(at: rootURL) }
-
-            let sourceURL = URL(fileURLWithPath: "/Assets/Test Model.usdz")
-            let exportID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000123"))
-            let cacheDirectory = QuickPreviewRuntimeExportCache.cacheDirectory(
-                for: sourceURL,
-                exportID: exportID,
-                rootDirectory: rootURL
-            )
-            let outputURL = QuickPreviewRuntimeExportCache.outputURL(for: sourceURL, in: cacheDirectory)
-
-            XCTAssertEqual(cacheDirectory.deletingLastPathComponent(), rootURL)
-            XCTAssertEqual(cacheDirectory.lastPathComponent, "Test-Model-\(exportID.uuidString)")
-            XCTAssertEqual(outputURL.lastPathComponent, "Test-Model.untold")
-            XCTAssertEqual(outputURL.deletingLastPathComponent(), cacheDirectory)
-        }
-
-        func test_quickPreviewRuntimeExportCache_prunesOnlyStaleUnpreservedEntries() throws {
-            let fileManager = FileManager.default
-            let rootURL = fileManager.temporaryDirectory
-                .appendingPathComponent("QuickPreviewCacheTests-\(UUID().uuidString)", isDirectory: true)
-            defer { try? fileManager.removeItem(at: rootURL) }
-
-            let staleURL = rootURL.appendingPathComponent("stale", isDirectory: true)
-            let freshURL = rootURL.appendingPathComponent("fresh", isDirectory: true)
-            let preservedURL = rootURL.appendingPathComponent("preserved", isDirectory: true)
-            let staleFileURL = rootURL.appendingPathComponent("old-preview.untold")
-            try fileManager.createDirectory(at: staleURL, withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: freshURL, withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: preservedURL, withIntermediateDirectories: true)
-            _ = fileManager.createFile(atPath: staleFileURL.path, contents: Data())
-
-            let now = Date(timeIntervalSince1970: 1_000_000)
-            let staleDate = now.addingTimeInterval(-QuickPreviewRuntimeExportCache.defaultStaleAge - 10)
-            let freshDate = now.addingTimeInterval(-10)
-            try fileManager.setAttributes([.modificationDate: staleDate], ofItemAtPath: staleURL.path)
-            try fileManager.setAttributes([.modificationDate: freshDate], ofItemAtPath: freshURL.path)
-            try fileManager.setAttributes([.modificationDate: staleDate], ofItemAtPath: preservedURL.path)
-            try fileManager.setAttributes([.modificationDate: staleDate], ofItemAtPath: staleFileURL.path)
-
-            QuickPreviewRuntimeExportCache.pruneStaleCaches(
-                in: rootURL,
-                preserving: [preservedURL],
-                now: now,
-                fileManager: fileManager
-            )
-
-            XCTAssertFalse(fileManager.fileExists(atPath: staleURL.path))
-            XCTAssertFalse(fileManager.fileExists(atPath: staleFileURL.path))
-            XCTAssertTrue(fileManager.fileExists(atPath: freshURL.path))
-            XCTAssertTrue(fileManager.fileExists(atPath: preservedURL.path))
-        }
     }
 #endif
