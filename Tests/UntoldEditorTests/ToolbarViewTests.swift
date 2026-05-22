@@ -282,6 +282,5 @@ import XCTest
             XCTAssertEqual(QuickPreviewImportMode.gaussian.menuTitle, "Load Gaussian (.ply)")
             XCTAssertEqual(QuickPreviewImportMode.gaussian.allowedContentTypes.first?.preferredFilenameExtension, "ply")
         }
-
     }
 #endif
