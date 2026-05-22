@@ -1,4 +1,20 @@
 # Changelog
+## v0.12.14 - 2026-05-22
+### 🐞 Fixes
+- [Patch] Migrate editor ray picking to ScenePickingSystem (c059ced…)
+- [Patch] Added FPS Stats (4e80c55…)
+- [Patch] Implemented undo redo feature (9ddf6e3…)
+- [Patch] Fix ci build failure (9c7b8e4…)
+- [Patch] add support to assetbrowser to import remote asset (5438b79…)
+- [Patch] Fix anti-aliasing failure (8ac8c8b…)
+- [Patch] Fix anti-aliasing failure (b3eb245…)
+- [Patch] Fixed the quick load preview (36825d8…)
+- [Patch] fixed rotation gizmo (9d23a4a…)
+- [Patch] Modify quick preview (59f1ae2…)
+- [Patch] Fixed gizmo parent-child selection (77432da…)
+- [Patch] Fixed the direction handler (a19d897…)
+- [Patch] Remove debug view from editor (5a592ef…)
+- [Patch] Removed export tools (4e279db…)
 ## v0.12.10 - 2026-04-29
 ### 🐞 Fixes
 - [Patch] Fixed bundle script to include required helper scripts (8bec369…)
