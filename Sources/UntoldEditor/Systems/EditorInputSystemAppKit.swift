@@ -13,8 +13,16 @@
     import simd
     import UntoldEngine
 
+    private final class EditorInputTargetViewRef {
+        weak var view: NSView?
+    }
+
+    private let editorInputTargetViewRef = EditorInputTargetViewRef()
+
     public extension InputSystem {
         func setupGestureRecognizers(view: NSView) {
+            editorInputTargetViewRef.view = view
+
             // Pinch gesture
             let pinchGesture = NSMagnificationGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
             view.addGestureRecognizer(pinchGesture)
@@ -108,6 +116,10 @@
         }
 
         func handleMouseScroll(_ event: NSEvent) {
+            guard isEventInsideEditorInputView(event) else {
+                return
+            }
+
             var deltaX: Double = event.scrollingDeltaX
             var deltaY: Double = event.scrollingDeltaY
 
@@ -128,14 +140,22 @@
 
             scrollDelta = 0.01 * simd_float2(Float(deltaX), Float(deltaY))
 
-            if deltaX != 0.0 || deltaY != 0.0 {
-                //            if shiftKey{
-                //                delta=0.01*simd_float3(0.0,Float(deltaY),0.0)
-                //                camera.moveCameraAlongAxis(uDelta: delta)
-                //            }
-
-                // camera.moveCameraAlongAxis(uDelta: delta)
+            if deltaY != 0.0 {
+                let zoomScale: Float = event.hasPreciseScrollingDeltas ? 0.025 : 0.15
+                zoomSceneCamera(by: Float(deltaY) * zoomScale)
             }
+        }
+
+        private func isEventInsideEditorInputView(_ event: NSEvent) -> Bool {
+            guard let view = editorInputTargetViewRef.view,
+                  let eventWindow = event.window,
+                  eventWindow === view.window
+            else {
+                return false
+            }
+
+            let location = view.convert(event.locationInWindow, from: nil)
+            return view.bounds.contains(location)
         }
 
         func handlePinchGesture(_ gestureRecognizer: NSMagnificationGestureRecognizer, in _: NSView) {
@@ -150,6 +170,7 @@
                 // determine the direction of the pinch
                 let scaleDiff = currentScale - previousScale
                 pinchDelta = 3.0 * simd_float3(0.0, 0.0, Float(1.0) * Float(scaleDiff))
+                zoomSceneCamera(by: Float(scaleDiff) * 8.0)
 
                 previousScale = currentScale
 
@@ -157,9 +178,47 @@
 
             } else if gestureRecognizer.state == .ended {
                 previousScale = 1.0
+                pinchDelta = .init(0, 0, 0)
 
                 currentPinchGestureState = .ended
             }
+        }
+
+        private func zoomSceneCamera(by delta: Float) {
+            guard delta.isFinite, abs(delta) > 0.0001 else {
+                return
+            }
+
+            let camera = findSceneCamera()
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
+                handleError(.noActiveCamera)
+                return
+            }
+
+            let target = getCameraTarget(entityId: camera)
+            let eye = cameraComponent.localPosition
+            let targetVector = target - eye
+            let distance = simd_length(targetVector)
+
+            guard distance > 0.001 else {
+                moveCameraAlongAxis(entityId: camera, uDelta: simd_float3(0, 0, delta))
+                return
+            }
+
+            let minDistance: Float = 0.25
+            let maxForwardStep = max(0.0, distance - minDistance)
+            let maxBackwardStep = max(5.0, distance * 0.5)
+            let clampedDelta: Float = Swift.min(Swift.max(delta, -maxBackwardStep), maxForwardStep)
+            guard abs(clampedDelta) > 0.0001 else {
+                return
+            }
+
+            let direction = simd_normalize(targetVector)
+            let newEye = eye + direction * clampedDelta
+            let currentUp = getCameraUp(entityId: camera)
+            let up = simd_length(currentUp) > 0.001 ? currentUp : cameraUpDefault
+
+            cameraLookAt(entityId: camera, eye: newEye, target: target, up: up)
         }
 
         func mouseRaycast(gestureRecognizer: NSClickGestureRecognizer, in view: NSView) {
@@ -241,7 +300,11 @@
                 // Store initial state
                 initialPanLocation = currentPanLocation
                 currentPanGestureState = .began
-                setOrbitOffset(entityId: findSceneCamera(), uTargetOffset: length(cameraComponent.localPosition))
+                let orbitDistance = simd_length(cameraComponent.localPosition - getCameraTarget(entityId: findSceneCamera()))
+                setOrbitOffset(
+                    entityId: findSceneCamera(),
+                    uTargetOffset: orbitDistance > 0.001 ? orbitDistance : length(cameraComponent.localPosition)
+                )
                 cameraControlMode = .orbiting
 
                 // Editor-only: hit-test gizmo if editor/gizmo mode is active

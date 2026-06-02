@@ -11,13 +11,142 @@ public struct Asset: Identifiable {
     var isFolder: Bool = false
 }
 
+private struct WelcomeStartView: View {
+    var onStarterStreamSelected: (StreamModelCatalogItem) -> Void
+    var onQuickPreview: (QuickPreviewImportMode) -> Void
+    var onNewProject: () -> Void
+    var onOpenProject: () -> Void
+    var onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Start Here")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white.opacity(0.8))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .help("Dismiss")
+            }
+
+            Menu {
+                ForEach(starterStreamModels) { item in
+                    Button {
+                        onStarterStreamSelected(item)
+                    } label: {
+                        Label(item.title, systemImage: "square.stack.3d.up.fill")
+                    }
+                }
+            } label: {
+                Label("Starter Streams", systemImage: "square.stack.3d.up.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.editorSecondaryAccent)
+            .menuStyle(.button)
+            .focusable(false)
+
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(QuickPreviewImportMode.allCases, id: \.self) { mode in
+                        Button {
+                            onQuickPreview(mode)
+                        } label: {
+                            Label(mode.menuTitle, systemImage: mode.systemImageName)
+                        }
+                    }
+                } label: {
+                    Label("Load Preview", systemImage: "eye.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .menuStyle(.button)
+                .focusable(false)
+
+                Button(action: onNewProject) {
+                    Label("New", systemImage: "hammer.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .focusable(false)
+
+                Button(action: onOpenProject) {
+                    Label("Open", systemImage: "folder.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .focusable(false)
+            }
+        }
+        .padding(16)
+        .frame(width: 360)
+        .background(Color.editorPanelBackground.opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.editorDivider, lineWidth: 1)
+        )
+        .cornerRadius(8)
+        .shadow(color: .black.opacity(0.25), radius: 16, x: 0, y: 8)
+    }
+}
+
+private struct CameraControlHintsView: View {
+    var onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Label("Camera Controls", systemImage: "video.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white.opacity(0.8))
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .help("Dismiss")
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Two-finger drag to orbit", systemImage: "arrow.triangle.2.circlepath")
+                Label("Scroll or pinch to zoom", systemImage: "magnifyingglass")
+                Label("WASD moves, Q/E raises and lowers", systemImage: "keyboard")
+            }
+            .font(.caption)
+            .foregroundColor(.white.opacity(0.82))
+            .labelStyle(.titleAndIcon)
+        }
+        .padding(12)
+        .frame(maxWidth: 320)
+        .background(Color.editorPanelBackground.opacity(0.94))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.editorDivider, lineWidth: 1)
+        )
+        .cornerRadius(8)
+        .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 6)
+    }
+}
+
 public struct EditorView: View {
     @State private var editor_entities: [EntityID] = getAllGameEntities()
     @StateObject private var selectionManager = SelectionManager()
     @StateObject private var sceneGraphModel = SceneGraphModel()
+    @ObservedObject private var editorBasePath = EditorAssetBasePath.shared
     @State private var assets: [String: [Asset]] = [:]
     @State private var selectedAsset: Asset? = nil
     @State private var isPlaying = false
+    @State private var showCreateProject = false
+    @State private var showInvalidProjectAlert = false
+    @State private var invalidProjectMessage = ""
     @State private var showSaveNamePrompt = false
     @State private var pendingSceneName: String = "untitled"
     @State private var showOverwriteAlert = false
@@ -25,6 +154,9 @@ public struct EditorView: View {
     @State private var isSaveAs = false
     @State private var showSaveBasePathAlert = false
     @State private var useSceneCameraDuringPlay = false
+    @State private var showWelcomeStart = true
+    @State private var showCameraControlHints = false
+    @State private var cameraControlHintsDismissed = false
     @State private var showQuickPreviewWarning = false
     @State private var quickPreviewEntities: [(EntityID, String)] = []
 
@@ -68,6 +200,7 @@ public struct EditorView: View {
                     onCreatePlane: editor_createPlane,
                     onCreateCylinder: editor_createCylinder,
                     onCreateCone: editor_createCone,
+                    onStarterStreamSelected: editor_loadStarterStream,
                     onQuickPreview: editor_handleQuickPreview
                 )
                 Divider()
@@ -96,6 +229,40 @@ public struct EditorView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .overlay(alignment: .topLeading) {
                                 EngineStatsOverlayView()
+                            }
+                            .overlay {
+                                if shouldShowWelcomeStart {
+                                    WelcomeStartView(
+                                        onStarterStreamSelected: { item in
+                                            showWelcomeStart = false
+                                            editor_loadStarterStream(item)
+                                        },
+                                        onQuickPreview: { mode in
+                                            showWelcomeStart = false
+                                            editor_handleQuickPreview(mode: mode)
+                                        },
+                                        onNewProject: {
+                                            showWelcomeStart = false
+                                            showCreateProject = true
+                                        },
+                                        onOpenProject: {
+                                            showWelcomeStart = false
+                                            openExistingProjectFromWelcome()
+                                        },
+                                        onDismiss: {
+                                            showWelcomeStart = false
+                                        }
+                                    )
+                                    .padding()
+                                }
+                            }
+                            .overlay(alignment: .bottom) {
+                                if shouldShowCameraControlHints {
+                                    CameraControlHintsView {
+                                        dismissCameraControlHints()
+                                    }
+                                    .padding(.bottom, 14)
+                                }
                             }
                         TransformManipulationToolbar(controller: editorController!)
                             .frame(height: 40)
@@ -217,6 +384,14 @@ public struct EditorView: View {
         } message: {
             Text("A scene with that name already exists. Overwrite it?")
         }
+        .sheet(isPresented: $showCreateProject) {
+            CreateProjectView()
+        }
+        .alert("Invalid Project", isPresented: $showInvalidProjectAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(invalidProjectMessage)
+        }
         .alert("No Project Loaded", isPresented: $showSaveBasePathAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -235,6 +410,94 @@ public struct EditorView: View {
             let entityWord = count == 1 ? "entity" : "entities"
             return Text("Your scene contains \(count) Quick Preview \(entityWord):\n\n\(entityNames)\n\nQuick Preview entities use absolute file paths and cannot be saved to scenes. To include these assets permanently, use the Import button in the Asset Browser to copy them into your project first.\n\nYou can delete the Quick Preview entities and save the rest of your scene, or cancel to keep working.")
         }
+    }
+
+    private var shouldShowWelcomeStart: Bool {
+        showWelcomeStart
+            && editorBasePath.basePath == nil
+            && hasQuickPreviewContent() == false
+    }
+
+    private var shouldShowCameraControlHints: Bool {
+        showCameraControlHints
+            && shouldShowWelcomeStart == false
+            && hasQuickPreviewContent()
+    }
+
+    private func hasQuickPreviewContent() -> Bool {
+        getAllGameEntities().contains { entityId in
+            hasComponent(entityId: entityId, componentType: QuickPreviewComponent.self)
+        }
+    }
+
+    private func revealCameraControlHintsIfNeeded() {
+        guard cameraControlHintsDismissed == false else {
+            return
+        }
+
+        showCameraControlHints = true
+    }
+
+    private func dismissCameraControlHints() {
+        cameraControlHintsDismissed = true
+        showCameraControlHints = false
+    }
+
+    private func openExistingProjectFromWelcome() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.message = "Select the UntoldEngine project folder (the folder containing the .xcodeproj file)"
+        panel.prompt = "Open Project"
+
+        guard panel.runModal() == .OK, let projectURL = panel.url else {
+            showWelcomeStart = true
+            return
+        }
+
+        let fm = FileManager.default
+        let projectName = projectURL.lastPathComponent
+        let xcodeProjectPath = projectURL.appendingPathComponent("\(projectName).xcodeproj")
+        guard fm.fileExists(atPath: xcodeProjectPath.path) else {
+            invalidProjectMessage = "This doesn't appear to be a valid UntoldEngine project.\n\nExpected to find: \(projectName).xcodeproj"
+            showInvalidProjectAlert = true
+            showWelcomeStart = true
+            return
+        }
+
+        let gameDataPath = projectURL
+            .appendingPathComponent("Sources")
+            .appendingPathComponent(projectName)
+            .appendingPathComponent("GameData")
+
+        if !fm.fileExists(atPath: gameDataPath.path) {
+            do {
+                try fm.createDirectory(at: gameDataPath, withIntermediateDirectories: true)
+                print("📁 Created missing GameData folder structure")
+            } catch {
+                invalidProjectMessage = "Failed to create GameData folder structure:\n\n\(error.localizedDescription)"
+                showInvalidProjectAlert = true
+                showWelcomeStart = true
+                return
+            }
+        }
+
+        let assetFolders = ["Models", "StreamModels", "Animations", "Scenes", "Scripts", "Gaussians", "Materials", "HDR", "Shaders"]
+        for folder in assetFolders {
+            let folderURL = gameDataPath.appendingPathComponent(folder, isDirectory: true)
+            if !fm.fileExists(atPath: folderURL.path) {
+                try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            }
+        }
+
+        NotificationCenter.default.post(name: .projectWillSwitch, object: nil)
+        assetBasePath = gameDataPath
+        EditorAssetBasePath.shared.basePath = gameDataPath
+
+        print("✅ Opened project: \(projectName)")
+        print("📁 Asset base path set to: \(gameDataPath.path)")
     }
 
     private func editor_handleSave() {
@@ -713,6 +976,61 @@ public struct EditorView: View {
 
     // MARK: - Quick Preview
 
+    private func editor_loadStarterStream(_ item: StreamModelCatalogItem) {
+        deleteExistingQuickPreviewEntities()
+
+        removeGizmo()
+        let entityId = createEntity()
+        let uniqueName = "QuickPreview-\(item.title)-\(entityId)"
+        setEntityName(entityId: entityId, name: uniqueName)
+
+        if let quickPreviewComp = scene.assign(to: entityId, component: QuickPreviewComponent.self) {
+            quickPreviewComp.absoluteFilePath = item.manifestURL.absoluteString
+            quickPreviewComp.fileExtension = "json"
+            quickPreviewComp.originalFileName = item.title
+        }
+
+        clearSceneBatches()
+        GeometryStreamingSystem.shared.enabled = true
+
+        setEntityStreamScene(entityId: entityId, url: item.manifestURL) { success in
+            DispatchQueue.main.async {
+                if success {
+                    applyStarterStreamCameraFrame(item)
+                    revealCameraControlHintsIfNeeded()
+                    print("✅ Starter stream loaded: \(item.title)")
+                } else {
+                    print("⚠️ Failed to load starter stream: \(item.title)")
+                }
+                sceneGraphModel.refreshHierarchy()
+            }
+        }
+
+        selectionManager.selectedEntity = entityId
+        editor_entities = getAllGameEntities()
+        sceneGraphModel.refreshHierarchy()
+
+        print("ℹ️ Quick Preview mode: Starter stream loaded from \(item.manifestURL.absoluteString)")
+        print("⚠️ Note: Quick Preview entities cannot be saved to scenes")
+    }
+
+    private func applyStarterStreamCameraFrame(_ item: StreamModelCatalogItem) {
+        let camera = findSceneCamera()
+        let frame = item.cameraFrame
+
+        cameraLookAt(entityId: camera, eye: frame.eye, target: frame.target, up: cameraUpDefault)
+        CameraSystem.shared.activeCamera = camera
+
+        if frame.usesOriginOrbit {
+            let radius = simd_length(frame.eye - frame.target)
+            if radius > 0.001 {
+                setOrbitOffset(entityId: camera, uTargetOffset: radius)
+            }
+        } else {
+            setOrbitOffset(entityId: camera, uTargetOffset: 25.0)
+        }
+    }
+
     private func editor_handleQuickPreview(mode: QuickPreviewImportMode) {
         let openPanel = NSOpenPanel()
         openPanel.title = mode.filePickerTitle
@@ -757,6 +1075,9 @@ public struct EditorView: View {
             // Load Untold runtime asset using absolute path
             setEntityMeshAsync(entityId: entityId, filename: absolutePath, withExtension: fileExtension) { success in
                 if success {
+                    DispatchQueue.main.async {
+                        revealCameraControlHintsIfNeeded()
+                    }
                     print("✅ Quick Preview loaded: \(fileName).\(fileExtension)")
                 } else {
                     print("⚠️ Failed to load Quick Preview, using fallback: \(fileName).\(fileExtension)")
@@ -768,6 +1089,7 @@ public struct EditorView: View {
 
             // Load Gaussian PLY using absolute path
             setEntityGaussian(entityId: entityId, filename: absolutePath, withExtension: fileExtension)
+            revealCameraControlHintsIfNeeded()
             print("✅ Quick Preview Gaussian loaded: \(fileName).\(fileExtension)")
         } else if fileExtension == "json" {
             clearSceneBatches()
@@ -776,6 +1098,7 @@ public struct EditorView: View {
             setEntityStreamScene(entityId: entityId, url: fileURL) { success in
                 DispatchQueue.main.async {
                     if success {
+                        revealCameraControlHintsIfNeeded()
                         print("✅ Quick Preview stream model loaded: \(fileName).\(fileExtension)")
                     } else {
                         print("⚠️ Failed to load Quick Preview stream model: \(fileName).\(fileExtension)")

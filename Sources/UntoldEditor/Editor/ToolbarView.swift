@@ -31,6 +31,7 @@
         var onCreatePlane: () -> Void
         var onCreateCylinder: () -> Void
         var onCreateCone: () -> Void
+        var onStarterStreamSelected: (StreamModelCatalogItem) -> Void = { _ in }
         var onQuickPreview: (QuickPreviewImportMode) -> Void
 
         @State private var isPlaying = false
@@ -101,6 +102,31 @@
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+
+                Menu {
+                    ForEach(starterStreamModels) { item in
+                        Button {
+                            onStarterStreamSelected(item)
+                        } label: {
+                            Label(item.title, systemImage: "square.stack.3d.up.fill")
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.stack.3d.up.fill")
+                        Text("Starter Streams")
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .background(Color.editorSecondaryAccent)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .menuStyle(.borderlessButton)
+                .focusable(false)
+                .help("Load a starter stream model without creating a project")
 
                 Menu {
                     ForEach(QuickPreviewImportMode.allCases, id: \.self) { mode in

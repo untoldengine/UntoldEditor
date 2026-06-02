@@ -10,7 +10,16 @@ import MetalKit
 import QuartzCore
 import UntoldEngine
 
+@MainActor
 func EditorUpdateRenderingSystem(in view: MTKView) {
+    // While assets are loading, keep rendering from the last-known-good visible
+    // list and avoid ECS traversal in culling / gaussian prep.
+    let loading = AssetLoadingGate.shared.isLoadingAny
+
+    if !loading {
+        visibleEntityIds = tripleVisibleEntities.snapshotForRead(frame: cullFrameIndex)
+    }
+
     // Limit in-flight command buffers so triple-buffered culling data isn't overwritten
     commandBufferSemaphore.wait()
 
@@ -19,27 +28,38 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             let renderTotalStart = CACurrentMediaTime()
         #endif
         renderInfo.lastCommandBuffer = commandBuffer
+        renderInfo.currentInFlightFrameSlot = acquireUniformFrameSlot()
 
-        #if ENGINE_STATS_ENABLED
-            let renderPrepStart = CACurrentMediaTime()
-            let cullingStart = CACurrentMediaTime()
-        #endif
-        performFrustumCulling(commandBuffer: commandBuffer)
-        #if ENGINE_STATS_ENABLED
-            let cullingMs = (CACurrentMediaTime() - cullingStart) * 1000.0
-            EngineStatsMonitor.shared.update { snapshot in
-                snapshot.timing.cullingMs += cullingMs
-            }
-        #endif
+        // Keep scene-root-derived camera/light matrices current before culling
+        // and render passes read them.
+        SceneRootTransform.shared.updateIfNeeded()
 
-        executeGaussianDepth(commandBuffer)
-        executeBitonicSort(commandBuffer)
-        #if ENGINE_STATS_ENABLED
-            let renderPrepMs = (CACurrentMediaTime() - renderPrepStart) * 1000.0
-            EngineStatsMonitor.shared.update { snapshot in
-                snapshot.timing.renderPrepMs += renderPrepMs
-            }
-        #endif
+        if !loading {
+            #if ENGINE_STATS_ENABLED
+                let renderPrepStart = CACurrentMediaTime()
+                let cullingStart = CACurrentMediaTime()
+            #endif
+            EngineProfiler.shared.beginScope(.renderPrep)
+            EngineProfiler.shared.beginScope(.culling)
+            performFrustumCulling(commandBuffer: commandBuffer)
+            EngineProfiler.shared.endScope(.culling)
+            #if ENGINE_STATS_ENABLED
+                let cullingMs = (CACurrentMediaTime() - cullingStart) * 1000.0
+                EngineStatsMonitor.shared.update { snapshot in
+                    snapshot.timing.cullingMs += cullingMs
+                }
+            #endif
+
+            executeGaussianDepth(commandBuffer)
+            executeBitonicSort(commandBuffer)
+            EngineProfiler.shared.endScope(.renderPrep)
+            #if ENGINE_STATS_ENABLED
+                let renderPrepMs = (CACurrentMediaTime() - renderPrepStart) * 1000.0
+                EngineStatsMonitor.shared.update { snapshot in
+                    snapshot.timing.renderPrepMs += renderPrepMs
+                }
+            #endif
+        }
         if let renderPassDescriptor = view.currentRenderPassDescriptor {
             renderInfo.renderPassDescriptor = renderPassDescriptor
 
@@ -69,10 +89,12 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             #if ENGINE_STATS_ENABLED
                 let encodeStart = CACurrentMediaTime()
             #endif
+            EngineProfiler.shared.beginScope(.encode)
             executeGraph(graph, sortedPasses, commandBuffer)
             // Keep editor in sync with runtime temporal HZB:
             // render depth this frame -> build HZB -> consume next frame during culling
             buildHZBDepthPyramid(commandBuffer)
+            EngineProfiler.shared.endScope(.encode)
             #if ENGINE_STATS_ENABLED
                 let encodeMs = (CACurrentMediaTime() - encodeStart) * 1000.0
                 EngineStatsMonitor.shared.update { snapshot in
@@ -85,6 +107,8 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             commandBuffer.present(drawable)
         }
 
+        EngineProfiler.shared.attach(to: commandBuffer, label: "EditorFrame")
+        let visibleEntityIdsAtSubmission = visibleEntityIds
         commandBuffer.addCompletedHandler { cb in
             #if ENGINE_STATS_ENABLED
                 let gpuExecutionMs = (cb.gpuEndTime - cb.gpuStartTime) * 1000.0
@@ -92,10 +116,8 @@ func EditorUpdateRenderingSystem(in view: MTKView) {
             #endif
             // Release the in-flight slot
             commandBufferSemaphore.signal()
-            DispatchQueue.main.async {
-                needsFinalizeDestroys = true
-                visibleEntityIds = tripleVisibleEntities.snapshotForRead(frame: cullFrameIndex)
-            }
+            needsFinalizeDestroys = true
+            MemoryBudgetManager.shared.markUsed(entityIds: visibleEntityIdsAtSubmission)
         }
 
         #if ENGINE_STATS_ENABLED

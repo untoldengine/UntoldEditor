@@ -645,7 +645,7 @@ struct AssetBrowserView: View {
         }
         .sheet(isPresented: $showRemoteStreamSheet) {
             RemoteStreamImportSheet(urlString: $remoteStreamURLString) {
-                saveRemoteStream()
+                saveRemoteStream(loadImmediately: true)
                 showRemoteStreamSheet = false
             } onCancel: {
                 remoteStreamURLString = ""
@@ -1392,6 +1392,9 @@ struct AssetBrowserView: View {
         let sceneName = manifestAsset.path.deletingPathExtension().lastPathComponent
         setEntityName(entityId: sceneRoot, name: sceneName)
 
+        clearSceneBatches()
+        GeometryStreamingSystem.shared.enabled = true
+
         setEntityStreamScene(entityId: sceneRoot, url: manifestAsset.path) { success in
             DispatchQueue.main.async {
                 if success {
@@ -1409,7 +1412,7 @@ struct AssetBrowserView: View {
         showStatus("Loading stream model: \(sceneName)...")
     }
 
-    private func saveRemoteStream() {
+    private func saveRemoteStream(loadImmediately: Bool) {
         guard let basePath = assetBasePath else {
             showStatus("No project loaded", isError: true)
             return
@@ -1431,16 +1434,44 @@ struct AssetBrowserView: View {
         let urlHash = String(format: "%08x", urlStr.utf8.reduce(UInt32(5381)) { ($0 &* 31) &+ UInt32($1) })
         let name = "\(baseName)-\(urlHash)"
 
+        saveRemoteStreamAsset(
+            name: name,
+            displayName: baseName,
+            urlString: urlStr,
+            basePath: basePath,
+            loadImmediately: loadImmediately
+        )
+        remoteStreamURLString = ""
+    }
+
+    private func saveRemoteStreamAsset(
+        name: String,
+        displayName: String,
+        urlString: String,
+        basePath: URL,
+        loadImmediately: Bool
+    ) {
         let streamModelsFolder = basePath.appendingPathComponent("StreamModels", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: streamModelsFolder, withIntermediateDirectories: true)
             let fileURL = streamModelsFolder
                 .appendingPathComponent(name)
                 .appendingPathExtension("remotestream")
-            try urlStr.write(to: fileURL, atomically: true, encoding: .utf8)
-            remoteStreamURLString = ""
+            try urlString.write(to: fileURL, atomically: true, encoding: .utf8)
             loadAssets()
-            showStatus("Remote stream '\(baseName)' added")
+            let asset = Asset(
+                name: displayName,
+                category: AssetCategory.streamModels.rawValue,
+                path: fileURL,
+                isFolder: false
+            )
+            selectedCategory = AssetCategory.streamModels.rawValue
+            folderPathStack = []
+            if loadImmediately {
+                loadRemoteStreamModel(from: asset)
+            } else {
+                showStatus("Remote stream '\(displayName)' added")
+            }
         } catch {
             showStatus("Failed to save remote stream: \(error.localizedDescription)", isError: true)
         }
@@ -1457,6 +1488,9 @@ struct AssetBrowserView: View {
         let sceneRoot = createEntity()
         let sceneName = asset.name
         setEntityName(entityId: sceneRoot, name: sceneName)
+
+        clearSceneBatches()
+        GeometryStreamingSystem.shared.enabled = true
 
         setEntityStreamScene(entityId: sceneRoot, url: url) { success in
             DispatchQueue.main.async {

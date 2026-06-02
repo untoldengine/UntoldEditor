@@ -13,7 +13,9 @@ public extension UntoldRendererConfig {
     static var editor: UntoldRendererConfig {
         UntoldRendererConfig(
             initPipelineBlocks: EditorDefaultPipeLines(),
-            updateRenderingSystemCallback: EditorUpdateRenderingSystem
+            updateRenderingSystemCallback: { view in
+                EditorUpdateRenderingSystem(in: view)
+            }
         )
     }
 }
