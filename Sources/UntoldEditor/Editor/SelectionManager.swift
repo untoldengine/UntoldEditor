@@ -53,6 +53,7 @@ struct MeshInspectionSelection: Equatable {
 
 class SceneGraphModel: ObservableObject {
     @Published var childrenMap: [EntityID: [EntityID]] = [:]
+    @Published private(set) var collapsedEntityIds: Set<EntityID> = []
 
     func refreshHierarchy() {
         let allEntities = getAllGameEntities()
@@ -64,10 +65,29 @@ class SceneGraphModel: ObservableObject {
             }
             return getEntityParent(entityId: entityId) ?? .invalid
         }
+
+        let currentEntityIds = Set(allEntities)
+        collapsedEntityIds = collapsedEntityIds.intersection(currentEntityIds)
     }
 
     func getChildren(entityId: EntityID?) -> [EntityID] {
         childrenMap[entityId ?? .invalid] ?? []
+    }
+
+    func hasChildren(entityId: EntityID) -> Bool {
+        getChildren(entityId: entityId).isEmpty == false
+    }
+
+    func isExpanded(entityId: EntityID) -> Bool {
+        collapsedEntityIds.contains(entityId) == false
+    }
+
+    func toggleExpanded(entityId: EntityID) {
+        if collapsedEntityIds.contains(entityId) {
+            collapsedEntityIds.remove(entityId)
+        } else {
+            collapsedEntityIds.insert(entityId)
+        }
     }
 }
 

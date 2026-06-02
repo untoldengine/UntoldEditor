@@ -230,6 +230,61 @@ final class SceneHierarchyViewTests: XCTestCase {
         XCTAssertEqual(children.count, 0, "Entity with no children should return empty array")
     }
 
+    func test_sceneGraphModel_entityWithChildrenReportsHasChildren() {
+        // Arrange
+        let parent = createEntity()
+        let child = createEntity()
+        registerSceneGraphComponent(entityId: parent)
+        registerSceneGraphComponent(entityId: child)
+        setParent(childId: child, parentId: parent)
+
+        // Act
+        sceneGraphModel.refreshHierarchy()
+
+        // Assert
+        XCTAssertTrue(sceneGraphModel.hasChildren(entityId: parent), "Parent should report children")
+        XCTAssertFalse(sceneGraphModel.hasChildren(entityId: child), "Leaf child should not report children")
+    }
+
+    func test_sceneGraphModel_nodesAreExpandedByDefault() {
+        // Arrange
+        let entity = createEntity()
+
+        // Act
+        sceneGraphModel.refreshHierarchy()
+
+        // Assert
+        XCTAssertTrue(sceneGraphModel.isExpanded(entityId: entity), "Nodes should be expanded by default")
+    }
+
+    func test_sceneGraphModel_toggleExpandedCollapsesAndExpandsNode() {
+        // Arrange
+        let entity = createEntity()
+        sceneGraphModel.refreshHierarchy()
+
+        // Act / Assert
+        sceneGraphModel.toggleExpanded(entityId: entity)
+        XCTAssertFalse(sceneGraphModel.isExpanded(entityId: entity), "Toggle should collapse expanded nodes")
+
+        sceneGraphModel.toggleExpanded(entityId: entity)
+        XCTAssertTrue(sceneGraphModel.isExpanded(entityId: entity), "Toggle should expand collapsed nodes")
+    }
+
+    func test_sceneGraphModel_refreshPrunesCollapsedDestroyedEntities() {
+        // Arrange
+        let entity = createEntity()
+        sceneGraphModel.refreshHierarchy()
+        sceneGraphModel.toggleExpanded(entityId: entity)
+        XCTAssertFalse(sceneGraphModel.isExpanded(entityId: entity))
+
+        // Act
+        destroyEntity(entityId: entity)
+        sceneGraphModel.refreshHierarchy()
+
+        // Assert
+        XCTAssertTrue(sceneGraphModel.isExpanded(entityId: entity), "Destroyed entities should be pruned from collapsed state")
+    }
+
     // MARK: - SelectionManager Integration Tests
 
     func test_selectionManager_updatesSelectedEntity() {

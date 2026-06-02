@@ -117,6 +117,9 @@ struct SceneHierarchyView: View {
 struct EntityRow: View {
     let entityid: EntityID
     let entityName: String
+    var hasChildren: Bool = false
+    var isExpanded: Bool = true
+    var onToggleExpanded: () -> Void = {}
     @ObservedObject var selectionManager: SelectionManager
     @State private var isDragOver = false
 
@@ -146,6 +149,17 @@ struct EntityRow: View {
 
     private var entityRowContent: some View {
         HStack(spacing: 8) {
+            Button(action: onToggleExpanded) {
+                Image(systemName: hasChildren ? (isExpanded ? "chevron.down" : "chevron.right") : "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(hasChildren ? .secondary : .clear)
+                    .frame(width: 12, height: 12)
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .disabled(hasChildren == false)
+            .help(isExpanded ? "Collapse Children" : "Expand Children")
+
             Image(systemName: isAssetNode ? (isBindableAssetMeshNode(entityid) ? "cube.fill" : "square.stack.3d.up") : "cube")
                 .foregroundColor(isSelected ? .white : (isAssetNode ? .secondary : .gray))
 
@@ -173,10 +187,19 @@ struct HierarchyNode: View {
     }
 
     private var nodeContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let children = sceneGraphModel.getChildren(entityId: entityId)
+        let hasChildren = children.isEmpty == false
+        let isExpanded = sceneGraphModel.isExpanded(entityId: entityId)
+
+        return VStack(alignment: .leading, spacing: 4) {
             EntityRow(
                 entityid: entityId,
                 entityName: entityName,
+                hasChildren: hasChildren,
+                isExpanded: isExpanded,
+                onToggleExpanded: {
+                    sceneGraphModel.toggleExpanded(entityId: entityId)
+                },
                 selectionManager: selectionManager
             )
             .contentShape(Rectangle())
@@ -197,16 +220,18 @@ struct HierarchyNode: View {
             )
 
             // Children
-            ForEach(sceneGraphModel.getChildren(entityId: entityId), id: \.self) { childID in
-                HierarchyNode(
-                    entityId: childID,
-                    entityName: getEntityName(entityId: childID),
-                    depth: depth + 1,
-                    sceneGraphModel: sceneGraphModel,
-                    selectionManager: selectionManager,
-                    onParentEntity: onParentEntity,
-                    onUnparentEntity: onUnparentEntity
-                )
+            if isExpanded {
+                ForEach(children, id: \.self) { childID in
+                    HierarchyNode(
+                        entityId: childID,
+                        entityName: getEntityName(entityId: childID),
+                        depth: depth + 1,
+                        sceneGraphModel: sceneGraphModel,
+                        selectionManager: selectionManager,
+                        onParentEntity: onParentEntity,
+                        onUnparentEntity: onUnparentEntity
+                    )
+                }
             }
         }
     }
