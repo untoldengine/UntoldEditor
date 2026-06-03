@@ -231,7 +231,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         let (graph, _) = buildEditModeGraph()
 
         // Assert - Verify non-stub passes have execution functions
-        let stubPassIDs: Set<String> = ["batchedModel", "lightPass"]
+        let stubPassIDs: Set = ["batchedModel", "lightPass"]
         for (passID, pass) in graph {
             if stubPassIDs.contains(passID) {
                 XCTAssertNil(pass.execute, "Pass '\(passID)' should be a dependency-only stub")

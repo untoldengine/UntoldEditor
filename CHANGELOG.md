@@ -1,4 +1,10 @@
 # Changelog
+## v0.13.0 - 2026-06-03
+### 🐞 Fixes
+- [Patch] Made user experience improvements (adf6d2b…)
+- [Patch] Implemented collapsible children in the Scene Graph (555b101…)
+- [Patch] Updated editor to TBDR pass (7fb8547…)
+- [Patch] Added SSAO parameters to Effects View (d8bb848…)
 ## v0.12.14 - 2026-05-22
 ### 🐞 Fixes
 - [Patch] Migrate editor ray picking to ScenePickingSystem (c059ced…)
