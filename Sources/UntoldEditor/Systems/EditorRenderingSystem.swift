@@ -168,17 +168,16 @@ func buildEditModeGraph() -> RenderGraphResult {
     graph[batchedShadowPass.id] = batchedShadowPass
 
     let modelPass = RenderPass(
-        id: "model", dependencies: [batchedShadowPass.id], execute: RenderPasses.modelExecution
+        id: "model", dependencies: [batchedShadowPass.id], execute: RenderPasses.combinedModelLightExecution
     )
     graph[modelPass.id] = modelPass
 
-    // Add batched model pass (runs after regular model pass)
-    let batchedModelPass = RenderPass(
-        id: "batchedModel", dependencies: [modelPass.id], execute: RenderPasses.batchedModelExecution
-    )
+    // Geometry and lighting now execute inside the TBDR model pass. Keep the
+    // legacy graph nodes as dependency anchors for editor overlays.
+    let batchedModelPass = RenderPass(id: "batchedModel", dependencies: [modelPass.id], execute: nil)
     graph[batchedModelPass.id] = batchedModelPass
 
-    let lightPass = RenderPass(id: "lightPass", dependencies: [batchedModelPass.id, modelPass.id, shadowPass.id], execute: RenderPasses.lightExecution)
+    let lightPass = RenderPass(id: "lightPass", dependencies: [batchedModelPass.id, modelPass.id, shadowPass.id], execute: nil)
     graph[lightPass.id] = lightPass
 
     let transparencyPass = RenderPass(

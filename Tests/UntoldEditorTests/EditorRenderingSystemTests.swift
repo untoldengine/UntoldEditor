@@ -223,16 +223,21 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNil(graph["environment"], "Grid mode should not have environment pass after switching back")
     }
 
-    func test_buildEditModeGraph_allPassesHaveExecutionFunctions() {
+    func test_buildEditModeGraph_executablePassesHaveExecutionFunctions() {
         // Arrange
         renderEnvironment = false
 
         // Act
         let (graph, _) = buildEditModeGraph()
 
-        // Assert - Verify all passes have execution functions
+        // Assert - Verify non-stub passes have execution functions
+        let stubPassIDs: Set<String> = ["batchedModel", "lightPass"]
         for (passID, pass) in graph {
-            XCTAssertNotNil(pass.execute, "Pass '\(passID)' should have an execution function")
+            if stubPassIDs.contains(passID) {
+                XCTAssertNil(pass.execute, "Pass '\(passID)' should be a dependency-only stub")
+            } else {
+                XCTAssertNotNil(pass.execute, "Pass '\(passID)' should have an execution function")
+            }
         }
     }
 
@@ -313,6 +318,7 @@ final class EditorRenderingSystemTests: XCTestCase {
             return
         }
 
+        XCTAssertNil(lightPass.execute, "Light pass should be a dependency-only stub")
         XCTAssertEqual(lightPass.dependencies.count, 3, "Light pass should have exactly 3 dependencies")
         XCTAssertTrue(lightPass.dependencies.contains("model"), "Light pass should depend on model")
         XCTAssertTrue(lightPass.dependencies.contains("shadow"), "Light pass should depend on shadow")
