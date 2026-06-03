@@ -103,6 +103,26 @@ final class EditorRenderPassesTests: XCTestCase {
         XCTAssertNotNil(closure, "highlightExecution closure should be accessible")
     }
 
+    func test_editorPreCompositeExecution_restoresSSAOEnabled() {
+        // Arrange
+        let originalSSAOEnabled = SSAOParams.shared.enabled
+        SSAOParams.shared.enabled = true
+        defer {
+            SSAOParams.shared.enabled = originalSSAOEnabled
+        }
+
+        guard let commandBuffer = commandQueue.makeCommandBuffer() else {
+            XCTFail("Could not create command buffer")
+            return
+        }
+
+        // Act
+        RenderPasses.editorPreCompositeExecution(commandBuffer)
+
+        // Assert
+        XCTAssertTrue(SSAOParams.shared.enabled, "Editor pre-composite should not change the user's SSAO setting")
+    }
+
     // MARK: - Early Return Condition Tests
 
     func test_gizmoExecution_returnsEarlyWhenActiveEntityIsInvalid() {

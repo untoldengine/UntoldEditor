@@ -351,14 +351,8 @@ struct SSAOEditorView: View {
             }
 
             UndoableEffectSlider(label: "Radius", undoName: "Change SSAO Radius", range: 0.1 ... 1.0, get: { settings.radius }, set: { settings.radius = $0 })
-
-//            Text("Bias")
-//            Slider(value: $settings.bias, in: 0.0 ... 0.1)
-//            Text(String(format: "%.4f", settings.bias))
-//
-//            Text("Intensity")
-//            Slider(value: $settings.intensity, in: 0.0 ... 2.0)
-//            Text(String(format: "%.2f", settings.intensity))
+            UndoableEffectSlider(label: "Bias", undoName: "Change SSAO Bias", range: 0.0 ... 0.1, format: "%.4f", get: { settings.bias }, set: { settings.bias = $0 })
+            UndoableEffectSlider(label: "Intensity", undoName: "Change SSAO Intensity", range: 0.0 ... 2.0, get: { settings.intensity }, set: { settings.intensity = $0 })
         }
         .padding()
     }

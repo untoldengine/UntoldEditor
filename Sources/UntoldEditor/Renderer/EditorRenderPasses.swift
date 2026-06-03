@@ -13,6 +13,16 @@ import MetalKit
 import UntoldEngine
 
 extension RenderPasses {
+    static let editorPreCompositeExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
+        let wasSSAOEnabled = SSAOParams.shared.enabled
+        SSAOParams.shared.enabled = false
+        defer {
+            SSAOParams.shared.enabled = wasSSAOEnabled
+        }
+
+        RenderPasses.preCompositeExecution(commandBuffer)
+    }
+
     static let gizmoExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
         if activeEntity == .invalid {
             return

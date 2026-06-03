@@ -211,7 +211,7 @@ func buildEditModeGraph() -> RenderGraphResult {
     graph[gaussianPass.id] = gaussianPass
 
     let preCompPass = RenderPass(
-        id: "precomp", dependencies: [modelPass.id, gizmoPass.id, spatialDebugPass.id, gaussianPass.id], execute: RenderPasses.preCompositeExecution
+        id: "precomp", dependencies: [modelPass.id, gizmoPass.id, spatialDebugPass.id, gaussianPass.id], execute: RenderPasses.editorPreCompositeExecution
     )
     graph[preCompPass.id] = preCompPass
 
