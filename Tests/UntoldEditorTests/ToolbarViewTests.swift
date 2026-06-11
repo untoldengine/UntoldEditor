@@ -272,9 +272,9 @@ import XCTest
         func test_quickPreviewModes_exposeExpectedPickerConfiguration() {
             XCTAssertEqual(QuickPreviewImportMode.allCases, [.untoldAsset, .tiledScene, .gaussian])
 
-            XCTAssertEqual(QuickPreviewImportMode.untoldAsset.menuTitle, "Load Untold Asset (.untold)")
+            XCTAssertEqual(QuickPreviewImportMode.untoldAsset.menuTitle, "Load Untold Asset (.untold, USD)")
             let runtimePreviewExtensions = Set(QuickPreviewImportMode.untoldAsset.allowedContentTypes.compactMap(\.preferredFilenameExtension))
-            XCTAssertEqual(runtimePreviewExtensions, ["untold"])
+            XCTAssertTrue(runtimePreviewExtensions.isSuperset(of: ["untold", "usd", "usda", "usdc", "usdz"]))
 
             XCTAssertEqual(QuickPreviewImportMode.tiledScene.menuTitle, "Load Tiled Stream (.json)")
             XCTAssertEqual(QuickPreviewImportMode.tiledScene.allowedContentTypes, [.json])

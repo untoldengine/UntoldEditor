@@ -15,6 +15,14 @@ private let runtimeTextureFolderNames = ["Textures", "textures"]
 private let sourceAssetExtensions: Set<String> = ["usd", "usda", "usdc", "usdz"]
 private let streamModelResourceFolderNames = ["tile_exports", "tile_export", "Textures", "textures"]
 
+struct RuntimeExportRequest: Identifiable, Equatable {
+    let id = UUID()
+    let sourceURL: URL
+    let category: AssetCategory
+    let destinationFolder: URL
+    let outputURL: URL
+}
+
 struct TilesExportRequest: Identifiable, Equatable {
     let id = UUID()
     let sourceURL: URL
@@ -214,6 +222,10 @@ func findUntoldEngineScript(named name: String, fileManager fm: FileManager = .d
         .first { fm.isExecutableFile(atPath: $0.path) || fm.fileExists(atPath: $0.path) }
 }
 
+func findExportUntoldScript(fileManager fm: FileManager = .default) -> URL? {
+    findUntoldEngineScript(named: "export-untold", fileManager: fm)
+}
+
 func findExportUntoldTilesScript(fileManager fm: FileManager = .default) -> URL? {
     findUntoldEngineScript(named: "export-untold-tiles", fileManager: fm)
 }
@@ -363,6 +375,11 @@ struct AssetBrowserView: View {
     @State private var showImportMenu = false
     @State private var showRemoteStreamSheet = false
     @State private var remoteStreamURLString = ""
+    @State private var pendingRuntimeExport: RuntimeExportRequest?
+    @State private var runtimeExportQueue: [RuntimeExportRequest] = []
+    @State private var isExportingRuntimeAsset = false
+    @State private var exportConvertOrientation = true
+    @State private var exportSourceOrientation = "blender-native"
     @State private var pendingTilesExport: TilesExportRequest?
     @State private var tilesExportQueue: [TilesExportRequest] = []
     @State private var isExportingTilesAsset = false
@@ -640,6 +657,9 @@ struct AssetBrowserView: View {
                 Text("This will remove \(asset.name) from disk under your Asset Folder.")
             }
         }
+        .sheet(item: $pendingRuntimeExport) { request in
+            runtimeExportSheet(for: request)
+        }
         .sheet(item: $pendingTilesExport) { request in
             tilesExportSheet(for: request)
         }
@@ -678,7 +698,9 @@ struct AssetBrowserView: View {
         // Set allowed file types based on category
         switch category {
         case .models, .animations:
-            openPanel.allowedContentTypes = [UTType(filenameExtension: runtimeAssetExtension)!]
+            openPanel.allowedContentTypes = ([runtimeAssetExtension] + sourceAssetExtensions.sorted()).compactMap {
+                UTType(filenameExtension: $0)
+            }
         case .streamModels:
             openPanel.allowedContentTypes = ([UTType(filenameExtension: "json")!] + sourceAssetExtensions.sorted().compactMap { UTType(filenameExtension: $0) })
         case .scripts:
@@ -745,6 +767,12 @@ struct AssetBrowserView: View {
 
                         if sourceExtension == runtimeAssetExtension {
                             try importRuntimeAsset(sourceURL: sourceURL, destinationFolder: destFolder, fileManager: fm)
+                        } else if sourceAssetExtensions.contains(sourceExtension) {
+                            queueRuntimeExport(
+                                sourceURL: sourceURL,
+                                category: category,
+                                destinationFolder: destFolder
+                            )
                         }
 
                     case "StreamModels":
@@ -792,7 +820,9 @@ struct AssetBrowserView: View {
             }
 
             loadAssets()
-            if tilesExportQueue.isEmpty, pendingTilesExport == nil {
+            if runtimeExportQueue.isEmpty, pendingRuntimeExport == nil,
+               tilesExportQueue.isEmpty, pendingTilesExport == nil
+            {
                 showStatus("Queued import of \(openPanel.urls.count) item(s) (see Console)")
             }
         }
@@ -807,6 +837,262 @@ struct AssetBrowserView: View {
         }
         try fm.copyItem(at: sourceURL, to: destinationAsset)
         try copyRuntimeAssetSidecars(for: sourceURL, to: destinationFolder, fileManager: fm)
+    }
+
+    private func queueRuntimeExport(sourceURL: URL, category: AssetCategory, destinationFolder: URL) {
+        let outputURL = destinationFolder
+            .appendingPathComponent(sourceURL.deletingPathExtension().lastPathComponent)
+            .appendingPathExtension(runtimeAssetExtension)
+        let request = RuntimeExportRequest(
+            sourceURL: sourceURL,
+            category: category,
+            destinationFolder: destinationFolder,
+            outputURL: outputURL
+        )
+
+        runtimeExportQueue.append(request)
+        presentNextRuntimeExportIfNeeded()
+    }
+
+    private func presentNextRuntimeExportIfNeeded() {
+        guard pendingRuntimeExport == nil, !runtimeExportQueue.isEmpty else {
+            return
+        }
+        pendingRuntimeExport = runtimeExportQueue.removeFirst()
+    }
+
+    private func runtimeExportSheet(for request: RuntimeExportRequest) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Convert to Untold Asset")
+                .font(.title2)
+                .bold()
+
+            Text("This USD file needs to be converted to Untold Engine's .untold runtime format before it can be added to your project.")
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Source")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(request.sourceURL.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(2)
+
+                Text("Output")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 6)
+                Text(request.outputURL.path)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineLimit(2)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Convert orientation", isOn: $exportConvertOrientation)
+
+                Picker("Source orientation", selection: $exportSourceOrientation) {
+                    Text("Blender native").tag("blender-native")
+                    Text("Engine oriented").tag("engine-oriented")
+                }
+                .disabled(!exportConvertOrientation)
+
+                Toggle("Compress geometry (LZ4)", isOn: $exportCompressGeometry)
+                    .help("Compresses vertex and index data with LZ4. Requires the Python lz4 package.")
+                if exportCompressGeometry {
+                    Text("Requires: pip install lz4")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.leading, 20)
+                }
+
+                Toggle("Compress textures (ASTC)", isOn: $exportCompressTextures)
+                    .help("Converts textures to GPU-native ASTC format. Requires astcenc and the Python Pillow package.")
+                if exportCompressTextures {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 12) {
+                            Link("Install astcenc →", destination: URL(string: "https://github.com/ARM-software/astc-encoder/releases")!)
+                                .font(.caption)
+                            Text("·")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Also requires: pip install Pillow")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("astcenc path (optional)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack {
+                                TextField("/opt/homebrew/bin/astcenc", text: $astcencBinPath)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(size: 12, design: .monospaced))
+                                Button("Browse…") {
+                                    let panel = NSOpenPanel()
+                                    panel.canChooseFiles = true
+                                    panel.canChooseDirectories = false
+                                    panel.allowsMultipleSelection = false
+                                    panel.title = "Select astcenc binary"
+                                    if panel.runModal() == .OK, let url = panel.url {
+                                        astcencBinPath = url.path
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
+            }
+
+            if isExportingRuntimeAsset {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Exporting...")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    pendingRuntimeExport = nil
+                    presentNextRuntimeExportIfNeeded()
+                }
+                .disabled(isExportingRuntimeAsset)
+
+                Button("Export") {
+                    exportRuntimeAsset(request)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(isExportingRuntimeAsset)
+            }
+        }
+        .padding(20)
+        .frame(width: 560)
+    }
+
+    private func exportRuntimeAsset(_ request: RuntimeExportRequest) {
+        guard !isExportingRuntimeAsset else { return }
+        guard let exporterScript = findExportUntoldScript() else {
+            showStatus("export-untold script not found", isError: true)
+            Logger.log(message: "❌ export-untold script not found. Expected at .build/checkouts/UntoldEngine/scripts/export-untold")
+            pendingRuntimeExport = nil
+            presentNextRuntimeExportIfNeeded()
+            return
+        }
+
+        isExportingRuntimeAsset = true
+        showStatus("Exporting \(request.sourceURL.lastPathComponent)...")
+        let convertOrientation = exportConvertOrientation
+        let sourceOrientation = exportSourceOrientation
+        let compressGeometry = exportCompressGeometry
+        let compressTextures = exportCompressTextures
+        let astcencBin = astcencBinPath.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            let tempDirectory = FileManager.default.temporaryDirectory
+            let outputLogURL = tempDirectory.appendingPathComponent("untold-export-\(UUID().uuidString).out")
+            let errorLogURL = tempDirectory.appendingPathComponent("untold-export-\(UUID().uuidString).err")
+
+            do {
+                try FileManager.default.createDirectory(at: request.destinationFolder, withIntermediateDirectories: true)
+                if FileManager.default.fileExists(atPath: request.outputURL.path) {
+                    try FileManager.default.removeItem(at: request.outputURL)
+                }
+                FileManager.default.createFile(atPath: outputLogURL.path, contents: nil)
+                FileManager.default.createFile(atPath: errorLogURL.path, contents: nil)
+                let outputHandle = try FileHandle(forWritingTo: outputLogURL)
+                let errorHandle = try FileHandle(forWritingTo: errorLogURL)
+                defer {
+                    try? outputHandle.close()
+                    try? errorHandle.close()
+                    try? FileManager.default.removeItem(at: outputLogURL)
+                    try? FileManager.default.removeItem(at: errorLogURL)
+                }
+
+                process.executableURL = exporterScript
+                var arguments = [
+                    "--input", request.sourceURL.path,
+                    "--output", request.outputURL.path,
+                ]
+                if request.category == .animations {
+                    arguments.append("--animation")
+                }
+                if convertOrientation {
+                    arguments.append("--ConvertOrientation")
+                    arguments.append(contentsOf: ["--source-orientation", sourceOrientation])
+                }
+                if compressGeometry {
+                    arguments.append("--compress-geometry")
+                }
+                process.arguments = arguments
+                process.standardOutput = outputHandle
+                process.standardError = errorHandle
+
+                try process.run()
+                process.waitUntilExit()
+
+                let stdout = (try? String(contentsOf: outputLogURL, encoding: .utf8)) ?? ""
+                let stderr = (try? String(contentsOf: errorLogURL, encoding: .utf8)) ?? ""
+
+                DispatchQueue.main.async {
+                    if !stdout.isEmpty { Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    if !stderr.isEmpty { Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                }
+
+                let exportSucceeded = process.terminationStatus == 0
+
+                if exportSucceeded, compressTextures {
+                    let texturesDir = request.destinationFolder.appendingPathComponent("Textures")
+                    if FileManager.default.fileExists(atPath: texturesDir.path),
+                       let texbakeScript = findTexbakeScript()
+                    {
+                        DispatchQueue.main.async { showStatus("Baking textures (ASTC)...") }
+                        let bakeResult = runTexbakeStep(script: texbakeScript, arguments: ["--dir", texturesDir.path], astcencBin: astcencBin)
+                        DispatchQueue.main.async {
+                            if !bakeResult.stdout.isEmpty { Logger.log(message: bakeResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !bakeResult.stderr.isEmpty { Logger.log(message: bakeResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        }
+
+                        DispatchQueue.main.async { showStatus("Patching texture references...") }
+                        let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputURL.path], astcencBin: astcencBin)
+                        DispatchQueue.main.async {
+                            if !patchResult.stdout.isEmpty { Logger.log(message: patchResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if !patchResult.stderr.isEmpty { Logger.log(message: patchResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                            if bakeResult.status != 0 || patchResult.status != 0 {
+                                Logger.log(message: "⚠️ ASTC compression had errors — asset imported without compressed textures")
+                            }
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            Logger.log(message: "⚠️ ASTC skipped — texbake.py not found or no Textures folder present")
+                        }
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    isExportingRuntimeAsset = false
+                    pendingRuntimeExport = nil
+                    if exportSucceeded {
+                        loadAssets()
+                        showStatus("Exported \(request.outputURL.lastPathComponent)")
+                    } else {
+                        showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
+                    }
+                    presentNextRuntimeExportIfNeeded()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    isExportingRuntimeAsset = false
+                    pendingRuntimeExport = nil
+                    Logger.log(message: "❌ Export failed: \(error)")
+                    showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
+                    presentNextRuntimeExportIfNeeded()
+                }
+            }
+        }
     }
 
     private func queueTilesExport(sourceURL: URL, destinationFolder: URL) {
