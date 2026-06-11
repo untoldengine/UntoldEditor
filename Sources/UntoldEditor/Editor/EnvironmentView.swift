@@ -362,6 +362,7 @@ private enum EditorAntiAliasingOption: String, CaseIterable, Hashable, Identifia
     case off = "Off"
     case fxaa = "FXAA"
     case smaa = "SMAA"
+    case msaa = "MSAA"
 
     var id: String {
         rawValue
@@ -375,6 +376,8 @@ private enum EditorAntiAliasingOption: String, CaseIterable, Hashable, Identifia
             return .fxaa
         case .smaa:
             return .smaa
+        case .msaa:
+            return .msaa
         }
     }
 
@@ -386,6 +389,8 @@ private enum EditorAntiAliasingOption: String, CaseIterable, Hashable, Identifia
             return .fxaa
         case .smaa:
             return .smaa
+        case .msaa:
+            return .msaa
         }
     }
 }
@@ -463,6 +468,8 @@ struct AntiAliasingEditorView: View {
                     }
                     .padding(.top, 4)
                 }
+            case .msaa:
+                EmptyView()
             }
         }
         .padding()

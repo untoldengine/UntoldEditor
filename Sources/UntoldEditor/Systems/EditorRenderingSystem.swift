@@ -295,7 +295,7 @@ func buildEditModeGraph() -> RenderGraphResult {
             )
             graph[smaaNeighborhoodPass.id] = smaaNeighborhoodPass
             outputDependency = smaaNeighborhoodPass.id
-        case .none:
+        case .none, .msaa:
             outputDependency = lookPass.id
         }
     }
