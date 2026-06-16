@@ -395,6 +395,7 @@ struct AssetBrowserView: View {
     @State private var exportGenerateLOD = false
     @State private var exportDryRun = false
     var editor_addEntityWithAsset: () -> Void
+    var editor_loadSceneAuthoredFromAsset: (Asset) -> Void = { _ in }
     private var currentFolderPath: URL? {
         folderPathStack.last
     }
@@ -443,6 +444,22 @@ struct AssetBrowserView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
 
+                    Button(action: loadSelectedSceneAuthoredPayload) {
+                        HStack(spacing: 6) {
+                            Text("Load Authored")
+                            Image(systemName: "camera.badge.ellipsis")
+                                .foregroundColor(.white)
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(selectedSceneAuthoredAsset() == nil ? Color.gray.opacity(0.5) : Color.editorSecondaryAccent)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(selectedSceneAuthoredAsset() == nil)
+                    .help("Load scene-authored cameras and lights from the selected .untold asset or tiled scene manifest")
                     Button(action: promptDeleteAsset) {
                         HStack(spacing: 6) {
                             Text("Delete")
@@ -1588,6 +1605,41 @@ struct AssetBrowserView: View {
         selectedAsset = asset
         selectedAssetName = asset.name
         updateTargetEntityName(for: selectionManager.selectedEntity)
+    }
+
+    private func selectedSceneAuthoredAsset() -> Asset? {
+        guard let selectedAsset else {
+            return nil
+        }
+
+        if let runtimeAsset = resolvedRuntimeAsset(for: selectedAsset),
+           runtimeAsset.category == AssetCategory.models.rawValue,
+           runtimeAsset.path.pathExtension.lowercased() == runtimeAssetExtension
+        {
+            return runtimeAsset
+        }
+
+        if let manifestAsset = resolvedTiledSceneManifest(for: selectedAsset) {
+            return manifestAsset
+        }
+
+        if selectedAsset.category == AssetCategory.streamModels.rawValue,
+           selectedAsset.path.pathExtension.lowercased() == "remotestream"
+        {
+            return selectedAsset
+        }
+
+        return nil
+    }
+
+    private func loadSelectedSceneAuthoredPayload() {
+        guard let asset = selectedSceneAuthoredAsset() else {
+            showStatus("Select a .untold model or tiled scene manifest first", isError: true)
+            return
+        }
+
+        editor_loadSceneAuthoredFromAsset(asset)
+        showStatus("Loading authored cameras/lights: \(asset.name)...")
     }
 
     // MARK: - Delete Asset

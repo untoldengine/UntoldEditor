@@ -159,6 +159,7 @@ public struct EditorView: View {
     @State private var cameraControlHintsDismissed = false
     @State private var showQuickPreviewWarning = false
     @State private var quickPreviewEntities: [(EntityID, String)] = []
+    @State private var sceneAuthoredGameCamera: EntityID?
     @State private var pendingQuickPreviewExport: QuickPreviewRuntimeExportRequest?
     @State private var isExportingQuickPreviewAsset = false
     @State private var quickPreviewConvertOrientation = false
@@ -279,7 +280,8 @@ public struct EditorView: View {
                                 selectedAsset: $selectedAsset,
                                 selectionManager: selectionManager,
                                 sceneGraphModel: sceneGraphModel,
-                                editor_addEntityWithAsset: editor_addEntityWithAsset
+                                editor_addEntityWithAsset: editor_addEntityWithAsset,
+                                editor_loadSceneAuthoredFromAsset: editor_loadSceneAuthoredFromAsset
                             )
                             .tabItem { Label("Assets", systemImage: "shippingbox") }
 
@@ -623,6 +625,7 @@ public struct EditorView: View {
             removeGizmo()
             EditorComponentsState.shared.clear()
             EditorUndoManager.shared.clear()
+            sceneAuthoredGameCamera = nil
             deserializeScene(sceneData: sceneData)
             editorController?.currentSceneURL = nil
             editor_entities = getAllGameEntities()
@@ -641,6 +644,7 @@ public struct EditorView: View {
         removeGizmo()
         EditorComponentsState.shared.clear()
         EditorUndoManager.shared.clear()
+        sceneAuthoredGameCamera = nil
 
         let light = createEntity()
         setEntityName(entityId: light, name: "Directional Light")
@@ -671,7 +675,7 @@ public struct EditorView: View {
             return
         }
 
-        let gameCameraEntityID = findGameCamera()
+        let gameCameraEntityID = findEditorGameCamera()
 
         if gameCameraEntityID == .invalid {
             return
@@ -759,7 +763,7 @@ public struct EditorView: View {
 
     private func updateActiveCameraForPlayMode() {
         if gameMode {
-            CameraSystem.shared.activeCamera = useSceneCameraDuringPlay ? findSceneCamera() : findGameCamera()
+            CameraSystem.shared.activeCamera = useSceneCameraDuringPlay ? findSceneCamera() : findEditorGameCamera()
         } else {
             CameraSystem.shared.activeCamera = findSceneCamera()
         }
@@ -1041,6 +1045,167 @@ public struct EditorView: View {
         }
     }
 
+    private func findEditorGameCamera() -> EntityID {
+        let entities = getAllGameEntities()
+
+        if let sceneAuthoredGameCamera,
+           entities.contains(sceneAuthoredGameCamera),
+           isGameCamera(sceneAuthoredGameCamera)
+        {
+            return sceneAuthoredGameCamera
+        }
+
+        if let activeCamera = CameraSystem.shared.activeCamera,
+           entities.contains(activeCamera),
+           isGameCamera(activeCamera)
+        {
+            return activeCamera
+        }
+
+        if let existingGameCamera = entities.first(where: isGameCamera) {
+            return existingGameCamera
+        }
+
+        return findGameCamera()
+    }
+
+    private func isGameCamera(_ entityId: EntityID) -> Bool {
+        hasComponent(entityId: entityId, componentType: CameraComponent.self)
+            && hasComponent(entityId: entityId, componentType: SceneCameraComponent.self) == false
+    }
+
+    private func refreshEditorAfterSceneAuthoredLoad(
+        selecting entityId: EntityID?,
+        gameCamera: EntityID?
+    ) {
+        removeGizmo()
+        activeEntity = .invalid
+        gizmoActive = false
+        sceneAuthoredGameCamera = gameCamera
+        if let entityId {
+            selectionManager.selectedEntity = entityId
+        }
+        selectionManager.inspectedMesh = nil
+        editor_entities = getAllGameEntities()
+        sceneGraphModel.refreshHierarchy()
+        updateActiveCameraForPlayMode()
+        selectionManager.objectWillChange.send()
+    }
+
+    private func removeDefaultSceneAuthoredEntities(existingEntityIds: Set<EntityID>) {
+        let entities = Set(getAllGameEntities())
+        let previousSceneAuthoredGameCamera = sceneAuthoredGameCamera
+        sceneAuthoredGameCamera = nil
+
+        let gameCamerasToRemove = existingEntityIds.filter {
+            entities.contains($0)
+                && isGameCamera($0)
+                && (getEntityName(entityId: $0) == "Game Camera" || $0 == previousSceneAuthoredGameCamera)
+        }
+
+        for gameCameraId in gameCamerasToRemove {
+            destroyEntity(entityId: gameCameraId)
+            setCamera(.active(.invalid))
+        }
+
+        if let directionalLightId = existingEntityIds.first(where: {
+            entities.contains($0)
+                && getEntityName(entityId: $0) == "Directional Light"
+                && hasComponent(entityId: $0, componentType: DirectionalLightComponent.self)
+        }) {
+            destroyEntity(entityId: directionalLightId)
+        }
+
+        sceneGraphModel.refreshHierarchy()
+    }
+
+    private func findImportedGameCamera(existingEntityIds: Set<EntityID>) -> EntityID? {
+        getAllGameEntities().first {
+            existingEntityIds.contains($0) == false
+                && isGameCamera($0)
+        }
+    }
+
+    private func loadSceneAuthoredPayload(
+        filename: String,
+        withExtension fileExtension: String,
+        selecting entityId: EntityID?,
+        sourceName: String
+    ) {
+        let existingEntityIds = Set(getAllGameEntities())
+
+        loadSceneAuthored(filename: filename, withExtension: fileExtension) { success in
+            DispatchQueue.main.async {
+                if success {
+                    removeDefaultSceneAuthoredEntities(existingEntityIds: existingEntityIds)
+                    let importedCamera = findImportedGameCamera(existingEntityIds: existingEntityIds)
+                    refreshEditorAfterSceneAuthoredLoad(selecting: entityId, gameCamera: importedCamera)
+                    print("✅ Scene-authored cameras/lights loaded: \(sourceName)")
+                } else {
+                    print("⚠️ Failed to load scene-authored cameras/lights: \(sourceName)")
+                }
+            }
+        }
+    }
+
+    private func loadSceneAuthoredPayload(
+        url manifestURL: URL,
+        selecting entityId: EntityID?,
+        sourceName: String
+    ) {
+        let existingEntityIds = Set(getAllGameEntities())
+
+        loadSceneAuthored(url: manifestURL) { success in
+            DispatchQueue.main.async {
+                if success {
+                    removeDefaultSceneAuthoredEntities(existingEntityIds: existingEntityIds)
+                    let importedCamera = findImportedGameCamera(existingEntityIds: existingEntityIds)
+                    refreshEditorAfterSceneAuthoredLoad(selecting: entityId, gameCamera: importedCamera)
+                    print("✅ Scene-authored cameras/lights loaded: \(sourceName)")
+                } else {
+                    print("⚠️ Failed to load scene-authored cameras/lights: \(sourceName)")
+                }
+            }
+        }
+    }
+
+    private func editor_loadSceneAuthoredFromAsset(_ asset: Asset) {
+        let fileExtension = asset.path.pathExtension.lowercased()
+
+        if fileExtension == "untold" {
+            loadSceneAuthoredPayload(
+                filename: asset.path.path,
+                withExtension: fileExtension,
+                selecting: selectionManager.selectedEntity,
+                sourceName: asset.name
+            )
+            return
+        }
+
+        if fileExtension == "json", isTiledSceneManifest(asset.path) {
+            loadSceneAuthoredPayload(
+                url: asset.path,
+                selecting: selectionManager.selectedEntity,
+                sourceName: asset.name
+            )
+            return
+        }
+
+        if fileExtension == "remotestream",
+           let urlString = try? String(contentsOf: asset.path, encoding: .utf8),
+           let manifestURL = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines))
+        {
+            loadSceneAuthoredPayload(
+                url: manifestURL,
+                selecting: selectionManager.selectedEntity,
+                sourceName: asset.name
+            )
+            return
+        }
+
+        print("⚠️ Scene-authored loading is only supported for .untold assets and tiled scene manifests")
+    }
+
     private func editor_handleQuickPreview(mode: QuickPreviewImportMode) {
         let openPanel = NSOpenPanel()
         openPanel.title = mode.filePickerTitle
@@ -1090,9 +1255,6 @@ public struct EditorView: View {
             // Load Untold runtime asset using absolute path
             setEntityMeshAsync(entityId: entityId, filename: absolutePath, withExtension: fileExtension) { success in
                 if success {
-                    DispatchQueue.main.async {
-                        revealCameraControlHintsIfNeeded()
-                    }
                     print("✅ Quick Preview loaded: \(fileName).\(fileExtension)")
                 } else {
                     print("⚠️ Failed to load Quick Preview, using fallback: \(fileName).\(fileExtension)")
@@ -1452,6 +1614,7 @@ public struct EditorView: View {
     }
 
     private func deleteExistingQuickPreviewEntities() {
+
         let previewEntityIds = getAllGameEntities()
             .filter { hasComponent(entityId: $0, componentType: QuickPreviewComponent.self) }
 

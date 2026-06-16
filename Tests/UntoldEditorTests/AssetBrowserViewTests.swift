@@ -30,14 +30,16 @@ final class AssetBrowserViewTests: XCTestCase {
                           selectedAsset: Binding<Asset?>,
                           selectionManager: SelectionManager = SelectionManager(),
                           sceneGraphModel: SceneGraphModel = SceneGraphModel(),
-                          editor_addEntityWithAsset: @escaping () -> Void = {}) -> AssetBrowserView
+                          editor_addEntityWithAsset: @escaping () -> Void = {},
+                          editor_loadSceneAuthoredFromAsset: @escaping (Asset) -> Void = { _ in }) -> AssetBrowserView
     {
         AssetBrowserView(
             assets: assets,
             selectedAsset: selectedAsset,
             selectionManager: selectionManager,
             sceneGraphModel: sceneGraphModel,
-            editor_addEntityWithAsset: editor_addEntityWithAsset
+            editor_addEntityWithAsset: editor_addEntityWithAsset,
+            editor_loadSceneAuthoredFromAsset: editor_loadSceneAuthoredFromAsset
         )
     }
 

@@ -1487,7 +1487,7 @@ struct CameraEditorView: View {
             TextInputVectorView(label: "Eye", value: Binding(
                 get: { eye },
                 set: { newEye in
-                    cameraLookAt(entityId: findGameCamera(), eye: newEye, target: target, up: up)
+                    cameraLookAt(entityId: entityId, eye: newEye, target: target, up: up)
                     refreshView()
                 }
             ))
@@ -1495,7 +1495,7 @@ struct CameraEditorView: View {
             TextInputVectorView(label: "Up", value: Binding(
                 get: { up },
                 set: { newUp in
-                    cameraLookAt(entityId: findGameCamera(), eye: eye, target: target, up: newUp)
+                    cameraLookAt(entityId: entityId, eye: eye, target: target, up: newUp)
                     refreshView()
                 }
             ))
@@ -1503,7 +1503,7 @@ struct CameraEditorView: View {
             TextInputVectorView(label: "Target", value: Binding(
                 get: { target },
                 set: { newTarget in
-                    cameraLookAt(entityId: findGameCamera(), eye: eye, target: newTarget, up: up)
+                    cameraLookAt(entityId: entityId, eye: eye, target: newTarget, up: up)
                     refreshView()
                 }
             ))
