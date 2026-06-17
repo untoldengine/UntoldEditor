@@ -37,6 +37,7 @@ import XCTest
         func test_demoGalleryView_wiresCallbacks() {
             let firstDemo = demoSceneCatalog[0]
             var selectedDemoId: String?
+            var didTryOwnScene = false
             var didCreateProject = false
             var didOpenProject = false
             var didOpenFullEditor = false
@@ -44,17 +45,20 @@ import XCTest
             let sut = DemoGalleryView(
                 demos: demoSceneCatalog,
                 onDemoSelected: { selectedDemoId = $0.id },
+                onTryOwnScene: { didTryOwnScene = true },
                 onCreateProject: { didCreateProject = true },
                 onOpenProject: { didOpenProject = true },
                 onOpenFullEditor: { didOpenFullEditor = true }
             )
 
             sut.onDemoSelected(firstDemo)
+            sut.onTryOwnScene()
             sut.onCreateProject()
             sut.onOpenProject()
             sut.onOpenFullEditor()
 
             XCTAssertEqual(selectedDemoId, firstDemo.id)
+            XCTAssertTrue(didTryOwnScene)
             XCTAssertTrue(didCreateProject)
             XCTAssertTrue(didOpenProject)
             XCTAssertTrue(didOpenFullEditor)
@@ -64,8 +68,55 @@ import XCTest
             let sut = DemoGalleryView(
                 demos: demoSceneCatalog,
                 onDemoSelected: { _ in },
+                onTryOwnScene: {},
                 onCreateProject: {},
                 onOpenProject: {},
+                onOpenFullEditor: {}
+            )
+
+            let host = NSHostingController(rootView: sut)
+            XCTAssertNotNil(host.view)
+        }
+
+        func test_previewImportGalleryView_wiresCallbacks() {
+            var selectedModes: [QuickPreviewImportMode] = []
+            var didBackToDemos = false
+            var didOpenFullEditor = false
+
+            let sut = PreviewImportGalleryView(
+                onModeSelected: { selectedModes.append($0) },
+                onBackToDemos: { didBackToDemos = true },
+                onOpenFullEditor: { didOpenFullEditor = true }
+            )
+
+            sut.onModeSelected(.untoldAsset)
+            sut.onModeSelected(.tiledScene)
+            sut.onModeSelected(.gaussian)
+            sut.onBackToDemos()
+            sut.onOpenFullEditor()
+
+            XCTAssertEqual(selectedModes, [.untoldAsset, .tiledScene, .gaussian])
+            XCTAssertTrue(didBackToDemos)
+            XCTAssertTrue(didOpenFullEditor)
+        }
+
+        func test_previewImportGalleryView_composesWithoutCrash() {
+            let sut = PreviewImportGalleryView(
+                onModeSelected: { _ in },
+                onBackToDemos: {},
+                onOpenFullEditor: {}
+            )
+
+            let host = NSHostingController(rootView: sut)
+            XCTAssertNotNil(host.view)
+        }
+
+        func test_quickPreviewSceneOverlayView_composesWithoutCrash() {
+            let sut = QuickPreviewSceneOverlayView(
+                title: "Kitchen Preview",
+                mode: .untoldAsset,
+                onLoadAnother: {},
+                onChooseDemo: {},
                 onOpenFullEditor: {}
             )
 

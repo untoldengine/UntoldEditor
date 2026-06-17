@@ -31,8 +31,7 @@ import XCTest
             onCreateSphereCalled: UnsafeMutablePointer<Bool>,
             onCreatePlaneCalled: UnsafeMutablePointer<Bool>,
             onCreateCylinderCalled: UnsafeMutablePointer<Bool>,
-            onCreateConeCalled: UnsafeMutablePointer<Bool>,
-            onQuickPreviewModes: UnsafeMutablePointer<[QuickPreviewImportMode]>? = nil
+            onCreateConeCalled: UnsafeMutablePointer<Bool>
         ) -> ToolbarView {
             ToolbarView(
                 selectionManager: selectionManager,
@@ -49,8 +48,7 @@ import XCTest
                 onCreateSphere: { onCreateSphereCalled.pointee = true },
                 onCreatePlane: { onCreatePlaneCalled.pointee = true },
                 onCreateCylinder: { onCreateCylinderCalled.pointee = true },
-                onCreateCone: { onCreateConeCalled.pointee = true },
-                onQuickPreview: { mode in onQuickPreviewModes?.pointee.append(mode) }
+                onCreateCone: { onCreateConeCalled.pointee = true }
             )
         }
 
@@ -69,7 +67,6 @@ import XCTest
             var onPlane = false
             var onCylinder = false
             var onCone = false
-            var quickPreviewModes: [QuickPreviewImportMode] = []
 
             let sut = makeSUT(
                 onSaveCalled: &onSave,
@@ -85,8 +82,7 @@ import XCTest
                 onCreateSphereCalled: &onSphere,
                 onCreatePlaneCalled: &onPlane,
                 onCreateCylinderCalled: &onCylinder,
-                onCreateConeCalled: &onCone,
-                onQuickPreviewModes: &quickPreviewModes
+                onCreateConeCalled: &onCone
             )
 
             // We cannot programmatically tap SwiftUI Buttons without a host and introspection.
@@ -103,8 +99,6 @@ import XCTest
             sut.onCreatePlane()
             sut.onCreateCylinder()
             sut.onCreateCone()
-            sut.onQuickPreview(.untoldAsset)
-            sut.onQuickPreview(.tiledScene)
 
             XCTAssertTrue(onSave, "onSave should be wired.")
             XCTAssertTrue(onSaveAs, "onSaveAs should be wired.")
@@ -118,7 +112,6 @@ import XCTest
             XCTAssertTrue(onPlane, "onCreatePlane should be wired.")
             XCTAssertTrue(onCylinder, "onCreateCylinder should be wired.")
             XCTAssertTrue(onCone, "onCreateCone should be wired.")
-            XCTAssertEqual(quickPreviewModes, [.untoldAsset, .tiledScene], "onQuickPreview should pass selected preview modes.")
 
             // For play toggle, verify the closure records values we pass.
             // Since @State is internal, we mimic the button behavior by calling the closure directly.
@@ -147,8 +140,7 @@ import XCTest
                 onCreateSphere: {},
                 onCreatePlane: {},
                 onCreateCylinder: {},
-                onCreateCone: {},
-                onQuickPreview: { _ in }
+                onCreateCone: {}
             )
 
             // Wrap in a hosting controller to ensure SwiftUI can build the body.
@@ -183,8 +175,7 @@ import XCTest
                 onCreateSphere: { sphereCreated = true },
                 onCreatePlane: { planeCreated = true },
                 onCreateCylinder: { cylinderCreated = true },
-                onCreateCone: { coneCreated = true },
-                onQuickPreview: { _ in }
+                onCreateCone: { coneCreated = true }
             )
 
             // When: Invoking the primitive creation closures
@@ -220,8 +211,7 @@ import XCTest
                 onCreateSphere: { callCount += 1 },
                 onCreatePlane: { callCount += 1 },
                 onCreateCylinder: {},
-                onCreateCone: {},
-                onQuickPreview: { _ in }
+                onCreateCone: {}
             )
 
             // When: Calling the primitive closures
@@ -254,8 +244,7 @@ import XCTest
                 onCreateSphere: { sphereCount += 1 },
                 onCreatePlane: { planeCount += 1 },
                 onCreateCylinder: {},
-                onCreateCone: {},
-                onQuickPreview: { _ in }
+                onCreateCone: {}
             )
 
             // When: Calling specific primitive closures multiple times
@@ -267,20 +256,6 @@ import XCTest
             XCTAssertEqual(cubeCount, 2, "Cube should be created twice")
             XCTAssertEqual(sphereCount, 1, "Sphere should be created once")
             XCTAssertEqual(planeCount, 0, "Plane should not be created")
-        }
-
-        func test_quickPreviewModes_exposeExpectedPickerConfiguration() {
-            XCTAssertEqual(QuickPreviewImportMode.allCases, [.untoldAsset, .tiledScene, .gaussian])
-
-            XCTAssertEqual(QuickPreviewImportMode.untoldAsset.menuTitle, "Load Untold Asset (.untold, USD)")
-            let runtimePreviewExtensions = Set(QuickPreviewImportMode.untoldAsset.allowedContentTypes.compactMap(\.preferredFilenameExtension))
-            XCTAssertTrue(runtimePreviewExtensions.isSuperset(of: ["untold", "usd", "usda", "usdc", "usdz"]))
-
-            XCTAssertEqual(QuickPreviewImportMode.tiledScene.menuTitle, "Load Tiled Stream (.json)")
-            XCTAssertEqual(QuickPreviewImportMode.tiledScene.allowedContentTypes, [.json])
-
-            XCTAssertEqual(QuickPreviewImportMode.gaussian.menuTitle, "Load Gaussian (.ply)")
-            XCTAssertEqual(QuickPreviewImportMode.gaussian.allowedContentTypes.first?.preferredFilenameExtension, "ply")
         }
     }
 #endif

@@ -12,6 +12,7 @@ import SwiftUI
 struct DemoGalleryView: View {
     let demos: [DemoSceneCatalogItem]
     var onDemoSelected: (DemoSceneCatalogItem) -> Void
+    var onTryOwnScene: () -> Void
     var onCreateProject: () -> Void
     var onOpenProject: () -> Void
     var onOpenFullEditor: () -> Void
@@ -84,6 +85,12 @@ struct DemoGalleryView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
+            Button(action: onTryOwnScene) {
+                Label("Try Your Own Scene", systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.editorAccent)
+            .focusable(false)
             Button(action: onCreateProject) {
                 Label("Create Project", systemImage: "hammer.fill")
             }
@@ -96,9 +103,255 @@ struct DemoGalleryView: View {
 
             Spacer()
 
-            Text("You can switch to the full editor after loading a demo.")
+            Text("You can switch to the full editor after loading a scene.")
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.58))
+        }
+    }
+}
+
+struct PreviewImportGalleryView: View {
+    var onModeSelected: (QuickPreviewImportMode) -> Void
+    var onBackToDemos: () -> Void
+    var onOpenFullEditor: () -> Void
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 180), spacing: 14, alignment: .top),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            header
+
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                ForEach(QuickPreviewImportMode.allCases, id: \.self) { mode in
+                    PreviewImportCard(mode: mode) {
+                        onModeSelected(mode)
+                    }
+                }
+            }
+
+            preparationGuide
+        }
+        .padding(20)
+        .frame(maxWidth: 760)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.editorPanelBackground.opacity(0.98),
+                    Color.editorBackground.opacity(0.98),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.editorDivider, lineWidth: 1)
+        )
+        .cornerRadius(14)
+        .shadow(color: .black.opacity(0.34), radius: 24, x: 0, y: 14)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Try Your Own Scene")
+                    .font(.largeTitle.bold())
+                    .foregroundColor(.white)
+
+                Text("Load an exported Untold scene file without creating a project. You can navigate immediately, then open the full editor when you are ready.")
+                    .font(.body)
+                    .foregroundColor(.white.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            Button("Back to Demos", action: onBackToDemos)
+                .buttonStyle(.bordered)
+                .tint(Color.editorSecondaryAccent)
+                .focusable(false)
+
+            Button(action: onOpenFullEditor) {
+                Label("Full Editor", systemImage: "slider.horizontal.3")
+            }
+            .buttonStyle(.bordered)
+            .tint(Color.editorSecondaryAccent)
+            .focusable(false)
+        }
+    }
+
+    private var preparationGuide: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Need to create one of these files?", systemImage: "wand.and.stars")
+                .font(.headline)
+                .foregroundColor(.white)
+
+            Text("Export from Blender with the Untold exporter add-on, or use the CLI exporter to produce .untold runtime assets and tiled .json scene manifests. Gaussian splats can be loaded directly from .ply files.")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.68))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Link(
+                "Get the Blender add-on and installation steps",
+                destination: URL(string: "https://untoldengine.github.io/UntoldEngine/API/UsingBlenderAddon/")!
+            )
+            .font(.caption.weight(.semibold))
+            .foregroundColor(Color.editorAccent)
+            .focusable(false)
+
+            HStack(spacing: 8) {
+                Text("1. Install Blender")
+                Text("2. Install Untold exporter")
+                Text("3. Export")
+                Text("4. Load here")
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundColor(.white.opacity(0.72))
+        }
+        .padding(12)
+        .background(Color.editorSurface.opacity(0.56))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .cornerRadius(10)
+    }
+}
+
+private struct PreviewImportCard: View {
+    let mode: QuickPreviewImportMode
+    var onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.editorAccentSoft)
+
+                    Image(systemName: mode.systemImageName)
+                        .font(.system(size: 38, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.88))
+                }
+                .frame(height: 96)
+
+                Text(mode.exploreTitle)
+                    .font(.headline)
+                    .foregroundColor(.white)
+
+                Text(mode.exploreSubtitle)
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.68))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(mode.exploreFileTypes)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.74))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.18))
+                    .cornerRadius(7)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.editorSurface.opacity(0.72))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+    }
+}
+
+struct QuickPreviewSceneOverlayView: View {
+    let title: String
+    let mode: QuickPreviewImportMode?
+    var onLoadAnother: () -> Void
+    var onChooseDemo: () -> Void
+    var onOpenFullEditor: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Text(mode?.exploreLoadedSubtitle ?? "Your Scene")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.66))
+            }
+
+            Spacer()
+
+            Button("Load Another", action: onLoadAnother)
+                .focusable(false)
+            Button("Demo Gallery", action: onChooseDemo)
+                .focusable(false)
+            Button(action: onOpenFullEditor) {
+                Label("Full Editor", systemImage: "slider.horizontal.3")
+            }
+            .focusable(false)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.editorPanelBackground.opacity(0.92))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.editorDivider, lineWidth: 1)
+        )
+        .cornerRadius(10)
+        .shadow(color: .black.opacity(0.25), radius: 14, x: 0, y: 8)
+    }
+}
+
+private extension QuickPreviewImportMode {
+    var exploreTitle: String {
+        switch self {
+        case .untoldAsset:
+            return "Untold Asset"
+        case .tiledScene:
+            return "Tiled Scene"
+        case .gaussian:
+            return "Gaussian Splat"
+        }
+    }
+
+    var exploreSubtitle: String {
+        switch self {
+        case .untoldAsset:
+            return "Open a runtime asset exported from Blender or converted from USD."
+        case .tiledScene:
+            return "Open a tiled stream manifest for larger scenes."
+        case .gaussian:
+            return "Open a Gaussian splat point-cloud scene."
+        }
+    }
+
+    var exploreFileTypes: String {
+        switch self {
+        case .untoldAsset:
+            return ".untold, USD"
+        case .tiledScene:
+            return ".json"
+        case .gaussian:
+            return ".ply"
+        }
+    }
+
+    var exploreLoadedSubtitle: String {
+        switch self {
+        case .untoldAsset:
+            return "Untold Asset Preview"
+        case .tiledScene:
+            return "Tiled Scene Preview"
+        case .gaussian:
+            return "Gaussian Splat Preview"
         }
     }
 }

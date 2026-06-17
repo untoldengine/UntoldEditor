@@ -10,90 +10,6 @@ public struct Asset: Identifiable {
     public let path: URL
     var isFolder: Bool = false
 }
-
-private struct WelcomeStartView: View {
-    var onStarterStreamSelected: (StreamModelCatalogItem) -> Void
-    var onQuickPreview: (QuickPreviewImportMode) -> Void
-    var onNewProject: () -> Void
-    var onOpenProject: () -> Void
-    var onDismiss: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Start Here")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Spacer()
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white.opacity(0.8))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help("Dismiss")
-            }
-
-            Menu {
-                ForEach(starterStreamModels) { item in
-                    Button {
-                        onStarterStreamSelected(item)
-                    } label: {
-                        Label(item.title, systemImage: "square.stack.3d.up.fill")
-                    }
-                }
-            } label: {
-                Label("Starter Streams", systemImage: "square.stack.3d.up.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.editorSecondaryAccent)
-            .menuStyle(.button)
-            .focusable(false)
-
-            HStack(spacing: 8) {
-                Menu {
-                    ForEach(QuickPreviewImportMode.allCases, id: \.self) { mode in
-                        Button {
-                            onQuickPreview(mode)
-                        } label: {
-                            Label(mode.menuTitle, systemImage: mode.systemImageName)
-                        }
-                    }
-                } label: {
-                    Label("Load Preview", systemImage: "eye.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .menuStyle(.button)
-                .focusable(false)
-
-                Button(action: onNewProject) {
-                    Label("New", systemImage: "hammer.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .focusable(false)
-
-                Button(action: onOpenProject) {
-                    Label("Open", systemImage: "folder.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .focusable(false)
-            }
-        }
-        .padding(16)
-        .frame(width: 360)
-        .background(Color.editorPanelBackground.opacity(0.96))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.editorDivider, lineWidth: 1)
-        )
-        .cornerRadius(8)
-        .shadow(color: .black.opacity(0.25), radius: 16, x: 0, y: 8)
-    }
-}
-
 private struct CameraControlHintsView: View {
     var onDismiss: () -> Void
 
@@ -169,8 +85,12 @@ public struct EditorView: View {
     @State private var quickPreviewAstcencBinPath = ""
     @State private var experienceMode: EditorExperienceMode = .explore
     @State private var showDemoGallery = true
+    @State private var showPreviewImportGallery = false
     @State private var activeDemoScene: DemoSceneCatalogItem?
     @State private var activeDemoCameraFrame: StreamModelCameraFrame?
+    @State private var activePreviewSceneTitle: String?
+    @State private var activePreviewImportMode: QuickPreviewImportMode?
+    @State private var pendingQuickPreviewLoadsInExplore = false
 
     var renderer: UntoldRenderer?
 
@@ -195,27 +115,7 @@ public struct EditorView: View {
         ZStack {
             VStack {
                 if experienceMode == .edit {
-                    ToolbarView(
-                        selectionManager: selectionManager,
-                        onSave: editor_handleSave,
-                        onSaveAs: editor_handleSaveAs,
-                        onClear: editor_clearScene,
-                        onPlayToggled: { isPlaying in
-                            editor_handlePlayToggle(isPlaying)
-                        },
-                        useSceneCameraDuringPlay: $useSceneCameraDuringPlay,
-                        dirLightCreate: editor_createDirLight,
-                        pointLightCreate: editor_createPointLight,
-                        spotLightCreate: editor_createSpotLight,
-                        areaLightCreate: editor_createAreaLight,
-                        onCreateCube: editor_createCube,
-                        onCreateSphere: editor_createSphere,
-                        onCreatePlane: editor_createPlane,
-                        onCreateCylinder: editor_createCylinder,
-                        onCreateCone: editor_createCone,
-                        onStarterStreamSelected: editor_loadStarterStream,
-                        onQuickPreview: editor_handleQuickPreview
-                    )
+                    editorToolbar
                     Divider()
                 }
                 HStack {
@@ -241,43 +141,7 @@ public struct EditorView: View {
                     }
 
                     VStack(spacing: 0) {
-                        EditorSceneView(renderer: renderer!)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .overlay(alignment: .topLeading) {
-                                EngineStatsOverlayView()
-                            }
-                            .overlay {
-                                if shouldShowDemoGallery {
-                                    DemoGalleryView(
-                                        demos: demoSceneCatalog,
-                                        onDemoSelected: editor_loadDemoScene,
-                                        onCreateProject: createProjectFromExplore,
-                                        onOpenProject: openProjectFromExplore,
-                                        onOpenFullEditor: switchToEditMode
-                                    )
-                                    .padding()
-                                }
-                            }
-                            .overlay(alignment: .top) {
-                                if shouldShowExploreSceneOverlay, let activeDemoScene {
-                                    ExploreSceneOverlayView(
-                                        demo: activeDemoScene,
-                                        onChooseAnotherDemo: showDemoChooser,
-                                        onResetCamera: resetActiveDemoCamera,
-                                        onOpenFullEditor: switchToEditMode
-                                    )
-                                    .padding(.top, 12)
-                                    .padding(.horizontal, 16)
-                                }
-                            }
-                            .overlay(alignment: .bottom) {
-                                if shouldShowCameraControlHints {
-                                    CameraControlHintsView {
-                                        dismissCameraControlHints()
-                                    }
-                                    .padding(.bottom, 14)
-                                }
-                            }
+                        editorSceneViewport
                         if experienceMode == .edit {
                             TransformManipulationToolbar(controller: editorController!)
                                 .frame(height: 40)
@@ -375,27 +239,7 @@ public struct EditorView: View {
             syncEditorAvailabilityForExperienceMode()
         }
         .sheet(isPresented: $showSaveNamePrompt) {
-            VStack(spacing: 12) {
-                Text("Save Scene")
-                    .font(.headline)
-                Text("Scenes are saved to the Scenes folder in your Asset Folder.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                TextField("Scene name", text: $pendingSceneName)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .onSubmit { confirmSaveSceneName() }
-
-                HStack {
-                    Button("Cancel") { showSaveNamePrompt = false }
-                    Spacer()
-                    Button("Save") { confirmSaveSceneName() }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(pendingSceneName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .padding()
-            .frame(width: 320)
+            saveScenePrompt
         }
         .alert("Overwrite Scene?", isPresented: $showOverwriteAlert) {
             Button("Cancel", role: .cancel) {
@@ -438,6 +282,116 @@ public struct EditorView: View {
         }
     }
 
+    private var editorSceneViewport: some View {
+        EditorSceneView(renderer: renderer!)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topLeading) {
+                EngineStatsOverlayView()
+            }
+            .overlay {
+                if shouldShowDemoGallery {
+                    DemoGalleryView(
+                        demos: demoSceneCatalog,
+                        onDemoSelected: editor_loadDemoScene,
+                        onTryOwnScene: showPreviewImportChooser,
+                        onCreateProject: createProjectFromExplore,
+                        onOpenProject: openProjectFromExplore,
+                        onOpenFullEditor: switchToEditMode
+                    )
+                    .padding()
+                }
+            }
+            .overlay {
+                if shouldShowPreviewImportGallery {
+                    PreviewImportGalleryView(
+                        onModeSelected: loadCustomPreviewScene,
+                        onBackToDemos: showDemoChooser,
+                        onOpenFullEditor: switchToEditMode
+                    )
+                    .padding()
+                }
+            }
+            .overlay(alignment: .top) {
+                if shouldShowExploreSceneOverlay, let activeDemoScene {
+                    ExploreSceneOverlayView(
+                        demo: activeDemoScene,
+                        onChooseAnotherDemo: showDemoChooser,
+                        onResetCamera: resetActiveDemoCamera,
+                        onOpenFullEditor: switchToEditMode
+                    )
+                    .padding(.top, 12)
+                    .padding(.horizontal, 16)
+                }
+            }
+            .overlay(alignment: .top) {
+                if shouldShowQuickPreviewSceneOverlay, let activePreviewSceneTitle {
+                    QuickPreviewSceneOverlayView(
+                        title: activePreviewSceneTitle,
+                        mode: activePreviewImportMode,
+                        onLoadAnother: showPreviewImportChooser,
+                        onChooseDemo: showDemoChooser,
+                        onOpenFullEditor: switchToEditMode
+                    )
+                    .padding(.top, 12)
+                    .padding(.horizontal, 16)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if shouldShowCameraControlHints {
+                    CameraControlHintsView {
+                        dismissCameraControlHints()
+                    }
+                    .padding(.bottom, 14)
+                }
+            }
+    }
+
+    private var editorToolbar: some View {
+        ToolbarView(
+            selectionManager: selectionManager,
+            onSave: editor_handleSave,
+            onSaveAs: editor_handleSaveAs,
+            onClear: editor_clearScene,
+            onPlayToggled: { isPlaying in
+                editor_handlePlayToggle(isPlaying)
+            },
+            useSceneCameraDuringPlay: $useSceneCameraDuringPlay,
+            dirLightCreate: editor_createDirLight,
+            pointLightCreate: editor_createPointLight,
+            spotLightCreate: editor_createSpotLight,
+            areaLightCreate: editor_createAreaLight,
+            onCreateCube: editor_createCube,
+            onCreateSphere: editor_createSphere,
+            onCreatePlane: editor_createPlane,
+            onCreateCylinder: editor_createCylinder,
+            onCreateCone: editor_createCone
+        )
+    }
+
+    private var saveScenePrompt: some View {
+        VStack(spacing: 12) {
+            Text("Save Scene")
+                .font(.headline)
+            Text("Scenes are saved to the Scenes folder in your Asset Folder.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            TextField("Scene name", text: $pendingSceneName)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .onSubmit { confirmSaveSceneName() }
+
+            HStack {
+                Button("Cancel") { showSaveNamePrompt = false }
+                Spacer()
+                Button("Save") { confirmSaveSceneName() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(pendingSceneName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 320)
+    }
+
     private func completeDemoSceneAuthoredLoad(
         _ success: Bool,
         existingEntityIds: Set<EntityID>,
@@ -460,6 +414,13 @@ public struct EditorView: View {
     private var shouldShowDemoGallery: Bool {
         showWelcomeStart
             && showDemoGallery
+            && showPreviewImportGallery == false
+            && experienceMode == .explore
+            && editorBasePath.basePath == nil
+    }
+    private var shouldShowPreviewImportGallery: Bool {
+        showWelcomeStart
+            && showPreviewImportGallery
             && experienceMode == .explore
             && editorBasePath.basePath == nil
     }
@@ -467,7 +428,14 @@ public struct EditorView: View {
     private var shouldShowExploreSceneOverlay: Bool {
         experienceMode == .explore
             && showDemoGallery == false
+            && showPreviewImportGallery == false
             && activeDemoScene != nil
+    }
+    private var shouldShowQuickPreviewSceneOverlay: Bool {
+        experienceMode == .explore
+            && showDemoGallery == false
+            && showPreviewImportGallery == false
+            && activePreviewSceneTitle != nil
     }
 
     private var shouldShowCameraControlHints: Bool {
@@ -509,6 +477,7 @@ public struct EditorView: View {
     private func switchToEditMode() {
         experienceMode = .edit
         showDemoGallery = false
+        showPreviewImportGallery = false
         disableExploreNavigationMode()
     }
 
@@ -527,8 +496,33 @@ public struct EditorView: View {
     private func showDemoChooser() {
         experienceMode = .explore
         showDemoGallery = true
+        showPreviewImportGallery = false
+        activePreviewSceneTitle = nil
+        activePreviewImportMode = nil
         showCameraControlHints = false
         enableExploreNavigationMode()
+    }
+
+    private func showPreviewImportChooser() {
+        experienceMode = .explore
+        showWelcomeStart = true
+        showDemoGallery = false
+        showPreviewImportGallery = true
+        activeDemoScene = nil
+        activeDemoCameraFrame = nil
+        activePreviewSceneTitle = nil
+        activePreviewImportMode = nil
+        showCameraControlHints = false
+        enableExploreNavigationMode()
+    }
+
+    private func loadCustomPreviewScene(mode: QuickPreviewImportMode) {
+        showDemoGallery = false
+        showPreviewImportGallery = false
+        activeDemoScene = nil
+        activeDemoCameraFrame = nil
+        enableExploreNavigationMode()
+        editor_handleQuickPreview(mode: mode, fromExploreMode: true)
     }
 
     private func resetActiveDemoCamera() {
@@ -1104,8 +1098,11 @@ public struct EditorView: View {
         experienceMode = .explore
         showWelcomeStart = true
         showDemoGallery = false
+        showPreviewImportGallery = false
         activeDemoScene = demo
         activeDemoCameraFrame = demo.cameraFrame
+        activePreviewSceneTitle = nil
+        activePreviewImportMode = nil
         enableExploreNavigationMode()
 
         deleteExistingQuickPreviewEntities()
@@ -1245,47 +1242,6 @@ public struct EditorView: View {
         selectionManager.objectWillChange.send()
     }
 
-    private func editor_loadStarterStream(_ item: StreamModelCatalogItem) {
-        deleteExistingQuickPreviewEntities()
-
-        removeGizmo()
-        let entityId = createEntity()
-        let uniqueName = "QuickPreview-\(item.title)-\(entityId)"
-        setEntityName(entityId: entityId, name: uniqueName)
-
-        if let quickPreviewComp = scene.assign(to: entityId, component: QuickPreviewComponent.self) {
-            quickPreviewComp.absoluteFilePath = item.manifestURL.absoluteString
-            quickPreviewComp.fileExtension = "json"
-            quickPreviewComp.originalFileName = item.title
-        }
-
-        clearSceneBatches()
-        GeometryStreamingSystem.shared.enabled = true
-
-        setEntityStreamScene(entityId: entityId, url: item.manifestURL) { success in
-            DispatchQueue.main.async {
-                if success {
-                    applyStarterStreamCameraFrame(item)
-                    revealCameraControlHintsIfNeeded()
-                    print("✅ Starter stream loaded: \(item.title)")
-                } else {
-                    print("⚠️ Failed to load starter stream: \(item.title)")
-                }
-                sceneGraphModel.refreshHierarchy()
-            }
-        }
-
-        selectionManager.selectedEntity = entityId
-        editor_entities = getAllGameEntities()
-        sceneGraphModel.refreshHierarchy()
-
-        print("ℹ️ Quick Preview mode: Starter stream loaded from \(item.manifestURL.absoluteString)")
-        print("⚠️ Note: Quick Preview entities cannot be saved to scenes")
-    }
-
-    private func applyStarterStreamCameraFrame(_ item: StreamModelCatalogItem) {
-        applyCameraFrame(item.cameraFrame)
-    }
 
     private func applyCameraFrame(_ frame: StreamModelCameraFrame) {
         let camera = findSceneCamera()
@@ -1474,7 +1430,7 @@ public struct EditorView: View {
         print("⚠️ Scene-authored loading is only supported for .untold assets and tiled scene manifests")
     }
 
-    private func editor_handleQuickPreview(mode: QuickPreviewImportMode) {
+    private func editor_handleQuickPreview(mode: QuickPreviewImportMode, fromExploreMode: Bool = false) {
         let openPanel = NSOpenPanel()
         openPanel.title = mode.filePickerTitle
         openPanel.allowedContentTypes = mode.allowedContentTypes
@@ -1483,11 +1439,16 @@ public struct EditorView: View {
         openPanel.message = mode.filePickerMessage
 
         guard openPanel.runModal() == .OK, let fileURL = openPanel.url else {
+            if fromExploreMode {
+                showPreviewImportGallery = true
+            }
             return
         }
 
         let fileExtension = fileURL.pathExtension.lowercased()
         let absolutePath = fileURL.path
+        let fileName = fileURL.deletingPathExtension().lastPathComponent
+        pendingQuickPreviewLoadsInExplore = fromExploreMode
 
         if isUSDSourceAsset(fileURL) {
             queueQuickPreviewRuntimeExport(sourceURL: fileURL)
@@ -1496,16 +1457,20 @@ public struct EditorView: View {
 
         if fileExtension == "json", !isTiledSceneManifest(fileURL) {
             Logger.log(message: "⚠️ Quick Preview JSON is not a tiled scene manifest: \(fileURL.lastPathComponent)")
+            if fromExploreMode {
+                showPreviewImportGallery = true
+                pendingQuickPreviewLoadsInExplore = false
+            }
             return
         }
 
         deleteExistingQuickPreviewEntities()
+        let existingEntityIds = Set(getAllGameEntities())
 
         // Create a new entity for the preview
         removeGizmo()
         let entityId = createEntity()
 
-        let fileName = fileURL.deletingPathExtension().lastPathComponent
         let uniqueName = "QuickPreview-\(fileName)-\(entityId)"
         setEntityName(entityId: entityId, name: uniqueName)
 
@@ -1522,10 +1487,28 @@ public struct EditorView: View {
 
             // Load Untold runtime asset using absolute path
             setEntityMeshAsync(entityId: entityId, filename: absolutePath, withExtension: fileExtension) { success in
-                if success {
-                    print("✅ Quick Preview loaded: \(fileName).\(fileExtension)")
-                } else {
-                    print("⚠️ Failed to load Quick Preview, using fallback: \(fileName).\(fileExtension)")
+                DispatchQueue.main.async {
+                    if success {
+                        loadQuickPreviewSceneAuthored(
+                            url: fileURL,
+                            fileExtension: fileExtension,
+                            isRuntimeAsset: true,
+                            existingEntityIds: existingEntityIds
+                        ) { _ in
+                            if fromExploreMode {
+                                completeExploreQuickPreviewLoad(fileName: fileName, mode: mode)
+                            } else {
+                                sceneGraphModel.refreshHierarchy()
+                            }
+                        }
+                        print("✅ Quick Preview loaded: \(fileName).\(fileExtension)")
+                    } else {
+                        print("⚠️ Failed to load Quick Preview, using fallback: \(fileName).\(fileExtension)")
+                        if fromExploreMode {
+                            showPreviewImportGallery = true
+                            pendingQuickPreviewLoadsInExplore = false
+                        }
+                    }
                 }
             }
         } else if fileExtension == "ply" {
@@ -1534,7 +1517,9 @@ public struct EditorView: View {
 
             // Load Gaussian PLY using absolute path
             setEntityGaussian(entityId: entityId, filename: absolutePath, withExtension: fileExtension)
-            revealCameraControlHintsIfNeeded()
+            if fromExploreMode == false {
+                revealCameraControlHintsIfNeeded()
+            }
             print("✅ Quick Preview Gaussian loaded: \(fileName).\(fileExtension)")
         } else if fileExtension == "json" {
             clearSceneBatches()
@@ -1543,10 +1528,26 @@ public struct EditorView: View {
             setEntityStreamScene(entityId: entityId, url: fileURL) { success in
                 DispatchQueue.main.async {
                     if success {
-                        revealCameraControlHintsIfNeeded()
+                        loadQuickPreviewSceneAuthored(
+                            url: fileURL,
+                            fileExtension: fileExtension,
+                            isRuntimeAsset: false,
+                            existingEntityIds: existingEntityIds
+                        ) { _ in
+                            if fromExploreMode {
+                                completeExploreQuickPreviewLoad(fileName: fileName, mode: mode)
+                            } else {
+                                revealCameraControlHintsIfNeeded()
+                                sceneGraphModel.refreshHierarchy()
+                            }
+                        }
                         print("✅ Quick Preview stream model loaded: \(fileName).\(fileExtension)")
                     } else {
                         print("⚠️ Failed to load Quick Preview stream model: \(fileName).\(fileExtension)")
+                        if fromExploreMode {
+                            showPreviewImportGallery = true
+                            pendingQuickPreviewLoadsInExplore = false
+                        }
                     }
                     sceneGraphModel.refreshHierarchy()
                 }
@@ -1579,9 +1580,39 @@ public struct EditorView: View {
         selectionManager.selectedEntity = entityId
         editor_entities = getAllGameEntities()
         sceneGraphModel.refreshHierarchy()
+        if fromExploreMode && fileExtension != "untold" {
+            completeExploreQuickPreviewLoad(fileName: fileName, mode: mode)
+        }
 
         print("ℹ️ Quick Preview mode: File loaded with absolute path")
         print("⚠️ Note: Quick Preview entities cannot be saved to scenes (absolute paths not serialized)")
+    }
+
+    private func loadQuickPreviewSceneAuthored(
+        url: URL,
+        fileExtension: String,
+        isRuntimeAsset: Bool,
+        existingEntityIds: Set<EntityID>,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard fileExtension == "untold" || fileExtension == "json" else {
+            completion(false)
+            return
+        }
+
+        if isRuntimeAsset {
+            loadSceneAuthored(filename: url.path, withExtension: fileExtension) { success in
+                DispatchQueue.main.async {
+                    completeDemoSceneAuthoredLoad(success, existingEntityIds: existingEntityIds, completion: completion)
+                }
+            }
+        } else {
+            loadSceneAuthored(url: url) { success in
+                DispatchQueue.main.async {
+                    completeDemoSceneAuthoredLoad(success, existingEntityIds: existingEntityIds, completion: completion)
+                }
+            }
+        }
     }
 
     private func isUSDSourceAsset(_ url: URL) -> Bool {
@@ -1826,6 +1857,7 @@ public struct EditorView: View {
         let fileName = sourceURL.deletingPathExtension().lastPathComponent
 
         deleteExistingQuickPreviewEntities()
+        let existingEntityIds = Set(getAllGameEntities())
         removeGizmo()
 
         let entityId = createEntity()
@@ -1846,10 +1878,28 @@ public struct EditorView: View {
             GeometryStreamingSystem.shared.enabled = false
 
             setEntityMeshAsync(entityId: entityId, filename: absolutePath, withExtension: fileExtension) { success in
-                if success {
-                    print("✅ Quick Preview loaded: \(loadURL.lastPathComponent)")
-                } else {
-                    print("⚠️ Failed to load Quick Preview, using fallback: \(loadURL.lastPathComponent)")
+                DispatchQueue.main.async {
+                    if success {
+                        loadQuickPreviewSceneAuthored(
+                            url: loadURL,
+                            fileExtension: fileExtension,
+                            isRuntimeAsset: true,
+                            existingEntityIds: existingEntityIds
+                        ) { _ in
+                            if pendingQuickPreviewLoadsInExplore {
+                                completeExploreQuickPreviewLoad(fileName: fileName, mode: .untoldAsset)
+                            } else {
+                                sceneGraphModel.refreshHierarchy()
+                            }
+                        }
+                        print("✅ Quick Preview loaded: \(loadURL.lastPathComponent)")
+                    } else {
+                        print("⚠️ Failed to load Quick Preview, using fallback: \(loadURL.lastPathComponent)")
+                        if pendingQuickPreviewLoadsInExplore {
+                            showPreviewImportGallery = true
+                            pendingQuickPreviewLoadsInExplore = false
+                        }
+                    }
                 }
             }
         } else if fileExtension == "ply" {
@@ -1876,9 +1926,29 @@ public struct EditorView: View {
         selectionManager.selectedEntity = entityId
         editor_entities = getAllGameEntities()
         sceneGraphModel.refreshHierarchy()
+        if pendingQuickPreviewLoadsInExplore && fileExtension != "untold" {
+            completeExploreQuickPreviewLoad(fileName: fileName, mode: .untoldAsset)
+        }
 
         print("ℹ️ Quick Preview mode: File loaded with absolute path")
         print("⚠️ Note: Quick Preview entities cannot be saved to scenes (absolute paths not serialized)")
+    }
+
+    private func completeExploreQuickPreviewLoad(fileName: String, mode: QuickPreviewImportMode) {
+        experienceMode = .explore
+        showWelcomeStart = true
+        showDemoGallery = false
+        showPreviewImportGallery = false
+        activeDemoScene = nil
+        activeDemoCameraFrame = nil
+        activePreviewSceneTitle = fileName
+        activePreviewImportMode = mode
+        pendingQuickPreviewLoadsInExplore = false
+        clearExploreSelection()
+        editor_entities = getAllGameEntities()
+        sceneGraphModel.refreshHierarchy()
+        enableExploreNavigationMode()
+        revealCameraControlHintsIfNeeded()
     }
 
     private func deleteExistingQuickPreviewEntities() {
