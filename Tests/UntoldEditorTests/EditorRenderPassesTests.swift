@@ -429,6 +429,28 @@ final class EditorRenderPassesTests: XCTestCase {
                        "Non-light entities should use scale of 1.2")
     }
 
+    func test_areaLightDebugPlaneNormalMatchesEmissionDirection() {
+        testEntity = createEntity()
+        createAreaLight(entityId: testEntity)
+
+        guard let worldTransform = scene.get(component: WorldTransformComponent.self, for: testEntity) else {
+            XCTFail("Area light should have a world transform.")
+            return
+        }
+
+        let debugModelMatrix = areaLightDebugModelMatrix(worldTransform: worldTransform.space)
+        let debugPlaneNormal = simd_normalize(simd_float3(
+            debugModelMatrix.columns.1.x,
+            debugModelMatrix.columns.1.y,
+            debugModelMatrix.columns.1.z
+        ))
+        let emissionDirection = simd_normalize(getLightEmissionDirection(entityId: testEntity))
+
+        XCTAssertEqual(debugPlaneNormal.x, emissionDirection.x, accuracy: 0.0001)
+        XCTAssertEqual(debugPlaneNormal.y, emissionDirection.y, accuracy: 0.0001)
+        XCTAssertEqual(debugPlaneNormal.z, emissionDirection.z, accuracy: 0.0001)
+    }
+
     // MARK: - Buffer Resource Tests
 
     func test_debuggerExecution_usesQuadBuffers() {

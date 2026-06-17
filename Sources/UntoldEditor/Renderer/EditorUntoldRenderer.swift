@@ -265,16 +265,30 @@ extension UntoldRenderer {
 
             let lightPos = getPosition(entityId: parentEntityIdGizmo)
             let gizmoPos = getPosition(entityId: lightDirEntity)
-            let zAxis = simd_normalize(gizmoPos - lightPos) * -1.0
+            let emissionDirection = gizmoPos - lightPos
+            guard simd_length_squared(emissionDirection) > 0.0001 else {
+                break
+            }
+
+            // Engine light emission is local -Z, so local +Z must point opposite
+            // the dragged direction handle.
+            let zAxis = -simd_normalize(emissionDirection)
 
             let worldUp = simd_float3(0, 1, 0)
-            var xAxis = simd_normalize(simd_cross(worldUp, zAxis))
-            if simd_length(xAxis) < 0.001 {
-                xAxis = simd_normalize(simd_cross(simd_float3(1, 0, 0), zAxis))
+            var xAxis = simd_cross(worldUp, zAxis)
+            if simd_length_squared(xAxis) < 0.000001 {
+                xAxis = simd_cross(simd_float3(1, 0, 0), zAxis)
             }
+            xAxis = simd_normalize(xAxis)
             let yAxis = simd_normalize(simd_cross(zAxis, xAxis))
             let rotM = simd_float3x3(columns: (xAxis, yAxis, zAxis))
-            localTransformComponent.rotation = transformMatrix3nToQuaternion(m: rotM)
+            let rotation = transformMatrix3nToQuaternion(m: rotM)
+            let euler = transformQuaternionToEulerAngles(q: rotation)
+            localTransformComponent.rotation = rotation
+            localTransformComponent.rotationX = euler.pitch
+            localTransformComponent.rotationY = euler.yaw
+            localTransformComponent.rotationZ = euler.roll
+            translateTo(entityId: activeEntity, position: localTransformComponent.position)
 
         default:
             break

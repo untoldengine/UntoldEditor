@@ -399,8 +399,8 @@ private func initialLightDirectionHandleOffset() -> simd_float3 {
         return simd_float3(0.0, GizmoDimensions.directionHandleOffsetY, 0.0)
     }
 
-    let forward = -1.0 * getForwardAxisVector(entityId: activeEntity)
-    let handleDirection = simd_length(forward) > 0.0001 ? simd_normalize(forward) : simd_float3(0.0, -1.0, 0.0)
+    let emissionDirection = getLightEmissionDirection(entityId: activeEntity)
+    let handleDirection = simd_length(emissionDirection) > 0.0001 ? simd_normalize(emissionDirection) : simd_float3(0.0, -1.0, 0.0)
     return handleDirection * abs(GizmoDimensions.directionHandleOffsetY)
 }
 

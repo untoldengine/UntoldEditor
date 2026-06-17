@@ -12,6 +12,15 @@ import Foundation
 import MetalKit
 import UntoldEngine
 
+/// Builds the selected area-light debug mesh transform so the plane normal points along light emission.
+func areaLightDebugModelMatrix(worldTransform: simd_float4x4) -> simd_float4x4 {
+    let areaDebugRotation = matrix4x4Rotation(
+        radians: degreesToRadians(degrees: -90.0),
+        axis: simd_float3(1.0, 0.0, 0.0)
+    )
+    return simd_mul(worldTransform, areaDebugRotation)
+}
+
 extension RenderPasses {
     static let editorPreCompositeExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
         let wasSSAOEnabled = SSAOParams.shared.enabled
@@ -607,13 +616,9 @@ extension RenderPasses {
                     axis: simd_float3(1.0, 0.0, 0.0)
                 )
                 debugModelMatrix = simd_mul(worldTransform.space, spotDebugRotation)
-            } else if let areaLightComponent = scene.get(component: AreaLightComponent.self, for: activeEntity) {
+            } else if scene.get(component: AreaLightComponent.self, for: activeEntity) != nil {
                 lightMesh = areaLightDebugMesh
-                let areaDebugRotation = matrix4x4Rotation(
-                    radians: degreesToRadians(degrees: 90.0),
-                    axis: simd_float3(1.0, 0.0, 0.0)
-                )
-                debugModelMatrix = simd_mul(worldTransform.space, areaDebugRotation)
+                debugModelMatrix = areaLightDebugModelMatrix(worldTransform: worldTransform.space)
             } else if let dirLightComponent = scene.get(component: DirectionalLightComponent.self, for: activeEntity) {
                 lightMesh = dirLightDebugMesh
             }
