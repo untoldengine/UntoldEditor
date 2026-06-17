@@ -167,6 +167,10 @@ public struct EditorView: View {
     @State private var quickPreviewCompressGeometry = false
     @State private var quickPreviewCompressTextures = false
     @State private var quickPreviewAstcencBinPath = ""
+    @State private var experienceMode: EditorExperienceMode = .explore
+    @State private var showDemoGallery = true
+    @State private var activeDemoScene: DemoSceneCatalogItem?
+    @State private var activeDemoCameraFrame: StreamModelCameraFrame?
 
     var renderer: UntoldRenderer?
 
@@ -190,46 +194,50 @@ public struct EditorView: View {
     public var body: some View {
         ZStack {
             VStack {
-                ToolbarView(
-                    selectionManager: selectionManager,
-                    onSave: editor_handleSave,
-                    onSaveAs: editor_handleSaveAs,
-                    onClear: editor_clearScene,
-                    onPlayToggled: { isPlaying in
-                        editor_handlePlayToggle(isPlaying)
-                    },
-                    useSceneCameraDuringPlay: $useSceneCameraDuringPlay,
-                    dirLightCreate: editor_createDirLight,
-                    pointLightCreate: editor_createPointLight,
-                    spotLightCreate: editor_createSpotLight,
-                    areaLightCreate: editor_createAreaLight,
-                    onCreateCube: editor_createCube,
-                    onCreateSphere: editor_createSphere,
-                    onCreatePlane: editor_createPlane,
-                    onCreateCylinder: editor_createCylinder,
-                    onCreateCone: editor_createCone,
-                    onStarterStreamSelected: editor_loadStarterStream,
-                    onQuickPreview: editor_handleQuickPreview
-                )
-                Divider()
+                if experienceMode == .edit {
+                    ToolbarView(
+                        selectionManager: selectionManager,
+                        onSave: editor_handleSave,
+                        onSaveAs: editor_handleSaveAs,
+                        onClear: editor_clearScene,
+                        onPlayToggled: { isPlaying in
+                            editor_handlePlayToggle(isPlaying)
+                        },
+                        useSceneCameraDuringPlay: $useSceneCameraDuringPlay,
+                        dirLightCreate: editor_createDirLight,
+                        pointLightCreate: editor_createPointLight,
+                        spotLightCreate: editor_createSpotLight,
+                        areaLightCreate: editor_createAreaLight,
+                        onCreateCube: editor_createCube,
+                        onCreateSphere: editor_createSphere,
+                        onCreatePlane: editor_createPlane,
+                        onCreateCylinder: editor_createCylinder,
+                        onCreateCone: editor_createCone,
+                        onStarterStreamSelected: editor_loadStarterStream,
+                        onQuickPreview: editor_handleQuickPreview
+                    )
+                    Divider()
+                }
                 HStack {
-                    VStack {
-                        SceneHierarchyView(
-                            selectionManager: selectionManager,
-                            sceneGraphModel: sceneGraphModel,
-                            entityList: editor_entities,
-                            onAddEntity_Editor: editor_addNewEntity,
-                            onRemoveEntity_Editor: editor_removeEntity,
-                            onAddCube: editor_createCube,
-                            onAddSphere: editor_createSphere,
-                            onAddPlane: editor_createPlane,
-                            onAddDirLight: editor_createDirLight,
-                            onAddPointLight: editor_createPointLight,
-                            onAddSpotLight: editor_createSpotLight,
-                            onAddAreaLight: editor_createAreaLight,
-                            onParentEntity: editor_parentEntity,
-                            onUnparentEntity: editor_unparentEntity
-                        )
+                    if experienceMode == .edit {
+                        VStack {
+                            SceneHierarchyView(
+                                selectionManager: selectionManager,
+                                sceneGraphModel: sceneGraphModel,
+                                entityList: editor_entities,
+                                onAddEntity_Editor: editor_addNewEntity,
+                                onRemoveEntity_Editor: editor_removeEntity,
+                                onAddCube: editor_createCube,
+                                onAddSphere: editor_createSphere,
+                                onAddPlane: editor_createPlane,
+                                onAddDirLight: editor_createDirLight,
+                                onAddPointLight: editor_createPointLight,
+                                onAddSpotLight: editor_createSpotLight,
+                                onAddAreaLight: editor_createAreaLight,
+                                onParentEntity: editor_parentEntity,
+                                onUnparentEntity: editor_unparentEntity
+                            )
+                        }
                     }
 
                     VStack(spacing: 0) {
@@ -239,29 +247,27 @@ public struct EditorView: View {
                                 EngineStatsOverlayView()
                             }
                             .overlay {
-                                if shouldShowWelcomeStart {
-                                    WelcomeStartView(
-                                        onStarterStreamSelected: { item in
-                                            showWelcomeStart = false
-                                            editor_loadStarterStream(item)
-                                        },
-                                        onQuickPreview: { mode in
-                                            showWelcomeStart = false
-                                            editor_handleQuickPreview(mode: mode)
-                                        },
-                                        onNewProject: {
-                                            showWelcomeStart = false
-                                            showCreateProject = true
-                                        },
-                                        onOpenProject: {
-                                            showWelcomeStart = false
-                                            openExistingProjectFromWelcome()
-                                        },
-                                        onDismiss: {
-                                            showWelcomeStart = false
-                                        }
+                                if shouldShowDemoGallery {
+                                    DemoGalleryView(
+                                        demos: demoSceneCatalog,
+                                        onDemoSelected: editor_loadDemoScene,
+                                        onCreateProject: createProjectFromExplore,
+                                        onOpenProject: openProjectFromExplore,
+                                        onOpenFullEditor: switchToEditMode
                                     )
                                     .padding()
+                                }
+                            }
+                            .overlay(alignment: .top) {
+                                if shouldShowExploreSceneOverlay, let activeDemoScene {
+                                    ExploreSceneOverlayView(
+                                        demo: activeDemoScene,
+                                        onChooseAnotherDemo: showDemoChooser,
+                                        onResetCamera: resetActiveDemoCamera,
+                                        onOpenFullEditor: switchToEditMode
+                                    )
+                                    .padding(.top, 12)
+                                    .padding(.horizontal, 16)
                                 }
                             }
                             .overlay(alignment: .bottom) {
@@ -272,48 +278,52 @@ public struct EditorView: View {
                                     .padding(.bottom, 14)
                                 }
                             }
-                        TransformManipulationToolbar(controller: editorController!)
-                            .frame(height: 40)
+                        if experienceMode == .edit {
+                            TransformManipulationToolbar(controller: editorController!)
+                                .frame(height: 40)
+                            TabView {
+                                AssetBrowserView(
+                                    assets: $assets,
+                                    selectedAsset: $selectedAsset,
+                                    selectionManager: selectionManager,
+                                    sceneGraphModel: sceneGraphModel,
+                                    editor_addEntityWithAsset: editor_addEntityWithAsset,
+                                    editor_loadSceneAuthoredFromAsset: editor_loadSceneAuthoredFromAsset
+                                )
+                                .tabItem { Label("Assets", systemImage: "shippingbox") }
+
+                                LogConsoleView()
+                                    .tabItem { Label("Console", systemImage: "terminal") }
+                            }
+                            .frame(height: 200)
+                            .clipped()
+                        }
+                    }
+
+                    if experienceMode == .edit {
                         TabView {
-                            AssetBrowserView(
-                                assets: $assets,
-                                selectedAsset: $selectedAsset,
+                            EnvironmentView(selectedAsset: $selectedAsset)
+                                .tabItem {
+                                    Label("Environment", systemImage: "sun.max")
+                                }
+
+                            PostProcessingEditorView()
+                                .tabItem {
+                                    Label("Effects", systemImage: "cube")
+                                }
+
+                            InspectorView(
                                 selectionManager: selectionManager,
                                 sceneGraphModel: sceneGraphModel,
-                                editor_addEntityWithAsset: editor_addEntityWithAsset,
-                                editor_loadSceneAuthoredFromAsset: editor_loadSceneAuthoredFromAsset
+                                onAddName_Editor: editor_addName,
+                                selectedAsset: $selectedAsset
                             )
-                            .tabItem { Label("Assets", systemImage: "shippingbox") }
-
-                            LogConsoleView()
-                                .tabItem { Label("Console", systemImage: "terminal") }
-                        }
-                        .frame(height: 200)
-                        .clipped()
-                    }
-
-                    TabView {
-                        EnvironmentView(selectedAsset: $selectedAsset)
                             .tabItem {
-                                Label("Environment", systemImage: "sun.max")
+                                Label("Inspector", systemImage: "cube")
                             }
-
-                        PostProcessingEditorView()
-                            .tabItem {
-                                Label("Effects", systemImage: "cube")
-                            }
-
-                        InspectorView(
-                            selectionManager: selectionManager,
-                            sceneGraphModel: sceneGraphModel,
-                            onAddName_Editor: editor_addName,
-                            selectedAsset: $selectedAsset
-                        )
-                        .tabItem {
-                            Label("Inspector", systemImage: "cube")
                         }
+                        .frame(minWidth: 200, maxWidth: 250)
                     }
-                    .frame(minWidth: 200, maxWidth: 250)
                 }
             }
             .background(
@@ -337,6 +347,7 @@ public struct EditorView: View {
             }
 
             sceneGraphModel.refreshHierarchy()
+            syncEditorAvailabilityForExperienceMode()
 
             // Listen for asset instance loading completion
             NotificationCenter.default.addObserver(
@@ -359,6 +370,9 @@ public struct EditorView: View {
         }
         .onChange(of: useSceneCameraDuringPlay) { _, _ in
             updateActiveCameraForPlayMode()
+        }
+        .onChange(of: experienceMode) { _, _ in
+            syncEditorAvailabilityForExperienceMode()
         }
         .sheet(isPresented: $showSaveNamePrompt) {
             VStack(spacing: 12) {
@@ -424,16 +438,42 @@ public struct EditorView: View {
         }
     }
 
-    private var shouldShowWelcomeStart: Bool {
+    private func completeDemoSceneAuthoredLoad(
+        _ success: Bool,
+        existingEntityIds: Set<EntityID>,
+        completion: (Bool) -> Void
+    ) {
+        guard success else {
+            completion(false)
+            return
+        }
+
+        removeDefaultSceneAuthoredEntities(existingEntityIds: existingEntityIds)
+        let importedCamera = findImportedGameCamera(existingEntityIds: existingEntityIds)
+        sceneAuthoredGameCamera = importedCamera
+        if let importedCamera {
+            applyGameCameraFrameToSceneCamera(importedCamera)
+        }
+        completion(importedCamera != nil)
+    }
+
+    private var shouldShowDemoGallery: Bool {
         showWelcomeStart
+            && showDemoGallery
+            && experienceMode == .explore
             && editorBasePath.basePath == nil
-            && hasQuickPreviewContent() == false
+    }
+
+    private var shouldShowExploreSceneOverlay: Bool {
+        experienceMode == .explore
+            && showDemoGallery == false
+            && activeDemoScene != nil
     }
 
     private var shouldShowCameraControlHints: Bool {
         showCameraControlHints
-            && shouldShowWelcomeStart == false
-            && hasQuickPreviewContent()
+            && shouldShowDemoGallery == false
+            && (hasQuickPreviewContent() || activeDemoScene != nil)
     }
 
     private func hasQuickPreviewContent() -> Bool {
@@ -453,6 +493,50 @@ public struct EditorView: View {
     private func dismissCameraControlHints() {
         cameraControlHintsDismissed = true
         showCameraControlHints = false
+    }
+
+    private func syncEditorAvailabilityForExperienceMode() {
+        editorController?.isEnabled = experienceMode == .edit
+
+        if experienceMode == .explore {
+            enableExploreNavigationMode()
+            clearExploreSelection()
+        } else {
+            disableExploreNavigationMode()
+        }
+    }
+
+    private func switchToEditMode() {
+        experienceMode = .edit
+        showDemoGallery = false
+        disableExploreNavigationMode()
+    }
+
+    private func createProjectFromExplore() {
+        switchToEditMode()
+        showWelcomeStart = false
+        showCreateProject = true
+    }
+
+    private func openProjectFromExplore() {
+        switchToEditMode()
+        showWelcomeStart = false
+        openExistingProjectFromWelcome()
+    }
+
+    private func showDemoChooser() {
+        experienceMode = .explore
+        showDemoGallery = true
+        showCameraControlHints = false
+        enableExploreNavigationMode()
+    }
+
+    private func resetActiveDemoCamera() {
+        guard let activeDemoCameraFrame else {
+            return
+        }
+
+        applyCameraFrame(activeDemoCameraFrame)
     }
 
     private func openExistingProjectFromWelcome() {
@@ -748,16 +832,36 @@ public struct EditorView: View {
     }
 
     private func editor_handlePlayToggle(_ isPlaying: Bool) {
-        self.isPlaying = isPlaying
-        gameMode = !gameMode
+        setEditorPlayMode(isPlaying)
+    }
+
+    private func setEditorPlayMode(_ shouldPlay: Bool) {
+        let didChangePlayState = isPlaying != shouldPlay || gameMode != shouldPlay
+        self.isPlaying = shouldPlay
+        gameMode = shouldPlay
         updateActiveCameraForPlayMode()
-        AnimationSystem.shared.isEnabled = isPlaying
+        AnimationSystem.shared.isEnabled = shouldPlay
+        guard didChangePlayState else {
+            return
+        }
 
         // Start/stop USC System
-        if gameMode {
+        if shouldPlay {
             USCSystem.shared.startPlayMode()
         } else {
             USCSystem.shared.stopPlayMode()
+        }
+    }
+
+    private func enableExploreNavigationMode() {
+        useSceneCameraDuringPlay = true
+        setEditorPlayMode(true)
+        CameraSystem.shared.activeCamera = findSceneCamera()
+    }
+
+    private func disableExploreNavigationMode() {
+        if isPlaying {
+            setEditorPlayMode(false)
         }
     }
 
@@ -990,6 +1094,157 @@ public struct EditorView: View {
 
     // MARK: - Quick Preview
 
+    private func editor_loadDemoScene(_ demo: DemoSceneCatalogItem) {
+        guard let sourceURL = demo.source.resolvedURL else {
+            Logger.log(message: "⚠️ Demo source not found: \(demo.title)")
+            showDemoGallery = true
+            return
+        }
+
+        experienceMode = .explore
+        showWelcomeStart = true
+        showDemoGallery = false
+        activeDemoScene = demo
+        activeDemoCameraFrame = demo.cameraFrame
+        enableExploreNavigationMode()
+
+        deleteExistingQuickPreviewEntities()
+        clearSceneBatches()
+        removeGizmo()
+        clearExploreSelection()
+
+        switch demo.source {
+        case .remoteManifest, .bundledManifest:
+            loadDemoStreamScene(demo, manifestURL: sourceURL)
+        case .bundledAsset:
+            loadDemoRuntimeAsset(demo, assetURL: sourceURL)
+        }
+    }
+
+    private func loadDemoStreamScene(_ demo: DemoSceneCatalogItem, manifestURL: URL) {
+        let existingEntityIds = Set(getAllGameEntities())
+        let entityId = createDemoPreviewEntity(
+            title: demo.title,
+            sourceURL: manifestURL,
+            fileExtension: "json"
+        )
+
+        GeometryStreamingSystem.shared.enabled = true
+
+        setEntityStreamScene(entityId: entityId, url: manifestURL) { success in
+            DispatchQueue.main.async {
+                guard success else {
+                    Logger.log(message: "⚠️ Failed to load demo scene: \(demo.title)")
+                    showDemoGallery = true
+                    return
+                }
+
+                loadDemoSceneAuthoredIfNeeded(
+                    demo,
+                    url: manifestURL,
+                    isRuntimeAsset: false,
+                    existingEntityIds: existingEntityIds
+                ) { didApplyAuthoredCamera in
+                    completeDemoSceneLoad(demo, didApplyAuthoredCamera: didApplyAuthoredCamera)
+                }
+            }
+        }
+    }
+
+    private func loadDemoRuntimeAsset(_ demo: DemoSceneCatalogItem, assetURL: URL) {
+        let existingEntityIds = Set(getAllGameEntities())
+        let fileExtension = demo.source.fileExtension
+        let entityId = createDemoPreviewEntity(
+            title: demo.title,
+            sourceURL: assetURL,
+            fileExtension: fileExtension
+        )
+
+        GeometryStreamingSystem.shared.enabled = false
+
+        setEntityMeshAsync(entityId: entityId, filename: assetURL.path, withExtension: fileExtension) { success in
+            DispatchQueue.main.async {
+                guard success else {
+                    Logger.log(message: "⚠️ Failed to load demo asset: \(demo.title)")
+                    showDemoGallery = true
+                    return
+                }
+
+                loadDemoSceneAuthoredIfNeeded(
+                    demo,
+                    url: assetURL,
+                    isRuntimeAsset: true,
+                    existingEntityIds: existingEntityIds
+                ) { didApplyAuthoredCamera in
+                    completeDemoSceneLoad(demo, didApplyAuthoredCamera: didApplyAuthoredCamera)
+                }
+            }
+        }
+    }
+
+    private func createDemoPreviewEntity(title: String, sourceURL: URL, fileExtension: String) -> EntityID {
+        let entityId = createEntity()
+        setEntityName(entityId: entityId, name: "Demo-\(title)-\(entityId)")
+
+        if let quickPreviewComp = scene.assign(to: entityId, component: QuickPreviewComponent.self) {
+            quickPreviewComp.absoluteFilePath = sourceURL.isFileURL ? sourceURL.path : sourceURL.absoluteString
+            quickPreviewComp.fileExtension = fileExtension
+            quickPreviewComp.originalFileName = title
+        }
+
+        return entityId
+    }
+
+    private func loadDemoSceneAuthoredIfNeeded(
+        _ demo: DemoSceneCatalogItem,
+        url: URL,
+        isRuntimeAsset: Bool,
+        existingEntityIds: Set<EntityID>,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard demo.loadsSceneAuthoredPayload else {
+            completion(false)
+            return
+        }
+
+        if isRuntimeAsset {
+            loadSceneAuthored(filename: url.path, withExtension: url.pathExtension.lowercased()) { success in
+                DispatchQueue.main.async {
+                    completeDemoSceneAuthoredLoad(success, existingEntityIds: existingEntityIds, completion: completion)
+                }
+            }
+        } else {
+            loadSceneAuthored(url: url) { success in
+                DispatchQueue.main.async {
+                    completeDemoSceneAuthoredLoad(success, existingEntityIds: existingEntityIds, completion: completion)
+                }
+            }
+        }
+    }
+
+    private func completeDemoSceneLoad(_ demo: DemoSceneCatalogItem, didApplyAuthoredCamera: Bool) {
+        if didApplyAuthoredCamera == false, let frame = demo.cameraFrame {
+            applyCameraFrame(frame)
+        }
+
+        clearExploreSelection()
+        editor_entities = getAllGameEntities()
+        sceneGraphModel.refreshHierarchy()
+        enableExploreNavigationMode()
+        revealCameraControlHintsIfNeeded()
+
+        Logger.log(message: "✅ Demo loaded: \(demo.title)")
+    }
+
+    private func clearExploreSelection() {
+        removeGizmo()
+        activeEntity = .invalid
+        gizmoActive = false
+        selectionManager.selectedEntity = nil
+        selectionManager.inspectedMesh = nil
+        selectionManager.objectWillChange.send()
+    }
+
     private func editor_loadStarterStream(_ item: StreamModelCatalogItem) {
         deleteExistingQuickPreviewEntities()
 
@@ -1029,8 +1284,11 @@ public struct EditorView: View {
     }
 
     private func applyStarterStreamCameraFrame(_ item: StreamModelCatalogItem) {
+        applyCameraFrame(item.cameraFrame)
+    }
+
+    private func applyCameraFrame(_ frame: StreamModelCameraFrame) {
         let camera = findSceneCamera()
-        let frame = item.cameraFrame
 
         cameraLookAt(entityId: camera, eye: frame.eye, target: frame.target, up: cameraUpDefault)
         CameraSystem.shared.activeCamera = camera
@@ -1043,6 +1301,16 @@ public struct EditorView: View {
         } else {
             setOrbitOffset(entityId: camera, uTargetOffset: 25.0)
         }
+    }
+
+    private func applyGameCameraFrameToSceneCamera(_ gameCamera: EntityID) {
+        let sceneCamera = findSceneCamera()
+        let eye = getCameraEye(entityId: gameCamera)
+        let up = getCameraUp(entityId: gameCamera)
+        let target = getCameraTarget(entityId: gameCamera)
+
+        cameraLookAt(entityId: sceneCamera, eye: eye, target: target, up: up)
+        CameraSystem.shared.activeCamera = sceneCamera
     }
 
     private func findEditorGameCamera() -> EntityID {
