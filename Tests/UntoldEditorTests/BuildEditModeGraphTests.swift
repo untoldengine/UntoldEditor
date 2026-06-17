@@ -64,7 +64,7 @@ final class BuildEditModeGraphTests: XCTestCase {
         XCTAssertEqual(finalID, "outputTransform")
 
         let expectedIDs: Set = [
-            "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
+            "environment", "shadow", "batchedShadow", "model", "batchedModel", "hzbDepthSource", "lightPass",
             "transparency", "spatialDebug", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
@@ -74,7 +74,8 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "batchedShadow", ["shadow"])
         assertDeps(graph, "model", ["batchedShadow"])
         assertDeps(graph, "batchedModel", ["model"])
-        assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "hzbDepthSource", ["batchedModel"])
+        assertDeps(graph, "lightPass", ["hzbDepthSource"])
         assertDeps(graph, "transparency", ["lightPass"])
         assertDeps(graph, "spatialDebug", ["transparency"])
         assertDeps(graph, "outline", ["batchedModel"])
@@ -102,7 +103,7 @@ final class BuildEditModeGraphTests: XCTestCase {
         XCTAssertEqual(finalID, "outputTransform")
 
         let expectedIDs: Set = [
-            "environment", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
+            "environment", "shadow", "batchedShadow", "model", "batchedModel", "hzbDepthSource", "lightPass",
             "transparency", "spatialDebug", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "fxaa", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
@@ -112,7 +113,8 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "batchedShadow", ["shadow"])
         assertDeps(graph, "model", ["batchedShadow"])
         assertDeps(graph, "batchedModel", ["model"])
-        assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "hzbDepthSource", ["batchedModel"])
+        assertDeps(graph, "lightPass", ["hzbDepthSource"])
         assertDeps(graph, "transparency", ["lightPass"])
         assertDeps(graph, "spatialDebug", ["transparency"])
         assertDeps(graph, "outline", ["batchedModel"])
@@ -141,7 +143,7 @@ final class BuildEditModeGraphTests: XCTestCase {
         XCTAssertEqual(finalID, "outputTransform")
 
         let expectedIDs: Set = [
-            "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
+            "grid", "shadow", "batchedShadow", "model", "batchedModel", "hzbDepthSource", "lightPass",
             "transparency", "spatialDebug", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
@@ -151,7 +153,8 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "batchedShadow", ["shadow"])
         assertDeps(graph, "model", ["batchedShadow"])
         assertDeps(graph, "batchedModel", ["model"])
-        assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "hzbDepthSource", ["batchedModel"])
+        assertDeps(graph, "lightPass", ["hzbDepthSource"])
         assertDeps(graph, "transparency", ["lightPass"])
         assertDeps(graph, "spatialDebug", ["transparency"])
         assertDeps(graph, "outline", ["batchedModel"])
@@ -179,7 +182,7 @@ final class BuildEditModeGraphTests: XCTestCase {
         XCTAssertEqual(finalID, "outputTransform")
 
         let expectedIDs: Set = [
-            "grid", "shadow", "batchedShadow", "model", "batchedModel", "lightPass",
+            "grid", "shadow", "batchedShadow", "model", "batchedModel", "hzbDepthSource", "lightPass",
             "transparency", "spatialDebug", "outline", "lightVisualPass", "gizmo", "precomp", "gaussian", "look", "fxaa", "outputTransform",
         ]
         XCTAssertEqual(Set(graph.keys), expectedIDs)
@@ -189,7 +192,8 @@ final class BuildEditModeGraphTests: XCTestCase {
         assertDeps(graph, "batchedShadow", ["shadow"])
         assertDeps(graph, "model", ["batchedShadow"])
         assertDeps(graph, "batchedModel", ["model"])
-        assertDeps(graph, "lightPass", ["batchedModel", "model", "shadow"])
+        assertDeps(graph, "hzbDepthSource", ["batchedModel"])
+        assertDeps(graph, "lightPass", ["hzbDepthSource"])
         assertDeps(graph, "transparency", ["lightPass"])
         assertDeps(graph, "spatialDebug", ["transparency"])
         assertDeps(graph, "outline", ["batchedModel"])

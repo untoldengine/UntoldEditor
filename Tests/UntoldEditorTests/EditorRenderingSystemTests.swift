@@ -74,6 +74,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNotNil(graph["batchedShadow"], "Batched shadow pass should exist")
         XCTAssertNotNil(graph["model"], "Model pass should exist")
         XCTAssertNotNil(graph["batchedModel"], "Batched model pass should exist")
+        XCTAssertNotNil(graph["hzbDepthSource"], "HZB depth source pass should exist")
         XCTAssertNotNil(graph["lightPass"], "Light pass should exist")
         XCTAssertNotNil(graph["outline"], "Highlight/outline pass should exist")
         XCTAssertNotNil(graph["lightVisualPass"], "Light visual pass should exist")
@@ -103,6 +104,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNotNil(graph["batchedShadow"], "Batched shadow pass should exist")
         XCTAssertNotNil(graph["model"], "Model pass should exist")
         XCTAssertNotNil(graph["batchedModel"], "Batched model pass should exist")
+        XCTAssertNotNil(graph["hzbDepthSource"], "HZB depth source pass should exist")
         XCTAssertNotNil(graph["lightPass"], "Light pass should exist")
         XCTAssertNotNil(graph["outline"], "Highlight/outline pass should exist")
         XCTAssertNotNil(graph["lightVisualPass"], "Light visual pass should exist")
@@ -129,9 +131,8 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertEqual(graph["batchedShadow"]?.dependencies, ["shadow"], "Batched shadow should depend on shadow")
         XCTAssertEqual(graph["model"]?.dependencies, ["batchedShadow"], "Model should depend on batchedShadow")
         XCTAssertEqual(graph["batchedModel"]?.dependencies, ["model"], "Batched model should depend on model")
-        XCTAssertTrue(graph["lightPass"]?.dependencies.contains("model") ?? false, "Light pass should depend on model")
-        XCTAssertTrue(graph["lightPass"]?.dependencies.contains("shadow") ?? false, "Light pass should depend on shadow")
-        XCTAssertTrue(graph["lightPass"]?.dependencies.contains("batchedModel") ?? false, "Light pass should depend on batchedModel")
+        XCTAssertEqual(graph["hzbDepthSource"]?.dependencies, ["batchedModel"], "HZB depth source should depend on batchedModel")
+        XCTAssertEqual(graph["lightPass"]?.dependencies, ["hzbDepthSource"], "Light pass should depend on HZB depth source")
         XCTAssertEqual(graph["outline"]?.dependencies, ["batchedModel"], "Outline should depend on batchedModel")
         XCTAssertEqual(graph["lightVisualPass"]?.dependencies, ["outline"], "Light visual pass should depend on outline")
         XCTAssertEqual(graph["gizmo"]?.dependencies, ["lightVisualPass"], "Gizmo should depend on light visual pass")
@@ -190,6 +191,8 @@ final class EditorRenderingSystemTests: XCTestCase {
         assertTopologicalConstraints(order: order, constraints: [
             ("grid", "shadow"),
             ("shadow", "model"),
+            ("batchedModel", "hzbDepthSource"),
+            ("hzbDepthSource", "lightPass"),
             ("model", "lightPass"),
             ("model", "outline"),
             ("outline", "lightVisualPass"),
@@ -305,7 +308,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertTrue(precompPass.dependencies.contains("gaussian"), "Precomp should depend on gaussian")
     }
 
-    func test_buildEditModeGraph_lightPass_dependsOnModelAndShadow() {
+    func test_buildEditModeGraph_lightPass_dependsOnHZBDepthSource() {
         // Arrange
         renderEnvironment = false
 
@@ -319,10 +322,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         }
 
         XCTAssertNil(lightPass.execute, "Light pass should be a dependency-only stub")
-        XCTAssertEqual(lightPass.dependencies.count, 3, "Light pass should have exactly 3 dependencies")
-        XCTAssertTrue(lightPass.dependencies.contains("model"), "Light pass should depend on model")
-        XCTAssertTrue(lightPass.dependencies.contains("shadow"), "Light pass should depend on shadow")
-        XCTAssertTrue(lightPass.dependencies.contains("batchedModel"), "Light pass should depend on batchedModel")
+        XCTAssertEqual(lightPass.dependencies, ["hzbDepthSource"], "Light pass should wait for the editor HZB depth source copy")
     }
 
     // MARK: - Helper Methods

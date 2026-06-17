@@ -176,8 +176,19 @@ func buildEditModeGraph() -> RenderGraphResult {
     // legacy graph nodes as dependency anchors for editor overlays.
     let batchedModelPass = RenderPass(id: "batchedModel", dependencies: [modelPass.id], execute: nil)
     graph[batchedModelPass.id] = batchedModelPass
+    // Keep the editor's temporal HZB in sync with the runtime graph:
+    // opaque depth is copied after all opaque geometry, then buildHZBDepthPyramid()
+    // consumes this source depth after graph execution for next-frame culling.
+    let hzbDepthSourcePass = RenderPass(
+        id: "hzbDepthSource",
+        dependencies: [batchedModelPass.id],
+        execute: RenderPasses.copyOpaqueDepthForHZBExecution
+    )
+    graph[hzbDepthSourcePass.id] = hzbDepthSourcePass
 
-    let lightPass = RenderPass(id: "lightPass", dependencies: [batchedModelPass.id, modelPass.id, shadowPass.id], execute: nil)
+    // Lighting already ran in modelPass. This remains a dependency anchor for
+    // editor overlay passes, but intentionally does not add SSAO in edit mode.
+    let lightPass = RenderPass(id: "lightPass", dependencies: [hzbDepthSourcePass.id], execute: nil)
     graph[lightPass.id] = lightPass
 
     let transparencyPass = RenderPass(
