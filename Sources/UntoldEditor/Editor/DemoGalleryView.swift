@@ -360,6 +360,16 @@ private struct DemoSceneCard: View {
     let demo: DemoSceneCatalogItem
     var onSelect: () -> Void
 
+    private var thumbnailImage: NSImage? {
+        for ext in ["png", "jpg", "jpeg"] {
+            if let url = Bundle.module.url(forResource: demo.thumbnailName, withExtension: ext),
+               let img = NSImage(contentsOf: url) {
+                return img
+            }
+        }
+        return nil
+    }
+
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 12) {
@@ -376,9 +386,17 @@ private struct DemoSceneCard: View {
                             )
                         )
 
-                    Image(systemName: demo.systemImageName)
-                        .font(.system(size: 42, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.88))
+                    if let img = thumbnailImage {
+                        Image(nsImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity, maxHeight: 112)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    } else {
+                        Image(systemName: demo.systemImageName)
+                            .font(.system(size: 42, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.88))
+                    }
                 }
                 .frame(height: 112)
 
