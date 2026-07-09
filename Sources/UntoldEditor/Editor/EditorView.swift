@@ -99,6 +99,9 @@ public struct EditorView: View {
         _selectionManager = StateObject(wrappedValue: sharedSelectionManager)
         editorController = EditorController(selectionManager: sharedSelectionManager)
         renderer = UntoldRenderer.create(configuration: .editor)
+        // Extensions that create pipelines must be registered after the renderer
+        // has initialized Metal and loaded the engine shader library.
+        registerEditorRenderExtension()
 
         if let r = renderer, let v = renderer?.metalView {
             r.setupCallbacks(gameUpdate: { _ in }, handleInput: r.handleSceneInput)

@@ -14,7 +14,7 @@ enum EditorFeatureFlags {
     // MARK: - Build System Features
 
     /// Enable the Build button in the toolbar
-    /// When disabled, users should use the `untoldengine-create` CLI tool instead
+    /// When disabled, users should use `untoldegie create` instead
     static let enableBuildButton: Bool = true
 
     // MARK: - Script Management Features

@@ -10,12 +10,8 @@
 import UntoldEngine
 
 public extension UntoldRendererConfig {
+    @MainActor
     static var editor: UntoldRendererConfig {
-        UntoldRendererConfig(
-            initPipelineBlocks: EditorDefaultPipeLines(),
-            updateRenderingSystemCallback: { view in
-                EditorUpdateRenderingSystem(in: view)
-            }
-        )
+        .default
     }
 }

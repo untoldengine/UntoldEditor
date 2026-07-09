@@ -37,7 +37,9 @@ extension RenderPasses {
             return
         }
 
-        guard let gizmoPipeline = PipelineManager.shared.renderPipelinesByType[.gizmo] else {
+        guard let gizmoPipeline = PipelineManager.shared.renderPipelinesByType[.editorGizmo]
+            ?? PipelineManager.shared.renderPipelinesByType[.gizmo]
+        else {
             handleError(.pipelineStateNulled, "gizmoPipeline is nil")
             return
         }

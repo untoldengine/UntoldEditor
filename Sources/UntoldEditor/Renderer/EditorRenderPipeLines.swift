@@ -39,12 +39,11 @@ public func InitDebugPipeline() -> RenderPipeline? {
 
 public extension RenderPipelineType {
     static let gizmo: RenderPipelineType = "gizmo"
-    static let debug: RenderPipelineType = "debug"
+    static let editorGizmo: RenderPipelineType = "untold.editor.gizmoPipeline"
 }
 
 public func EditorDefaultPipeLines() -> [(RenderPipelineType, RenderPipelineInitBlock)] {
     DefaultPipeLines() + [
         (.gizmo, InitGizmoPipeline),
-        (.debug, InitDebugPipeline),
     ]
 }
