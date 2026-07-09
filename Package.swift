@@ -13,7 +13,7 @@ let package = Package(
         // Use a branch during active development:
         // .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
         // Or pin to a release:
-        .package(url: "https://github.com/untoldengine/UntoldEngine.git", exact: "0.13.0"),
+        .package(url: "https://github.com/untoldengine/UntoldEngine.git", exact: "0.14.0"),
     ],
     targets: [
         .executableTarget(
@@ -23,7 +23,7 @@ let package = Package(
             ],
             path: "Sources/UntoldEditor",
             resources: [
-                // .process("Resources")
+                .process("Resources"),
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v5),

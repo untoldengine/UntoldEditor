@@ -363,7 +363,8 @@ private struct DemoSceneCard: View {
     private var thumbnailImage: NSImage? {
         for ext in ["png", "jpg", "jpeg"] {
             if let url = Bundle.module.url(forResource: demo.thumbnailName, withExtension: ext),
-               let img = NSImage(contentsOf: url) {
+               let img = NSImage(contentsOf: url)
+            {
                 return img
             }
         }

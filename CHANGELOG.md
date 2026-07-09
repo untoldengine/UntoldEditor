@@ -1,4 +1,12 @@
 # Changelog
+## v0.14.0 - 2026-07-09
+### 🐞 Fixes
+- [Patch] added option to load authored scene data (4558dec…)
+- [Patch] Fixed area light direction (e05a8d4…)
+- [Patch] Added an Explore Window (86e53f7…)
+- [Patch] Added Try your scene steps (03ee7d5…)
+- [Patch] updated editor render graph (f47e3b7…)
+- [Patch] Migrate editor rendering to the engine's RenderExtension system (31ee159…)
 ## v0.13.0 - 2026-06-03
 ### 🐞 Fixes
 - [Patch] Made user experience improvements (adf6d2b…)

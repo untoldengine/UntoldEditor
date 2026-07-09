@@ -52,9 +52,9 @@ final class EditorRenderingSystemTests: XCTestCase {
             XCTAssertNotNil(graph[passID])
         }
 
-        XCTAssertLessThan(order.firstIndex(of: editorPasses[0])!, order.firstIndex(of: editorPasses[1])!)
-        XCTAssertLessThan(order.firstIndex(of: editorPasses[1])!, order.firstIndex(of: editorPasses[2])!)
-        XCTAssertLessThan(order.firstIndex(of: editorPasses[2])!, order.firstIndex(of: "precomp")!)
+        XCTAssertLessThan(try XCTUnwrap(order.firstIndex(of: editorPasses[0])), try XCTUnwrap(order.firstIndex(of: editorPasses[1])))
+        XCTAssertLessThan(try XCTUnwrap(order.firstIndex(of: editorPasses[1])), try XCTUnwrap(order.firstIndex(of: editorPasses[2])))
+        XCTAssertLessThan(try XCTUnwrap(order.firstIndex(of: editorPasses[2])), try XCTUnwrap(order.firstIndex(of: "precomp")))
     }
 
     func testPlayModeUsesRuntimeGraphWithoutEditorPasses() throws {

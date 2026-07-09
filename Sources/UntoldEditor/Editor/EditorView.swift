@@ -10,6 +10,7 @@ public struct Asset: Identifiable {
     public let path: URL
     var isFolder: Bool = false
 }
+
 private struct CameraControlHintsView: View {
     var onDismiss: () -> Void
 
@@ -421,6 +422,7 @@ public struct EditorView: View {
             && experienceMode == .explore
             && editorBasePath.basePath == nil
     }
+
     private var shouldShowPreviewImportGallery: Bool {
         showWelcomeStart
             && showPreviewImportGallery
@@ -434,6 +436,7 @@ public struct EditorView: View {
             && showPreviewImportGallery == false
             && activeDemoScene != nil
     }
+
     private var shouldShowQuickPreviewSceneOverlay: Bool {
         experienceMode == .explore
             && showDemoGallery == false
@@ -834,7 +837,7 @@ public struct EditorView: View {
 
     private func setEditorPlayMode(_ shouldPlay: Bool) {
         let didChangePlayState = isPlaying != shouldPlay || gameMode != shouldPlay
-        self.isPlaying = shouldPlay
+        isPlaying = shouldPlay
         gameMode = shouldPlay
         updateActiveCameraForPlayMode()
         AnimationSystem.shared.isEnabled = shouldPlay
@@ -1245,7 +1248,6 @@ public struct EditorView: View {
         selectionManager.objectWillChange.send()
     }
 
-
     private func applyCameraFrame(_ frame: StreamModelCameraFrame) {
         let camera = findSceneCamera()
 
@@ -1583,7 +1585,7 @@ public struct EditorView: View {
         selectionManager.selectedEntity = entityId
         editor_entities = getAllGameEntities()
         sceneGraphModel.refreshHierarchy()
-        if fromExploreMode && fileExtension != "untold" {
+        if fromExploreMode, fileExtension != "untold" {
             completeExploreQuickPreviewLoad(fileName: fileName, mode: mode)
         }
 
@@ -1929,7 +1931,7 @@ public struct EditorView: View {
         selectionManager.selectedEntity = entityId
         editor_entities = getAllGameEntities()
         sceneGraphModel.refreshHierarchy()
-        if pendingQuickPreviewLoadsInExplore && fileExtension != "untold" {
+        if pendingQuickPreviewLoadsInExplore, fileExtension != "untold" {
             completeExploreQuickPreviewLoad(fileName: fileName, mode: .untoldAsset)
         }
 
@@ -1955,7 +1957,6 @@ public struct EditorView: View {
     }
 
     private func deleteExistingQuickPreviewEntities() {
-
         let previewEntityIds = getAllGameEntities()
             .filter { hasComponent(entityId: $0, componentType: QuickPreviewComponent.self) }
 
