@@ -1,4 +1,5 @@
 # Changelog
+## v0.14.2 - 2026-07-16
 ## v0.14.0 - 2026-07-09
 ### 🐞 Fixes
 - [Patch] added option to load authored scene data (4558dec…)
