@@ -604,6 +604,7 @@ extension RenderPasses {
         if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
             var lightMesh: [Mesh] = []
             var debugModelMatrix = worldTransform.space
+            var isAreaLight = false
             if let pointLightComponent = scene.get(component: PointLightComponent.self, for: activeEntity) {
                 scale = simd_float3(repeating: pointLightComponent.radius)
                 lightMesh = pointLightDebugMesh
@@ -621,6 +622,7 @@ extension RenderPasses {
             } else if scene.get(component: AreaLightComponent.self, for: activeEntity) != nil {
                 lightMesh = areaLightDebugMesh
                 debugModelMatrix = areaLightDebugModelMatrix(worldTransform: worldTransform.space)
+                isAreaLight = true
             } else if let dirLightComponent = scene.get(component: DirectionalLightComponent.self, for: activeEntity) {
                 lightMesh = dirLightDebugMesh
             }
@@ -631,6 +633,13 @@ extension RenderPasses {
             renderEncoder.setVertexBytes(&scale, length: MemoryLayout<simd_float3>.stride, index: 4)
 
             renderEncoder.setTriangleFillMode(.lines)
+
+            // The area light gizmo is a single-sided plane; disable culling so its
+            // wireframe stays visible from either side as the camera orbits.
+            if isAreaLight {
+                renderEncoder.setCullMode(.none)
+            }
+
             for mesh in lightMesh {
                 renderEncoder.setVertexBuffer(
                     mesh.metalKitMesh.vertexBuffers[Int(modelPassVerticesIndex.rawValue)].buffer,
@@ -646,6 +655,10 @@ extension RenderPasses {
                         indexBufferOffset: subMesh.metalKitSubmesh.indexBuffer.offset
                     )
                 }
+            }
+
+            if isAreaLight {
+                renderEncoder.setCullMode(.back)
             }
 
         } else {
