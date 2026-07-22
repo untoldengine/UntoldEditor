@@ -121,6 +121,21 @@ final class InspectorViewTests: XCTestCase {
         XCTAssertEqual(names, expected, "Components should be sorted as expected.")
     }
 
+    func test_renderComponentEditor_togglesShadowCasting_viaBinding() {
+        // Arrange
+        let e = createEntityWithName("Receiver Plane")
+        addTransform(to: e)
+        addRender(to: e)
+
+        XCTAssertTrue(getEntityCastsShadow(entityId: e))
+
+        // Act: mimic the binding setter used by RenderComponentEditorView.
+        setEntityCastsShadow(entityId: e, false)
+
+        // Assert
+        XCTAssertFalse(getEntityCastsShadow(entityId: e))
+    }
+
     func test_addComponentSheet_addsDirectionalLight_andCreatesLightComponent() {
         // Arrange
         let e = createEntityWithName("Light Holder")
@@ -178,6 +193,44 @@ final class InspectorViewTests: XCTestCase {
 
         // Assert
         XCTAssertEqual(getLightIntensity(entityId: e), initialIntensity + 2.0, accuracy: 0.0001)
+    }
+
+    func test_pointLightEditor_togglesShadowCasting_viaBinding() {
+        // Arrange
+        let e = createEntityWithName("Point")
+        addTransform(to: e)
+        createPointLight(entityId: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Precondition
+        XCTAssertFalse(getPointLightCastsShadow(entityId: e))
+
+        // Act: mimic the binding setter used by PointLightEditorView
+        setLight(entityId: e, .point(.castsShadow(true)))
+        sut.selectionManager.objectWillChange.send()
+
+        // Assert
+        XCTAssertTrue(getPointLightCastsShadow(entityId: e))
+    }
+
+    func test_spotLightEditor_togglesShadowCasting_viaBinding() {
+        // Arrange
+        let e = createEntityWithName("Spot")
+        addTransform(to: e)
+        createSpotLight(entityId: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Precondition
+        XCTAssertFalse(getSpotLightCastsShadow(entityId: e))
+
+        // Act: mimic the binding setter used by SpotLightEditorView
+        setLight(entityId: e, .spot(.castsShadow(true)))
+        sut.selectionManager.objectWillChange.send()
+
+        // Assert
+        XCTAssertTrue(getSpotLightCastsShadow(entityId: e))
     }
 
     func test_removeComponent_isDisabledForDirectionalLightInSceneCompositionMode() {

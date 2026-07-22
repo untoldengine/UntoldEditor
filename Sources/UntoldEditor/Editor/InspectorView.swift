@@ -651,6 +651,21 @@ struct RenderingEditorView: View {
             .background(Color.secondary.opacity(0.05))
             .cornerRadius(8)
 
+            if hasComponent(entityId: entityId, componentType: RenderComponent.self) {
+                Toggle(isOn: Binding(
+                    get: { getEntityCastsShadow(entityId: entityId) },
+                    set: { enabled in
+                        setEntityCastsShadow(entityId: entityId, enabled)
+                        refreshView()
+                    }
+                )) {
+                    Text("Cast Shadows")
+                }
+                .toggleStyle(.checkbox)
+                .disabled(inspectionOnly)
+                .opacity(inspectionOnly ? 0.7 : 1.0)
+            }
+
             if hasComponent(entityId: entityId, componentType: RenderComponent.self),
                hasComponent(entityId: entityId, componentType: LightComponent.self) == false
             {
@@ -1342,6 +1357,7 @@ struct PointLightEditorView: View {
                 let intensity: Float = getLightIntensity(entityId: entityId)
                 let falloff: Float = getLightFalloff(entityId: entityId)
                 let radius: Float = getLightRadius(entityId: entityId)
+                let castsShadow: Bool = getPointLightCastsShadow(entityId: entityId)
 
                 TextInputVectorView(label: "Color", value: Binding(
                     get: { color },
@@ -1380,6 +1396,18 @@ struct PointLightEditorView: View {
                     ))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+
+                Toggle(isOn: Binding(
+                    get: { castsShadow },
+                    set: { enabled in
+                        setLight(entityId: entityId, .point(.castsShadow(enabled)))
+                        refreshView()
+                    }
+                )) {
+                    Text("Cast Shadows")
+                }
+                .toggleStyle(.checkbox)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -1397,7 +1425,9 @@ struct SpotLightEditorView: View {
                 let color: simd_float3 = getLightColor(entityId: entityId)
                 let falloff: Float = getLightFalloff(entityId: entityId)
                 let intensity: Float = getLightIntensity(entityId: entityId)
+                let radius: Float = getLightRadius(entityId: entityId)
                 let coneAngle: Float = getLightConeAngle(entityId: entityId)
+                let castsShadow: Bool = getSpotLightCastsShadow(entityId: entityId)
                 TextInputVectorView(label: "Color", value: Binding(
                     get: { color },
                     set: { newColor in
@@ -1424,6 +1454,17 @@ struct SpotLightEditorView: View {
                     ))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                    TextInputNumberView(label: "Radius", value: Binding(
+                        get: { radius },
+                        set: { newRadius in
+                            updateLightRadius(entityId: entityId, radius: newRadius)
+                            refreshView()
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                HStack {
                     TextInputNumberView(label: "Cone Angle", value: Binding(
                         get: { coneAngle },
                         set: { newConeAngle in
@@ -1433,6 +1474,18 @@ struct SpotLightEditorView: View {
                     ))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+
+                Toggle(isOn: Binding(
+                    get: { castsShadow },
+                    set: { enabled in
+                        setLight(entityId: entityId, .spot(.castsShadow(enabled)))
+                        refreshView()
+                    }
+                )) {
+                    Text("Cast Shadows")
+                }
+                .toggleStyle(.checkbox)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
