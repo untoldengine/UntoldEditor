@@ -357,7 +357,8 @@ private func createGizmoHandle(
         rotateTo(entityId: handle, angle: rotation.angle, axis: rotation.axis)
     }
     registerComponent(entityId: handle, componentType: GizmoComponent.self)
-    if let handleComponent = scene.assign(to: handle, component: GizmoHandleComponent.self) {
+    registerComponent(entityId: handle, componentType: GizmoHandleComponent.self)
+    if let handleComponent = scene.get(component: GizmoHandleComponent.self, for: handle) {
         handleComponent.mode = descriptor.mode
         handleComponent.axis = descriptor.axis
     }

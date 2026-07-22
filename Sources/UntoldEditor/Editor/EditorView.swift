@@ -1189,7 +1189,8 @@ public struct EditorView: View {
         let entityId = createEntity()
         setEntityName(entityId: entityId, name: "Demo-\(title)-\(entityId)")
 
-        if let quickPreviewComp = scene.assign(to: entityId, component: QuickPreviewComponent.self) {
+        registerComponent(entityId: entityId, componentType: QuickPreviewComponent.self)
+        if let quickPreviewComp = scene.get(component: QuickPreviewComponent.self, for: entityId) {
             quickPreviewComp.absoluteFilePath = sourceURL.isFileURL ? sourceURL.path : sourceURL.absoluteString
             quickPreviewComp.fileExtension = fileExtension
             quickPreviewComp.originalFileName = title
@@ -1480,7 +1481,8 @@ public struct EditorView: View {
         setEntityName(entityId: entityId, name: uniqueName)
 
         // Mark this entity as a Quick Preview entity (cannot be saved)
-        if let quickPreviewComp = scene.assign(to: entityId, component: QuickPreviewComponent.self) {
+        registerComponent(entityId: entityId, componentType: QuickPreviewComponent.self)
+        if let quickPreviewComp = scene.get(component: QuickPreviewComponent.self, for: entityId) {
             quickPreviewComp.absoluteFilePath = absolutePath
             quickPreviewComp.fileExtension = fileExtension
             quickPreviewComp.originalFileName = fileName
@@ -1869,7 +1871,8 @@ public struct EditorView: View {
         let uniqueName = "QuickPreview-\(fileName)-\(entityId)"
         setEntityName(entityId: entityId, name: uniqueName)
 
-        if let quickPreviewComp = scene.assign(to: entityId, component: QuickPreviewComponent.self) {
+        registerComponent(entityId: entityId, componentType: QuickPreviewComponent.self)
+        if let quickPreviewComp = scene.get(component: QuickPreviewComponent.self, for: entityId) {
             quickPreviewComp.absoluteFilePath = sourceURL.path
             quickPreviewComp.fileExtension = sourceURL.pathExtension.lowercased()
             quickPreviewComp.originalFileName = fileName
