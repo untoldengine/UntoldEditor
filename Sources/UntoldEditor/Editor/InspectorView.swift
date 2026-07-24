@@ -1357,6 +1357,7 @@ struct PointLightEditorView: View {
                 let intensity: Float = getLightIntensity(entityId: entityId)
                 let falloff: Float = getLightFalloff(entityId: entityId)
                 let radius: Float = getLightRadius(entityId: entityId)
+                let range: Float = scene.get(component: PointLightComponent.self, for: entityId)?.range ?? 0.0
                 let castsShadow: Bool = getPointLightCastsShadow(entityId: entityId)
 
                 TextInputVectorView(label: "Color", value: Binding(
@@ -1369,7 +1370,7 @@ struct PointLightEditorView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack {
-                    TextInputNumberView(label: "Brighness", value: Binding(
+                    TextInputNumberView(label: "Power (W)", value: Binding(
                         get: { intensity },
                         set: { newIntensity in
                             updateLightIntensity(entityId: entityId, intensity: newIntensity)
@@ -1378,10 +1379,10 @@ struct PointLightEditorView: View {
                     ))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    TextInputNumberView(label: "Falloff", value: Binding(
-                        get: { falloff },
-                        set: { newFalloff in
-                            updateLightFalloff(entityId: entityId, falloff: newFalloff)
+                    TextInputNumberView(label: "Range", value: Binding(
+                        get: { range },
+                        set: { newRange in
+                            setLight(entityId: entityId, .point(.range(newRange)))
                             refreshView()
                         }
                     ))
@@ -1397,6 +1398,15 @@ struct PointLightEditorView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
+                TextInputNumberView(label: "Legacy Falloff", value: Binding(
+                    get: { falloff },
+                    set: { newFalloff in
+                        updateLightFalloff(entityId: entityId, falloff: newFalloff)
+                        refreshView()
+                    }
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
                 Toggle(isOn: Binding(
                     get: { castsShadow },
                     set: { enabled in
@@ -1404,7 +1414,7 @@ struct PointLightEditorView: View {
                         refreshView()
                     }
                 )) {
-                    Text("Cast Shadows")
+                    Text("Shadow")
                 }
                 .toggleStyle(.checkbox)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1426,7 +1436,8 @@ struct SpotLightEditorView: View {
                 let falloff: Float = getLightFalloff(entityId: entityId)
                 let intensity: Float = getLightIntensity(entityId: entityId)
                 let radius: Float = getLightRadius(entityId: entityId)
-                let coneAngle: Float = getLightConeAngle(entityId: entityId)
+                let range: Float = scene.get(component: SpotLightComponent.self, for: entityId)?.range ?? 0.0
+                let coneAngle: Float = getLightConeAngle(entityId: entityId) * 2.0
                 let castsShadow: Bool = getSpotLightCastsShadow(entityId: entityId)
                 TextInputVectorView(label: "Color", value: Binding(
                     get: { color },
@@ -1437,7 +1448,7 @@ struct SpotLightEditorView: View {
                 ))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 HStack {
-                    TextInputNumberView(label: "Brightness", value: Binding(
+                    TextInputNumberView(label: "Power (W)", value: Binding(
                         get: { intensity },
                         set: { newIntensity in
                             updateLightIntensity(entityId: entityId, intensity: newIntensity)
@@ -1445,10 +1456,11 @@ struct SpotLightEditorView: View {
                         }
                     ))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    TextInputNumberView(label: "Falloff", value: Binding(
-                        get: { falloff },
-                        set: { newFalloff in
-                            updateLightFalloff(entityId: entityId, falloff: newFalloff)
+
+                    TextInputNumberView(label: "Range", value: Binding(
+                        get: { range },
+                        set: { newRange in
+                            setLight(entityId: entityId, .spot(.range(newRange)))
                             refreshView()
                         }
                     ))
@@ -1468,12 +1480,21 @@ struct SpotLightEditorView: View {
                     TextInputNumberView(label: "Cone Angle", value: Binding(
                         get: { coneAngle },
                         set: { newConeAngle in
-                            updateLightConeAngle(entityId: entityId, coneAngle: newConeAngle)
+                            updateLightConeAngle(entityId: entityId, coneAngle: newConeAngle * 0.5)
                             refreshView()
                         }
                     ))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+
+                TextInputNumberView(label: "Legacy Falloff", value: Binding(
+                    get: { falloff },
+                    set: { newFalloff in
+                        updateLightFalloff(entityId: entityId, falloff: newFalloff)
+                        refreshView()
+                    }
+                ))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Toggle(isOn: Binding(
                     get: { castsShadow },
@@ -1482,7 +1503,7 @@ struct SpotLightEditorView: View {
                         refreshView()
                     }
                 )) {
-                    Text("Cast Shadows")
+                    Text("Shadow")
                 }
                 .toggleStyle(.checkbox)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1502,7 +1523,11 @@ struct AreaLightEditorView: View {
             VStack {
                 let color: simd_float3 = getLightColor(entityId: entityId)
                 let intensity: Float = getLightIntensity(entityId: entityId)
-                // add area lights properties here
+                let scale: simd_float3 = getScale(entityId: entityId)
+                let areaLightComponent = scene.get(component: AreaLightComponent.self, for: entityId)
+                let range: Float = areaLightComponent?.range ?? 0.0
+                let twoSided: Bool = areaLightComponent?.twoSided ?? false
+
                 TextInputVectorView(label: "Color", value: Binding(
                     get: { color },
                     set: { newColor in
@@ -1512,13 +1537,70 @@ struct AreaLightEditorView: View {
                 ))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                TextInputNumberView(label: "Brightness", value: Binding(
-                    get: { intensity },
-                    set: { newIntensity in
-                        updateLightIntensity(entityId: entityId, intensity: newIntensity)
+                HStack {
+                    TextInputNumberView(label: "Power (W)", value: Binding(
+                        get: { intensity },
+                        set: { newIntensity in
+                            updateLightIntensity(entityId: entityId, intensity: newIntensity)
+                            refreshView()
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    TextInputNumberView(label: "Range", value: Binding(
+                        get: { range },
+                        set: { newRange in
+                            setLight(entityId: entityId, .area(.range(newRange)))
+                            refreshView()
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                HStack {
+                    TextInputNumberView(label: "Size X", value: Binding(
+                        get: { scale.x },
+                        set: { newSizeX in
+                            let before = EditorTransformSnapshot(entityId: entityId)
+                            let nextSizeX = max(newSizeX, 0.001)
+                            scaleTo(entityId: entityId, scale: simd_float3(nextSizeX, scale.y, scale.z))
+                            EditorUndoManager.shared.registerTransformChange(
+                                entityId: entityId,
+                                before: before,
+                                after: EditorTransformSnapshot(entityId: entityId)
+                            )
+                            refreshView()
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    TextInputNumberView(label: "Size Y", value: Binding(
+                        get: { scale.y },
+                        set: { newSizeY in
+                            let before = EditorTransformSnapshot(entityId: entityId)
+                            let nextSizeY = max(newSizeY, 0.001)
+                            scaleTo(entityId: entityId, scale: simd_float3(scale.x, nextSizeY, scale.z))
+                            EditorUndoManager.shared.registerTransformChange(
+                                entityId: entityId,
+                                before: before,
+                                after: EditorTransformSnapshot(entityId: entityId)
+                            )
+                            refreshView()
+                        }
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                Toggle(isOn: Binding(
+                    get: { twoSided },
+                    set: { enabled in
+                        setLight(entityId: entityId, .area(.twoSided(enabled)))
                         refreshView()
                     }
-                ))
+                )) {
+                    Text("Two Sided")
+                }
+                .toggleStyle(.checkbox)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }

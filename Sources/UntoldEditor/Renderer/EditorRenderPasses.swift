@@ -609,16 +609,18 @@ extension RenderPasses {
                 scale = simd_float3(repeating: pointLightComponent.radius)
                 lightMesh = pointLightDebugMesh
             } else if let spotLightComponent = scene.get(component: SpotLightComponent.self, for: activeEntity) {
-                let theta = degreesToRadians(degrees: spotLightComponent.coneAngle)
-                let radius = tan(theta) * spotLightComponent.radius
+                let halfAngle = degreesToRadians(degrees: spotLightComponent.coneAngle)
+                let coneLength = max(spotLightComponent.range, 1.0)
+                let coneRadius = tan(halfAngle) * coneLength
 
-                scale = simd_float3(radius, radius, spotLightComponent.radius / 2.0)
+                scale = simd_float3(coneRadius * 2.0, coneLength, coneRadius * 2.0)
                 lightMesh = spotLightDebugMesh
                 let spotDebugRotation = matrix4x4Rotation(
                     radians: degreesToRadians(degrees: 90.0),
                     axis: simd_float3(1.0, 0.0, 0.0)
                 )
-                debugModelMatrix = simd_mul(worldTransform.space, spotDebugRotation)
+                let spotDebugPivotOffset = matrix4x4Translation(0.0, -coneLength / 2.0, 0.0)
+                debugModelMatrix = simd_mul(simd_mul(worldTransform.space, spotDebugRotation), spotDebugPivotOffset)
             } else if scene.get(component: AreaLightComponent.self, for: activeEntity) != nil {
                 lightMesh = areaLightDebugMesh
                 debugModelMatrix = areaLightDebugModelMatrix(worldTransform: worldTransform.space)
