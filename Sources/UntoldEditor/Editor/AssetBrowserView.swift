@@ -729,7 +729,7 @@ struct AssetBrowserView: View {
         case .materials:
             openPanel.allowedContentTypes = [.png, .jpeg, .tiff]
         case .hdr:
-            openPanel.allowedContentTypes = [UTType(filenameExtension: "hdr")!]
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "hdr")!, UTType(filenameExtension: "exr")!]
         }
 
         openPanel.canChooseDirectories = (category == .materials || category == .streamModels)
@@ -1456,8 +1456,8 @@ struct AssetBrowserView: View {
                                                         path: item,
                                                         isFolder: true))
                         } else if category == .hdr {
-                            // For HDR, also allow .hdr files directly in the HDR folder
-                            if item.pathExtension.lowercased() == "hdr" {
+                            // For HDR, also allow .hdr and .exr files directly in the HDR folder
+                            if ["hdr", "exr"].contains(item.pathExtension.lowercased()) {
                                 categoryAssets.append(Asset(name: item.lastPathComponent,
                                                             category: category.rawValue,
                                                             path: item,
@@ -1563,7 +1563,7 @@ struct AssetBrowserView: View {
                     if isDir.boolValue {
                         return Asset(name: item.lastPathComponent, category: selectedCategory ?? "", path: item, isFolder: true)
                     } else {
-                        let allowedExtensions: Set<String> = [runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "tif", "tiff", "ply", "json", "uscript", "remotestream"]
+                        let allowedExtensions: Set<String> = [runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "exr", "tif", "tiff", "ply", "json", "uscript", "remotestream"]
                         guard allowedExtensions.contains(item.pathExtension.lowercased()) else { return nil }
 
                         return Asset(name: item.lastPathComponent,
@@ -2020,9 +2020,9 @@ struct AssetBrowserView: View {
             showSceneLoadConfirmation = true
             editorController?.currentSceneURL = asset.path
         }
-        // Handle HDR files (hdr)
+        // Handle HDR files (hdr, exr)
         else if asset.category == AssetCategory.hdr.rawValue,
-                withExtension.lowercased() == "hdr"
+                ["hdr", "exr"].contains(withExtension.lowercased())
         {
             // Verify HDR file exists before attempting to load
             guard FileManager.default.fileExists(atPath: asset.path.path) else {

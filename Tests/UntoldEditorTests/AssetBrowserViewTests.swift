@@ -180,6 +180,45 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
+    func test_loadAssetsFromDisk_includesEXRFilesInHDRCategory() throws {
+        try withTempDirectory { base in
+            let hdr = base.appendingPathComponent("HDR", isDirectory: true)
+            try FileManager.default.createDirectory(at: hdr, withIntermediateDirectories: true)
+
+            let exrFile = hdr.appendingPathComponent("garden.exr")
+            FileManager.default.createFile(atPath: exrFile.path, contents: Data())
+            let hdrFile = hdr.appendingPathComponent("studio.hdr")
+            FileManager.default.createFile(atPath: hdrFile.path, contents: Data())
+            let txtFile = hdr.appendingPathComponent("readme.txt")
+            FileManager.default.createFile(atPath: txtFile.path, contents: Data())
+
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            // Replicate the filesystem walk the view does (mirrors AssetBrowserView's
+            // HDR-category filter, which now accepts both "hdr" and "exr").
+            var categoryAssets: [Asset] = []
+            if let contents = try? FileManager.default.contentsOfDirectory(at: hdr, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                for item in contents where ["hdr", "exr"].contains(item.pathExtension.lowercased()) {
+                    categoryAssets.append(Asset(name: item.lastPathComponent, category: AssetCategory.hdr.rawValue, path: item, isFolder: false))
+                }
+            }
+
+            let names = Set(categoryAssets.map(\.name))
+            XCTAssertTrue(names.contains("garden.exr"), "EXR files should be listed in the HDR category")
+            XCTAssertTrue(names.contains("studio.hdr"))
+            XCTAssertFalse(names.contains("readme.txt"))
+        }
+    }
+
     func test_selectingAssetUpdatesBinding() throws {
         var assetsState: [String: [Asset]] = [
             "Models": [

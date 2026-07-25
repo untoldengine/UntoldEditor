@@ -62,6 +62,27 @@ final class EnvironmentViewTests: XCTestCase {
         }
     }
 
+    func test_addIBLHandlesNonExistentEXRFile() throws {
+        try withTempDirectory { base in
+            // Same as test_addIBLHandlesNonExistentFile, but for the .exr extension
+            // that the HDR category now also accepts (addIBL itself is extension-
+            // agnostic, but this locks in that .exr assets flow through the same
+            // guard clauses as .hdr instead of being silently ignored).
+            let hdr = base.appendingPathComponent("HDR", isDirectory: true)
+            try FileManager.default.createDirectory(at: hdr, withIntermediateDirectories: true)
+
+            let nonExistentEXRPath = hdr.appendingPathComponent("nonexistent.exr")
+            let exrAsset = Asset(name: "nonexistent.exr", category: "HDR", path: nonExistentEXRPath, isFolder: false)
+
+            XCTAssertFalse(FileManager.default.fileExists(atPath: nonExistentEXRPath.path), "EXR file should not exist")
+
+            addIBL(asset: exrAsset)
+
+            XCTAssertFalse(iblSuccessful, "iblSuccessful should remain false for non-existent EXR file")
+            XCTAssertFalse(applyIBL, "applyIBL should remain false for non-existent EXR file")
+        }
+    }
+
     func test_addIBLConditionalLogicForSuccess() throws {
         try withTempDirectory { base in
             // This test validates the conditional logic in addIBL for successful HDR loading
