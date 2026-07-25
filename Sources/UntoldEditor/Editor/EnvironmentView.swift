@@ -41,6 +41,7 @@ func addIBL(asset: Asset?) {
 struct EnvironmentView: View {
     @State private var enableApplyIBL: Bool = false
     @State private var enableRenderEnvironment: Bool = false
+    @State private var enableColorLUT: Bool = false
     @State private var intensity: Float = 1.0
     @Binding var selectedAsset: Asset?
     var body: some View {
@@ -108,6 +109,27 @@ struct EnvironmentView: View {
 
             Divider()
 
+            // MARK: - Color LUT Toggle (Compact)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $enableColorLUT) {
+                    Label("Apply Color LUT", systemImage: enableColorLUT ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 12))
+                }
+                .toggleStyle(SwitchToggleStyle())
+                .scaleEffect(0.85)
+                .onChange(of: enableColorLUT) { _, newValue in
+                    ColorLUTParams.shared.enabled = newValue
+                    enableColorLUT = ColorLUTParams.shared.enabled
+                }
+
+                Text("Compares the baked Blender color-grading LUT against the default tonemap. Only takes effect if the loaded asset has a baked LUT.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+
+            Divider()
+
             // MARK: - Ambient Intensity Slider (Compact)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -132,6 +154,7 @@ struct EnvironmentView: View {
         .onAppear {
             enableApplyIBL = applyIBL
             enableRenderEnvironment = renderEnvironment
+            enableColorLUT = ColorLUTParams.shared.enabled
             intensity = ambientIntensity
         }
     }
