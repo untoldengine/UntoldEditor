@@ -1,4 +1,11 @@
 # Changelog
+## v0.16.0 - 2026-08-12
+### 🐞 Fixes
+- [Patch] fix area light mesh culling (9122f78…)
+- [Patch] Added shadow cast to point lights (390e1f4…)
+- [Patch] Align light inspector controls and debug meshes with Blender lighting (b439816…)
+- [Patch] Allow .exr import alongside .hdr in Asset Browser's HDR category (7ac9415…)
+- [Patch] Enable the color lut in the editor (d519be9…)
 ## v0.14.2 - 2026-07-16
 ## v0.14.0 - 2026-07-09
 ### 🐞 Fixes

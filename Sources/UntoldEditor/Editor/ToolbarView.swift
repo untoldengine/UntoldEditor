@@ -15,7 +15,7 @@
         @ObservedObject var selectionManager: SelectionManager
         @ObservedObject var editorBasePath = EditorAssetBasePath.shared
         @ObservedObject private var statsStore = EditorEngineStatsStore.shared
-        private let editorVersionLabel = "v0.14.2"
+        private let editorVersionLabel = "v0.16.0"
 
         var onSave: () -> Void
         var onSaveAs: () -> Void

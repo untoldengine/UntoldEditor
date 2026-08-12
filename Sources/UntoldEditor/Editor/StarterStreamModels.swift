@@ -25,7 +25,7 @@ let starterStreamModels: [StreamModelCatalogItem] = [
     .init(
         id: "dungeon",
         title: "Game Dungeon",
-        manifestURL: URL(string: "https://d8pyi1c08k1w.cloudfront.net/dungeon3/dungeon3.json")!
+        manifestURL: URL(string: "https://d8pyi1c08k1w.cloudfront.net/Dungeon/dungeon.json")!
     ),
     .init(
         id: "city",
