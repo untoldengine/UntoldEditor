@@ -179,5 +179,5 @@ See **CONTRIBUTING.md** and **CODE_OF_CONDUCT.md** (coming soon).
 
 ## 📜 License
 
-Licensed under **GNU LGPL v3.0**.  
+Licensed under **Mozilla Public License 2.0**.  
 See [LICENSE](LICENSE) for details.

@@ -2,9 +2,11 @@
 //  ScriptProjectManager.swift
 //  UntoldEditor
 //
-//  Copyright (C) Untold Engine Studios
-//  Licensed under the GNU LGPL v3.0 or later.
-//  See the LICENSE file or <https://www.gnu.org/licenses/> for details.
+// Copyright (C) Untold Engine Studios
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
 //
 
 import Foundation
@@ -259,8 +261,11 @@ class ScriptProjectManager {
         //  GenerateScripts.swift
         //  USC Script Generator
         //
-        //  Copyright (C) Untold Engine Studios
-        //  Licensed under the GNU LGPL v3.0 or later.
+        // Copyright (C) Untold Engine Studios
+        //
+        // This Source Code Form is subject to the terms of the Mozilla Public
+        // License, v. 2.0. If a copy of the MPL was not distributed with this
+        // file, You can obtain one at https://mozilla.org/MPL/2.0/.
         //
 
         import Foundation
@@ -300,8 +305,11 @@ class ScriptProjectManager {
         //  \(name).swift
         //  USC Script
         //
-        //  Copyright (C) Untold Engine Studios
-        //  Licensed under the GNU LGPL v3.0 or later.
+        // Copyright (C) Untold Engine Studios
+        //
+        // This Source Code Form is subject to the terms of the Mozilla Public
+        // License, v. 2.0. If a copy of the MPL was not distributed with this
+        // file, You can obtain one at https://mozilla.org/MPL/2.0/.
         //
 
         import Foundation

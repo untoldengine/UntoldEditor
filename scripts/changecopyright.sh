@@ -11,7 +11,7 @@
 #    replaces any line containing “Created by” with the standard
 #    copyright and license notice. This helps ensure all source
 #    files remain consistent with the Untold Engine’s licensing
-#    policy (GNU LGPL v3.0 or later).
+#    policy (Mozilla Public License 2.0).
 #
 #  How it works:
 #    - Uses `find` to locate all `.swift` files.
@@ -34,5 +34,4 @@
 
 YEAR=$(date +"%Y")
 
-find . -name "*.swift" -type f -exec sed -i '' "1,/Created by/s#//.*Created by.*#//  Copyright (C) Untold Engine Studios\n//  Licensed under the GNU LGPL v3.0 or later.\n//  See the LICENSE file or <https://www.gnu.org/licenses/> for details.#" {} +
-
+find . -name "*.swift" -type f -exec sed -i '' "1,/Created by/s#//.*Created by.*#// Copyright (C) Untold Engine Studios\n//\n// This Source Code Form is subject to the terms of the Mozilla Public\n// License, v. 2.0. If a copy of the MPL was not distributed with this\n// file, You can obtain one at https://mozilla.org/MPL/2.0/.#" {} +
