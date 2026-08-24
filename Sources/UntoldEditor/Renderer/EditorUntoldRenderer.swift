@@ -142,6 +142,7 @@ extension UntoldRenderer {
                 sensitivity: 100.0
             )
             applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: -angle * 10)
+            syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
 
         case (.rotate, .y) where InputSystem.shared.mouseActive:
@@ -158,6 +159,7 @@ extension UntoldRenderer {
                 sensitivity: 100.0
             )
             applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: angle * 10)
+            syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
 
         case (.rotate, .z) where InputSystem.shared.mouseActive:
@@ -174,6 +176,7 @@ extension UntoldRenderer {
                 sensitivity: 100.0
             )
             applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: angle * 10)
+            syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
 
         // MARK: - Scale
@@ -291,6 +294,7 @@ extension UntoldRenderer {
             localTransformComponent.rotationY = euler.yaw
             localTransformComponent.rotationZ = euler.roll
             translateTo(entityId: activeEntity, position: localTransformComponent.position)
+            refreshInspector()
 
         default:
             break

@@ -407,6 +407,32 @@ private func initialLightDirectionHandleOffset() -> simd_float3 {
     return handleDirection * abs(GizmoDimensions.directionHandleOffsetY)
 }
 
+/// Repositions the light direction handle (and its hit proxy) to match the given light
+/// entity's current orientation. Call this after changing a light's rotation through any
+/// path other than dragging the handle itself (e.g. editing the Orientation fields in the
+/// Inspector), so the gizmo doesn't go stale relative to the light it represents.
+func syncLightDirectionHandleToActiveLight(entityId: EntityID) {
+    guard entityId != .invalid,
+          entityId == activeEntity,
+          gizmoActive,
+          parentEntityIdGizmo != .invalid,
+          hasComponent(entityId: entityId, componentType: LightComponent.self)
+    else {
+        return
+    }
+
+    let localPosition = initialLightDirectionHandleOffset()
+
+    for handle in getEntityChildren(parentId: parentEntityIdGizmo) {
+        guard let handleComponent = scene.get(component: GizmoHandleComponent.self, for: handle),
+              handleComponent.mode == .lightRotate, handleComponent.axis == .none
+        else {
+            continue
+        }
+        translateTo(entityId: handle, position: localPosition)
+    }
+}
+
 private func rotationFromYAxis(to direction: simd_float3) -> (angle: Float, axis: simd_float3)? {
     let up = simd_float3(0.0, 1.0, 0.0)
     let dirLength = simd_length(direction)

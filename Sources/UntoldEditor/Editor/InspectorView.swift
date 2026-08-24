@@ -1202,6 +1202,7 @@ struct TransformationEditorView: View {
                     let before = EditorTransformSnapshot(entityId: entityId)
                     handleTransformChange()
                     applyAxisRotations(entityId: entityId, axis: newOrientation)
+                    syncLightDirectionHandleToActiveLight(entityId: entityId)
                     EditorUndoManager.shared.registerTransformChange(
                         entityId: entityId,
                         before: before,
