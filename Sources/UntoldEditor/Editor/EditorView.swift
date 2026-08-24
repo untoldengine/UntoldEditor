@@ -1156,6 +1156,13 @@ public struct EditorView: View {
         let light = createEntity()
         setEntityName(entityId: light, name: "Directional Light")
         createDirLight(entityId: light)
+        // destroyAllEntities() above only marks the previous scene's entities for deferred
+        // destruction; the actual cleanup (which nulls activeDirectionalLight if it pointed
+        // at the old light) doesn't run until finalizePendingDestroys() later this frame.
+        // createDirLight()'s "activate only if nil" check can therefore see a stale non-nil
+        // pointer here and skip activating this new light. Force it active explicitly so a
+        // freshly cleared scene never ends up with an inactive (shadow-less) default sun.
+        setDirectionalLight(.active(light))
 
         let sceneCamera = findSceneCamera()
 
