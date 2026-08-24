@@ -258,19 +258,24 @@
                 if hasComponent(entityId: entityId, componentType: GizmoComponent.self) {
                     activeEntity = selectableTransformEntity(for: entityId)
                     selectionDelegate?.didSelectEntity(entityId)
-                } else if keyState.shiftPressed,
-                          let rayContext,
+                } else if keyState.commandPressed {
+                    // Cmd+click selects the top-level asset root, for moving/rotating
+                    // the whole imported group at once.
+                    let transformEntityId = editableAssetRootEntity(for: entityId)
+                    activeEntity = selectableTransformEntity(for: transformEntityId)
+                    selectionDelegate?.didSelectEntity(entityId)
+                } else if let rayContext,
                           let meshIndex = pickMeshIndexForEntity(
                               entityId: entityId,
                               rayOrigin: rayContext.rayOrigin,
                               rayDirection: rayContext.rayDirection
                           )
                 {
+                    // Default: click selects the specific child mesh under the cursor.
                     activeEntity = selectableTransformEntity(for: entityId)
                     selectionDelegate?.didInspectMesh(entityId, meshIndex: meshIndex)
                 } else {
-                    let transformEntityId = editableAssetRootEntity(for: entityId)
-                    activeEntity = selectableTransformEntity(for: transformEntityId)
+                    activeEntity = selectableTransformEntity(for: entityId)
                     selectionDelegate?.didSelectEntity(entityId)
                 }
                 selectionDelegate?.resetActiveAxis()
@@ -550,6 +555,13 @@
                 keyState.ctrlPressed = true
             } else {
                 keyState.ctrlPressed = false
+            }
+
+            // Command key
+            if event.modifierFlags.contains(.command) {
+                keyState.commandPressed = true
+            } else {
+                keyState.commandPressed = false
             }
         }
 
