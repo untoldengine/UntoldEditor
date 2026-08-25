@@ -10,6 +10,7 @@
 //
 import simd
 import SwiftUI
+import UniformTypeIdentifiers
 import UntoldEngine
 
 public struct ComponentOption_Editor: Identifiable {
@@ -35,6 +36,45 @@ func openFilePicker() -> URL? {
     panel.canChooseFiles = true
 
     return panel.runModal() == .OK ? panel.urls.first : nil
+}
+
+private func pickTextureImageFile() -> URL? {
+    let panel = NSOpenPanel()
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = false
+    panel.canChooseFiles = true
+    panel.allowedContentTypes = [.png, .jpeg, .tiff]
+
+    return panel.runModal() == .OK ? panel.urls.first : nil
+}
+
+/// Copies an externally-picked texture image into the project's Materials asset folder,
+/// mirroring the single-file fallback of the Asset Browser's own Materials import (a
+/// subfolder named after the file, matching what updateMaterialTexture(path:) expects to
+/// resolve via LoadingSystem's resource search paths).
+private func importTextureAsset(from sourceURL: URL) -> URL? {
+    guard let basePath = assetBasePath else {
+        Logger.logWarning(message: "[InspectorView] assetBasePath is not set; cannot import texture \(sourceURL.lastPathComponent).")
+        return nil
+    }
+
+    let fm = FileManager.default
+    let materialsRoot = basePath.appendingPathComponent("Materials", isDirectory: true)
+    let baseName = sourceURL.deletingPathExtension().lastPathComponent
+    let materialFolder = materialsRoot.appendingPathComponent(baseName, isDirectory: true)
+    let destFile = materialFolder.appendingPathComponent(sourceURL.lastPathComponent)
+
+    do {
+        try fm.createDirectory(at: materialFolder, withIntermediateDirectories: true)
+        if fm.fileExists(atPath: destFile.path) {
+            try fm.removeItem(at: destFile)
+        }
+        try fm.copyItem(at: sourceURL, to: destFile)
+        return destFile
+    } catch {
+        Logger.logWarning(message: "[InspectorView] Failed to import texture \(sourceURL.lastPathComponent): \(error.localizedDescription)")
+        return nil
+    }
 }
 
 private func onAddMesh_Editor(entityId: EntityID, url: URL) {
@@ -318,12 +358,16 @@ struct InspectorView: View {
                         if let inspectedMesh = selectionManager.inspectedMesh,
                            inspectedMesh.entityId == entityId
                         {
+                            // inspectMesh() (see SelectionManager) only ever sets inspectedMesh
+                            // alongside selectedEntity on the same entity, so reaching this
+                            // block means entityId genuinely is the active selection, not just
+                            // a passive peek — safe (and expected) to be fully editable here.
                             RenderingEditorView(
                                 entityId: entityId,
                                 asset: selectedAsset,
                                 refreshView: refreshView,
                                 meshIndex: inspectedMesh.meshIndex,
-                                inspectionOnly: true
+                                inspectionOnly: false
                             )
                             Divider()
                         }
@@ -334,7 +378,16 @@ struct InspectorView: View {
                                 editor_availableComponents: availableComponents_Editor
                             )
 
-                            let sortedComponents = sortEntityComponents(componentOption_Editor: mergedComponents)
+                            // The inspectedMesh banner above already renders this entity's
+                            // Render Component (with the correct submesh index) when it targets
+                            // this same entity. Skip the generic entry here so Material
+                            // Properties / Wrap Mode don't render twice.
+                            let isInspectedMeshEntity = selectionManager.inspectedMesh?.entityId == entityId
+                            let visibleComponents = isInspectedMeshEntity
+                                ? mergedComponents.filter { $0.key != ObjectIdentifier(RenderComponent.self) }
+                                : mergedComponents
+
+                            let sortedComponents = sortEntityComponents(componentOption_Editor: visibleComponents)
 
                             // Static Batching Section - Show for any entity with renderable hierarchy
                             if EditorAuthoringMode.sceneCompositionOnly == false, isDerivedAssetNode(entityId) == false {
@@ -697,6 +750,11 @@ struct RenderingEditorView: View {
                                 Button(action: {
                                     if asset?.category == "Materials", let path = asset?.path {
                                         updateMaterialTexture(entityId: entityId, textureType: type, path: path, meshIndex: meshIndex)
+                                        refreshView()
+                                    } else if let pickedURL = pickTextureImageFile(),
+                                              let importedURL = importTextureAsset(from: pickedURL)
+                                    {
+                                        updateMaterialTexture(entityId: entityId, textureType: type, path: importedURL, meshIndex: meshIndex)
                                         refreshView()
                                     }
                                 }) {
