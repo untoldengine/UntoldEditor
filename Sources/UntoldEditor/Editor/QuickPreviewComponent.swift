@@ -21,7 +21,7 @@ enum QuickPreviewImportMode: String, CaseIterable {
     var menuTitle: String {
         switch self {
         case .untoldAsset:
-            return "Load Untold Asset (.untold, USD)"
+            return "Load Untold Asset (.untold, USD, .blend)"
         case .tiledScene:
             return "Load Tiled Stream (.json)"
         case .gaussian:
@@ -43,7 +43,7 @@ enum QuickPreviewImportMode: String, CaseIterable {
     var filePickerTitle: String {
         switch self {
         case .untoldAsset:
-            return "Load Preview - Select Untold or USD Asset"
+            return "Load Preview - Select Untold, USD, or Blend Asset"
         case .tiledScene:
             return "Load Preview - Select Tiled Stream Manifest"
         case .gaussian:
@@ -54,7 +54,7 @@ enum QuickPreviewImportMode: String, CaseIterable {
     var filePickerMessage: String {
         switch self {
         case .untoldAsset:
-            return "Select an Untold runtime asset or USD source asset to preview without creating a project"
+            return "Select an Untold runtime asset, USD source asset, or .blend file to preview without creating a project"
         case .tiledScene:
             return "Select a tiled stream manifest to preview without creating a project"
         case .gaussian:
@@ -65,7 +65,7 @@ enum QuickPreviewImportMode: String, CaseIterable {
     var allowedContentTypes: [UTType] {
         switch self {
         case .untoldAsset:
-            return ["untold", "usd", "usda", "usdc", "usdz"].compactMap { UTType(filenameExtension: $0) }
+            return ["untold", "usd", "usda", "usdc", "usdz", "blend"].compactMap { UTType(filenameExtension: $0) }
         case .tiledScene:
             return [.json]
         case .gaussian:

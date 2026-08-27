@@ -79,6 +79,15 @@ class EditorController: SelectionDelegate, ObservableObject {
     @Published var activeAxis: TransformAxis = .none
     @Published var currentSceneURL: URL?
 
+    /// refreshInspector() can be called once per rendered frame while a gizmo is being
+    /// dragged (see EditorUntoldRenderer.handleSceneInput). Each call forces SwiftUI to
+    /// re-diff the whole Inspector, which is far too expensive to do 60 times a second,
+    /// so calls are throttled to minInspectorRefreshInterval with a trailing edge to
+    /// guarantee the final value is always reflected once dragging settles.
+    private var lastInspectorRefreshTime: TimeInterval = 0
+    private var pendingInspectorRefresh: DispatchWorkItem?
+    private let minInspectorRefreshInterval: TimeInterval = 1.0 / 15.0
+
     init(selectionManager: SelectionManager) {
         self.selectionManager = selectionManager
         selectionDelegate = self
@@ -108,6 +117,24 @@ class EditorController: SelectionDelegate, ObservableObject {
     }
 
     func refreshInspector() {
+        pendingInspectorRefresh?.cancel()
+
+        let now = Date().timeIntervalSinceReferenceDate
+        let elapsed = now - lastInspectorRefreshTime
+        guard elapsed >= minInspectorRefreshInterval else {
+            // Too soon since the last refresh — schedule a trailing-edge refresh so the
+            // Inspector still catches up to the latest value once the burst quiets down.
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                lastInspectorRefreshTime = Date().timeIntervalSinceReferenceDate
+                selectionManager.objectWillChange.send()
+            }
+            pendingInspectorRefresh = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + (minInspectorRefreshInterval - elapsed), execute: workItem)
+            return
+        }
+
+        lastInspectorRefreshTime = now
         DispatchQueue.main.async {
             self.selectionManager.objectWillChange.send()
         }

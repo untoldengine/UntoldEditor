@@ -14,7 +14,7 @@ import UntoldEngine
 
 private let runtimeAssetExtension = "untold"
 private let runtimeTextureFolderNames = ["Textures", "textures"]
-private let sourceAssetExtensions: Set<String> = ["usd", "usda", "usdc", "usdz"]
+private let sourceAssetExtensions: Set<String> = ["usd", "usda", "usdc", "usdz", "blend"]
 private let streamModelResourceFolderNames = ["tile_exports", "tile_export", "Textures", "textures"]
 
 struct RuntimeExportRequest: Identifiable, Equatable {
@@ -1027,7 +1027,7 @@ struct AssetBrowserView: View {
                 .font(.title2)
                 .bold()
 
-            Text("This USD file needs to be converted to Untold Engine's .untold runtime format before it can be added to your project.")
+            Text("This USD or .blend file needs to be converted to Untold Engine's .untold runtime format before it can be added to your project.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1277,7 +1277,7 @@ struct AssetBrowserView: View {
                 .font(.title2)
                 .bold()
 
-            Text("This USD file will be partitioned into tile payloads and a manifest JSON using export-untold-tiles.")
+            Text("This USD or .blend file will be partitioned into tile payloads and a manifest JSON using export-untold-tiles.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {

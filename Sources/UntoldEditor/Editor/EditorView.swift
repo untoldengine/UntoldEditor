@@ -1904,7 +1904,7 @@ public struct EditorView: View {
         let fileName = fileURL.deletingPathExtension().lastPathComponent
         pendingQuickPreviewLoadsInExplore = fromExploreMode
 
-        if isUSDSourceAsset(fileURL) {
+        if isConvertibleSourceAsset(fileURL) {
             queueQuickPreviewRuntimeExport(sourceURL: fileURL)
             return
         }
@@ -2070,8 +2070,8 @@ public struct EditorView: View {
         }
     }
 
-    private func isUSDSourceAsset(_ url: URL) -> Bool {
-        ["usd", "usda", "usdc", "usdz"].contains(url.pathExtension.lowercased())
+    private func isConvertibleSourceAsset(_ url: URL) -> Bool {
+        ["usd", "usda", "usdc", "usdz", "blend"].contains(url.pathExtension.lowercased())
     }
 
     private func queueQuickPreviewRuntimeExport(sourceURL: URL) {
@@ -2092,7 +2092,7 @@ public struct EditorView: View {
                 .font(.title2)
                 .bold()
 
-            Text("This USD file needs to be converted to Untold Engine's .untold runtime format before it can be previewed.")
+            Text("This USD or .blend file needs to be converted to Untold Engine's .untold runtime format before it can be previewed.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
