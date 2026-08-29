@@ -44,6 +44,33 @@ struct EnvironmentView: View {
     @State private var enableColorLUT: Bool = false
     @State private var intensity: Float = 1.0
     @Binding var selectedAsset: Asset?
+    var onLoadSceneAuthored: (Asset) -> Void = { _ in }
+
+    private var selectedSceneAuthoredAsset: Asset? {
+        guard let selectedAsset else {
+            return nil
+        }
+
+        if let runtimeAsset = resolvedRuntimeAsset(for: selectedAsset),
+           runtimeAsset.category == AssetCategory.models.rawValue,
+           runtimeAsset.path.pathExtension.lowercased() == "untold"
+        {
+            return runtimeAsset
+        }
+
+        if let manifestAsset = resolvedTiledSceneManifest(for: selectedAsset) {
+            return manifestAsset
+        }
+
+        if selectedAsset.category == AssetCategory.streamModels.rawValue,
+           selectedAsset.path.pathExtension.lowercased() == "remotestream"
+        {
+            return selectedAsset
+        }
+
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // MARK: - Header
@@ -54,6 +81,48 @@ struct EnvironmentView: View {
                     .foregroundColor(.editorTextPrimary)
             }
             .padding(.bottom, 6)
+
+            Divider()
+
+            // MARK: - Scene Authored Data
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Scene Authored")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.editorTextPrimary)
+
+                Button(action: loadSceneAuthoredFromSelection) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera.badge.ellipsis")
+                            .font(.system(size: 12))
+                        Text("Load Scene Authored")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(selectedSceneAuthoredAsset == nil ? Color.editorSurface.opacity(0.45) : Color.editorAccent)
+                    .foregroundColor(selectedSceneAuthoredAsset == nil ? .editorTextTertiary : .editorTextPrimary)
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.editorDivider, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(selectedSceneAuthoredAsset == nil)
+                .help("Load Blender-authored cameras and lights from the selected .untold asset or tiled scene manifest")
+
+                HStack {
+                    Text("Source")
+                        .foregroundColor(.editorTextSecondary)
+                    Spacer()
+                    Text(selectedSceneAuthoredAsset?.name ?? "None")
+                        .foregroundColor(.editorTextTertiary)
+                        .lineLimit(1)
+                }
+                .font(.system(size: 11))
+            }
 
             Divider()
 
@@ -162,6 +231,56 @@ struct EnvironmentView: View {
             enableColorLUT = ColorLUTParams.shared.enabled
             intensity = ambientIntensity
         }
+    }
+
+    private func resolvedRuntimeAsset(for asset: Asset) -> Asset? {
+        guard asset.isFolder else { return asset }
+        guard asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue else {
+            return nil
+        }
+        guard let runtimeAssetURL = primaryRuntimeAsset(in: asset.path) else {
+            return nil
+        }
+
+        return Asset(
+            name: runtimeAssetURL.lastPathComponent,
+            category: asset.category,
+            path: runtimeAssetURL,
+            isFolder: false
+        )
+    }
+
+    private func resolvedTiledSceneManifest(for asset: Asset) -> Asset? {
+        guard asset.category == AssetCategory.streamModels.rawValue else {
+            return nil
+        }
+
+        if asset.isFolder {
+            guard let manifestURL = primaryTiledSceneManifest(in: asset.path) else {
+                return nil
+            }
+
+            return Asset(
+                name: manifestURL.lastPathComponent,
+                category: asset.category,
+                path: manifestURL,
+                isFolder: false
+            )
+        }
+
+        guard isTiledSceneManifest(asset.path) else {
+            return nil
+        }
+
+        return asset
+    }
+
+    private func loadSceneAuthoredFromSelection() {
+        guard let asset = selectedSceneAuthoredAsset else {
+            return
+        }
+
+        onLoadSceneAuthored(asset)
     }
 }
 

@@ -464,7 +464,10 @@ public struct EditorView: View {
                     Group {
                         switch rightPanelEnvTab {
                         case .environment:
-                            EnvironmentView(selectedAsset: $selectedAsset)
+                            EnvironmentView(
+                                selectedAsset: $selectedAsset,
+                                onLoadSceneAuthored: editor_loadSceneAuthoredFromAsset
+                            )
                         case .effects:
                             PostProcessingEditorView()
                         }
