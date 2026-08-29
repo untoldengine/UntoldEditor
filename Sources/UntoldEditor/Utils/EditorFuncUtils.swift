@@ -40,6 +40,8 @@ func bindingForWrapMode(
                 return material.roughness.wrapMode
             case .metallic:
                 return material.metallic.wrapMode
+            case .height:
+                return material.height.wrapMode
             }
         },
         set: { newValue in

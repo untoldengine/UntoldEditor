@@ -909,6 +909,132 @@ struct RenderingEditorView: View {
                 }
 
                 HStack {
+                    // Height Scale Input — total Parallax Occlusion Mapping ray-march depth,
+                    // in UV-normalized units. Only has a visible effect once a Height texture
+                    // is assigned above.
+                    VStack {
+                        TextInputNumberView(
+                            label: "",
+                            value: Binding(
+                                get: { getMaterialHeightScale(entityId: entityId, meshIndex: meshIndex) },
+                                set: { newValue in
+                                    updateMaterialHeightScale(entityId: entityId, heightScale: newValue, meshIndex: meshIndex)
+                                    if inspectionOnly, isUntoldBackedMesh {
+                                        hasPendingUntoldWrite = true
+                                        untoldUpdateStatus = nil
+                                    }
+                                    refreshView()
+                                }
+                            )
+                        )
+                        .frame(width: 60)
+
+                        Text("Height Scale")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // Midlevel Input — matches Blender's Displacement node "Midlevel"
+                    // (default 0.5 = no shift).
+                    VStack {
+                        TextInputNumberView(
+                            label: "",
+                            value: Binding(
+                                get: { getMaterialHeightMidlevel(entityId: entityId, meshIndex: meshIndex) },
+                                set: { newValue in
+                                    updateMaterialHeightMidlevel(entityId: entityId, heightMidlevel: newValue, meshIndex: meshIndex)
+                                    if inspectionOnly, isUntoldBackedMesh {
+                                        hasPendingUntoldWrite = true
+                                        untoldUpdateStatus = nil
+                                    }
+                                    refreshView()
+                                }
+                            )
+                        )
+                        .frame(width: 60)
+
+                        Text("Midlevel")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // POM Enabled Toggle — lets testers A/B compare normal-mapping-only vs.
+                    // normal+POM without discarding the height texture assignment.
+                    VStack {
+                        Toggle(isOn: Binding(
+                            get: { getMaterialHeightEnabled(entityId: entityId, meshIndex: meshIndex) },
+                            set: { newValue in
+                                updateMaterialHeightEnabled(entityId: entityId, heightEnabled: newValue, meshIndex: meshIndex)
+                                if inspectionOnly, isUntoldBackedMesh {
+                                    hasPendingUntoldWrite = true
+                                    untoldUpdateStatus = nil
+                                }
+                                refreshView()
+                            }
+                        )) {
+                            EmptyView()
+                        }
+                        .toggleStyle(.checkbox)
+                        .frame(width: 60)
+
+                        Text("POM Enabled")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                HStack {
+                    // Height Remap Min/Max — contrast-stretch the raw height sample before
+                    // Midlevel is applied. Many real-world displacement maps (Substance/
+                    // Poliigon exports especially) only use a narrow slice of the full [0,1]
+                    // range, leaving POM almost no local contrast to work with even at a
+                    // reasonable Height Scale. Identity is (0.0, 1.0).
+                    VStack {
+                        TextInputNumberView(
+                            label: "",
+                            value: Binding(
+                                get: { getMaterialHeightRemapMin(entityId: entityId, meshIndex: meshIndex) },
+                                set: { newValue in
+                                    updateMaterialHeightRemapMin(entityId: entityId, heightRemapMin: newValue, meshIndex: meshIndex)
+                                    if inspectionOnly, isUntoldBackedMesh {
+                                        hasPendingUntoldWrite = true
+                                        untoldUpdateStatus = nil
+                                    }
+                                    refreshView()
+                                }
+                            )
+                        )
+                        .frame(width: 60)
+
+                        Text("Height Remap Min")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    VStack {
+                        TextInputNumberView(
+                            label: "",
+                            value: Binding(
+                                get: { getMaterialHeightRemapMax(entityId: entityId, meshIndex: meshIndex) },
+                                set: { newValue in
+                                    updateMaterialHeightRemapMax(entityId: entityId, heightRemapMax: newValue, meshIndex: meshIndex)
+                                    if inspectionOnly, isUntoldBackedMesh {
+                                        hasPendingUntoldWrite = true
+                                        untoldUpdateStatus = nil
+                                    }
+                                    refreshView()
+                                }
+                            )
+                        )
+                        .frame(width: 60)
+
+                        Text("Height Remap Max")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                HStack {
                     VStack {
                         TextInputNumberView(
                             label: "",
