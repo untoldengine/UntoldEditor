@@ -14,6 +14,10 @@ clean:
 test:
 	swift test
 
+# Test against the local UntoldEngine package using a stable build path
+localtest:
+	swift test --build-path /tmp/untoldeditor-local-build
+
 # Required SwiftFormat version
 SWIFTFORMAT_VERSION := 0.60.1
 
