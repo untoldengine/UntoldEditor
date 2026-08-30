@@ -1,4 +1,17 @@
 # Changelog
+## v0.18.0 - 2026-08-30
+### 🐞 Fixes
+- [Patch]Restore scene-authored loading in Environment panel (bac0530…)
+- [Patch] Fixed directional light rotation - gizmo (81b1a0d…)
+- [Patch] Fixed parent-child selection in viewport (41df956…)
+- [Patch] Fixed the active directional light (1c17fdd…)
+- [Patch] Re-added Import textures features (ea5ed67…)
+- [Patch] Allow exporting blender files (bd0308e…)
+- [Patch] Show material texture details on inspector hover (37c4b13…)
+- [Patch] Coalesce gizmo drag updates during viewport transforms (6ea624c…)
+- [Patch] Removed TaskBar View test (75afd7e…)
+### 🚀 Features
+- [Feature] Add Height/POM material channel to Inspector (d460c63…)
 ## v0.16.0 - 2026-08-12
 ### 🐞 Fixes
 - [Patch] fix area light mesh culling (9122f78…)
