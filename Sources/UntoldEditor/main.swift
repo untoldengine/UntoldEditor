@@ -139,8 +139,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    // Keep the View-menu checkmarks in sync with the current overlay / camera state.
-    func menuNeedsUpdate(_ menu: NSMenu) {
+    /// Keep the View-menu checkmarks in sync with the current overlay / camera state.
+    func menuNeedsUpdate(_: NSMenu) {
         let store = EditorEngineStatsStore.shared
         showFPSItem?.state = store.overlayMode != .off ? .on : .off
         showFPSAdvancedItem?.state = store.overlayMode == .advanced ? .on : .off
@@ -155,13 +155,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - File actions (bridged to SwiftUI via notifications)
 
-    @objc private func menuNew() { NotificationCenter.default.post(name: .editorMenuNew, object: nil) }
-    @objc private func menuOpen() { NotificationCenter.default.post(name: .editorMenuOpen, object: nil) }
-    @objc private func menuNewScene() { NotificationCenter.default.post(name: .editorMenuNewScene, object: nil) }
-    @objc private func menuSaveProject() { NotificationCenter.default.post(name: .editorMenuSaveProject, object: nil) }
-    @objc private func menuSave() { NotificationCenter.default.post(name: .editorMenuSave, object: nil) }
-    @objc private func menuSaveAs() { NotificationCenter.default.post(name: .editorMenuSaveAs, object: nil) }
-    @objc private func menuReset() { NotificationCenter.default.post(name: .editorMenuReset, object: nil) }
+    @objc private func menuNew() {
+        NotificationCenter.default.post(name: .editorMenuNew, object: nil)
+    }
+
+    @objc private func menuOpen() {
+        NotificationCenter.default.post(name: .editorMenuOpen, object: nil)
+    }
+
+    @objc private func menuNewScene() {
+        NotificationCenter.default.post(name: .editorMenuNewScene, object: nil)
+    }
+
+    @objc private func menuSaveProject() {
+        NotificationCenter.default.post(name: .editorMenuSaveProject, object: nil)
+    }
+
+    @objc private func menuSave() {
+        NotificationCenter.default.post(name: .editorMenuSave, object: nil)
+    }
+
+    @objc private func menuSaveAs() {
+        NotificationCenter.default.post(name: .editorMenuSaveAs, object: nil)
+    }
+
+    @objc private func menuReset() {
+        NotificationCenter.default.post(name: .editorMenuReset, object: nil)
+    }
 
     // MARK: - View actions (mutate shared stores directly)
 
@@ -188,8 +208,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         EditorPlaybackSettings.shared.useSceneCameraDuringPlay.toggle()
     }
 
-    // Animation + render-pause are driven by EditorView (which observes these
-    // values), so the menu just flips the state.
+    /// Animation + render-pause are driven by EditorView (which observes these
+    /// values), so the menu just flips the state.
     @objc private func menuToggleLeftPanel() {
         EditorPanelVisibility.shared.showLeftPanel.toggle()
     }

@@ -452,8 +452,8 @@ public struct EditorView: View {
         case effects
     }
 
-    // Right panel is contextual: the project shows Environment/Effects (with a
-    // themed segmented switch); a selected object shows the Inspector.
+    /// Right panel is contextual: the project shows Environment/Effects (with a
+    /// themed segmented switch); a selected object shows the Inspector.
     private var editorRightPanel: some View {
         Group {
             if selectionManager.projectSelected {
@@ -498,7 +498,7 @@ public struct EditorView: View {
         }
     }
 
-    // Inspector shown when the active scene is selected in the Scene Graph.
+    /// Inspector shown when the active scene is selected in the Scene Graph.
     private var sceneInspector: some View {
         let sceneName = editorController?.currentSceneURL?.deletingPathExtension().lastPathComponent ?? "Untitled Scene"
         return VStack(alignment: .leading, spacing: 10) {
@@ -573,8 +573,8 @@ public struct EditorView: View {
         .focusable(false)
     }
 
-    // Themed segmented selector matching the editor style (accent-filled active
-    // segment inside a rounded surface container).
+    /// Themed segmented selector matching the editor style (accent-filled active
+    /// segment inside a rounded surface container).
     private var editorPanelTabs: some View {
         HStack(spacing: 2) {
             panelTabButton(.assets, title: "Assets", icon: "shippingbox")
@@ -609,13 +609,13 @@ public struct EditorView: View {
         .focusable(false)
     }
 
-    // Bottom dock: a segmented Assets/Console selector (replacing the old
-    // native TabView tab strip) plus the selected panel below it.
-    // Pause the Metal render loop for the duration of a panel show/hide
-    // animation so the viewport doesn't compete with the layout change (which
-    // caused stutter). Called from onChange, so it covers every trigger: edge
-    // tabs, the View menu (⌘1/2/3) and Focus Viewport (⌘F). The viewport freezes
-    // on its last frame, then resumes.
+    /// Bottom dock: a segmented Assets/Console selector (replacing the old
+    /// native TabView tab strip) plus the selected panel below it.
+    /// Pause the Metal render loop for the duration of a panel show/hide
+    /// animation so the viewport doesn't compete with the layout change (which
+    /// caused stutter). Called from onChange, so it covers every trigger: edge
+    /// tabs, the View menu (⌘1/2/3) and Focus Viewport (⌘F). The viewport freezes
+    /// on its last frame, then resumes.
     private func pauseRenderForPanelAnimation() {
         renderer?.metalView.isPaused = true
         renderPauseGeneration += 1
@@ -627,8 +627,8 @@ public struct EditorView: View {
         }
     }
 
-    // Small always-visible tab that protrudes from a panel's inner edge (placed
-    // as an overlay above the viewport) to collapse/expand the panel.
+    /// Small always-visible tab that protrudes from a panel's inner edge (placed
+    /// as an overlay above the viewport) to collapse/expand the panel.
     private func panelEdgeTabVertical(
         isOpen: Bool,
         openIcon: String,
@@ -1091,8 +1091,8 @@ public struct EditorView: View {
         }
     }
 
-    // Load a scene file from the project into the (single) ECS world, replacing
-    // whatever is currently loaded. Used by the Scene Graph panel.
+    /// Load a scene file from the project into the (single) ECS world, replacing
+    /// whatever is currently loaded. Used by the Scene Graph panel.
     private func editor_loadScene(from url: URL) {
         guard let sceneData = loadGameScene(from: url) else {
             print("❌ Failed to load scene from \(url.lastPathComponent)")
@@ -1120,7 +1120,7 @@ public struct EditorView: View {
         print("✅ Scene loaded: \(url.lastPathComponent)")
     }
 
-    // Ask before switching scenes: loading discards the current world.
+    /// Ask before switching scenes: loading discards the current world.
     private func editor_requestLoadScene(_ url: URL) {
         if url == editorController?.currentSceneURL { return }
         pendingSceneToLoad = url
@@ -1133,13 +1133,13 @@ public struct EditorView: View {
         editor_loadScene(from: url)
     }
 
-    // Save the project. Projects persist as folders (scenes + imported assets on
-    // disk), so for now this writes the active scene's work into the project.
+    /// Save the project. Projects persist as folders (scenes + imported assets on
+    /// disk), so for now this writes the active scene's work into the project.
     private func editor_saveProject() {
         editor_handleSave()
     }
 
-    // Start a fresh, unsaved scene (File → Add New Scene).
+    /// Start a fresh, unsaved scene (File → Add New Scene).
     private func editor_newScene() {
         editor_clearScene()
         editorController?.currentSceneURL = nil
@@ -1252,7 +1252,7 @@ public struct EditorView: View {
         sceneGraphModel.refreshHierarchy()
     }
 
-    // Delete a specific entity (used by the Scene Graph right-click menu).
+    /// Delete a specific entity (used by the Scene Graph right-click menu).
     private func editor_removeEntity(_ entityId: EntityID) {
         guard isDerivedAssetNode(entityId) == false else {
             print("⚠️ Asset nodes cannot be removed directly")

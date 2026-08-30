@@ -98,13 +98,15 @@ struct SceneHierarchyView: View {
         )
     }
 
-    // A scene node in the tree. `url == nil` represents the current, not-yet-saved
-    // ("Untitled") scene, which is always the active one.
+    /// A scene node in the tree. `url == nil` represents the current, not-yet-saved
+    /// ("Untitled") scene, which is always the active one.
     private struct SceneItem: Identifiable {
         let url: URL?
         let name: String
         let isActive: Bool
-        var id: String { url?.absoluteString ?? "__untitled__" }
+        var id: String {
+            url?.absoluteString ?? "__untitled__"
+        }
     }
 
     private var sceneItems: [SceneItem] {
@@ -353,7 +355,7 @@ struct HierarchyNode: View {
     var onParentEntity: (EntityID, EntityID) -> Void = { _, _ in }
     var onUnparentEntity: (EntityID) -> Void = { _ in }
     var onDeleteEntity: (EntityID) -> Void = { _ in }
-    var addActions: AddEntityActions = AddEntityActions()
+    var addActions: AddEntityActions = .init()
     @State private var isDragOver = false
 
     var body: some View {

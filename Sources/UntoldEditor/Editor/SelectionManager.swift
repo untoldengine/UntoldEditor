@@ -55,8 +55,8 @@ struct MeshInspectionSelection: Equatable {
 
 class SceneGraphModel: ObservableObject {
     @Published var childrenMap: [EntityID: [EntityID]] = [:]
-    // Every node is collapsed by default; we track only the ones the user
-    // expanded. Opening a project therefore shows a tidy, collapsed tree.
+    /// Every node is collapsed by default; we track only the ones the user
+    /// expanded. Opening a project therefore shows a tidy, collapsed tree.
     @Published private(set) var expandedEntityIds: Set<EntityID> = []
 
     func refreshHierarchy() {

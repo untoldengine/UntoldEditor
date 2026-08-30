@@ -46,7 +46,7 @@ final class EditorPanelVisibility: ObservableObject {
     @Published var showBottomPanel: Bool = true
     @Published var showRightPanel: Bool = true
 
-    // Saved layout used by the "focus viewport" toggle (⌘F).
+    /// Saved layout used by the "focus viewport" toggle (⌘F).
     private var savedLayout: (left: Bool, bottom: Bool, right: Bool)?
 
     private init() {}

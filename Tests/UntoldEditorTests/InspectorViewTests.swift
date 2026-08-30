@@ -99,8 +99,8 @@ final class InspectorViewTests: XCTestCase {
         XCTAssertTrue(text.contains("Texture: RustedIron_Roughness.png"))
     }
 
-    func test_editorMaterialSlotHoverText_showsEmbeddedTextureHostAsMaterialName() {
-        let url = URL(string: "usdz-embedded://Robot/normal")!
+    func test_editorMaterialSlotHoverText_showsEmbeddedTextureHostAsMaterialName() throws {
+        let url = try XCTUnwrap(URL(string: "usdz-embedded://Robot/normal"))
         let text = editorMaterialSlotHoverText(textureType: .normal, textureURL: url)
 
         XCTAssertTrue(text.contains("Normal"))

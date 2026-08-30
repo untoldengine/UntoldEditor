@@ -19,7 +19,9 @@ struct ProjectSceneFile: Identifiable, Hashable {
     let url: URL
     let name: String
 
-    var id: URL { url }
+    var id: URL {
+        url
+    }
 }
 
 final class ProjectSceneCatalog: ObservableObject {

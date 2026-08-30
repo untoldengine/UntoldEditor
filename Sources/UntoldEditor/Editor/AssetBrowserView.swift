@@ -586,10 +586,10 @@ struct AssetBrowserView: View {
         importAssetForCategory(category, into: currentDirectoryURL)
     }
 
-    // Returns AnyView (not `some View`) so the recursive child call is allowed.
-    // `category == nil` marks a generic (non-category) folder such as the root
-    // or a custom directory created at root level. `url` may be nil for a
-    // category root when no project folder is set yet.
+    /// Returns AnyView (not `some View`) so the recursive child call is allowed.
+    /// `category == nil` marks a generic (non-category) folder such as the root
+    /// or a custom directory created at root level. `url` may be nil for a
+    /// category root when no project folder is set yet.
     private func directoryNode(url: URL?, name: String, category: String?, depth: Int) -> AnyView {
         let isGeneric = (category == nil)
         let subfolders: [URL] = {
@@ -671,8 +671,8 @@ struct AssetBrowserView: View {
         )
     }
 
-    // Root node of the directory tree (the project's asset folder). Right-click
-    // to create a directory at root level.
+    /// Root node of the directory tree (the project's asset folder). Right-click
+    /// to create a directory at root level.
     private var rootDirectoryRow: some View {
         let root = assetBasePath
         let isSelected = root.map { r in selectedDirURL?.standardizedFileURL == r.standardizedFileURL } ?? false
@@ -1758,8 +1758,8 @@ struct AssetBrowserView: View {
         .cornerRadius(6)
     }
 
-    // Shared row list used by both the flat-category listing and
-    // folderContentsView. Only the folder-tap navigation differs per call site.
+    /// Shared row list used by both the flat-category listing and
+    /// folderContentsView. Only the folder-tap navigation differs per call site.
     private func assetRowList(_ assets: [Asset], spacing: CGFloat, onFolderTap: @escaping (Asset) -> Void) -> some View {
         VStack(alignment: .leading, spacing: spacing) {
             ForEach(assets) { asset in
