@@ -16,6 +16,7 @@ private let runtimeAssetExtension = "untold"
 private let runtimeTextureFolderNames = ["Textures", "textures"]
 private let sourceAssetExtensions: Set<String> = ["usd", "usda", "usdc", "usdz", "blend"]
 private let streamModelResourceFolderNames = ["tile_exports", "tile_export", "Textures", "textures"]
+private let materialTextureExtensions: Set<String> = ["png", "jpg", "jpeg", "tif", "tiff"]
 
 struct RuntimeExportRequest: Identifiable, Equatable {
     let id = UUID()
@@ -318,6 +319,66 @@ enum AssetCategory: String, CaseIterable {
             return "pencil"
         }
     }
+}
+
+func editorTextureType(from filename: String) -> TextureType? {
+    let lowercasedName = filename.lowercased()
+
+    if lowercasedName.contains("basecolor")
+        || lowercasedName.contains("base_color")
+        || lowercasedName.contains("albedo")
+        || lowercasedName.contains("diffuse")
+        || lowercasedName.contains("color")
+    {
+        return .baseColor
+    } else if lowercasedName.contains("roughness") || lowercasedName.contains("rough") {
+        return .roughness
+    } else if lowercasedName.contains("metallic") || lowercasedName.contains("metalness") || lowercasedName.contains("metal") {
+        return .metallic
+    } else if lowercasedName.contains("normalgx")
+        || lowercasedName.contains("normaldx")
+        || lowercasedName.contains("normalgl")
+        || lowercasedName.contains("normal")
+        || lowercasedName.contains("nrm")
+    {
+        return .normal
+    } else if lowercasedName.contains("height")
+        || lowercasedName.contains("displacement")
+        || lowercasedName.contains("displace")
+        || lowercasedName.contains("bump")
+    {
+        return .height
+    }
+
+    return nil
+}
+
+func editorMaterialTextureAssignments(in folder: URL, fileManager: FileManager = .default) -> [TextureType: URL] {
+    guard let enumerator = fileManager.enumerator(
+        at: folder,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+    ) else {
+        return [:]
+    }
+
+    let textureURLs = enumerator.compactMap { item -> URL? in
+        guard let url = item as? URL else { return nil }
+        guard materialTextureExtensions.contains(url.pathExtension.lowercased()) else { return nil }
+        return url
+    }
+
+    var assignments: [TextureType: URL] = [:]
+    for url in textureURLs.sorted(by: { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }) {
+        guard let textureType = editorTextureType(from: url.deletingPathExtension().lastPathComponent),
+              assignments[textureType] == nil
+        else {
+            continue
+        }
+        assignments[textureType] = url
+    }
+
+    return assignments
 }
 
 private struct RemoteStreamImportSheet: View {
@@ -1836,6 +1897,54 @@ struct AssetBrowserView: View {
 
     // MARK: - Add Model with Double Click
 
+    private func selectedMaterialTarget() -> (entityId: EntityID, meshIndex: Int)? {
+        if let inspectedMesh = selectionManager.inspectedMesh,
+           inspectedMesh.entityId != .invalid,
+           hasComponent(entityId: inspectedMesh.entityId, componentType: RenderComponent.self)
+        {
+            return (inspectedMesh.entityId, inspectedMesh.meshIndex)
+        }
+
+        guard let entityId = selectionManager.selectedEntity,
+              entityId != .invalid,
+              hasComponent(entityId: entityId, componentType: RenderComponent.self)
+        else {
+            return nil
+        }
+
+        return (entityId, 0)
+    }
+
+    private func assignMaterialFolder(_ asset: Asset) {
+        guard asset.category == AssetCategory.materials.rawValue, asset.isFolder else {
+            return
+        }
+
+        guard let target = selectedMaterialTarget() else {
+            showStatus("Select a mesh before assigning materials", isError: true)
+            return
+        }
+
+        let assignments = editorMaterialTextureAssignments(in: asset.path)
+        guard assignments.isEmpty == false else {
+            showStatus("No recognized material textures in \(asset.name)", isError: true)
+            return
+        }
+
+        for textureType in TextureType.allCases {
+            guard let textureURL = assignments[textureType] else { continue }
+            updateMaterialTexture(
+                entityId: target.entityId,
+                textureType: textureType,
+                path: textureURL,
+                meshIndex: target.meshIndex
+            )
+        }
+
+        selectionManager.objectWillChange.send()
+        showStatus("Assigned \(assignments.count) material textures from \(asset.name)")
+    }
+
     private func resolvedRuntimeAsset(for asset: Asset) -> Asset? {
         guard asset.isFolder else { return asset }
         guard asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue else {
@@ -2008,6 +2117,11 @@ struct AssetBrowserView: View {
     }
 
     private func handle_add_model_double_click(asset: Asset) {
+        if asset.category == AssetCategory.materials.rawValue, asset.isFolder {
+            assignMaterialFolder(asset)
+            return
+        }
+
         if asset.category == AssetCategory.streamModels.rawValue {
             if asset.path.pathExtension.lowercased() == "remotestream" {
                 loadRemoteStreamModel(from: asset)
