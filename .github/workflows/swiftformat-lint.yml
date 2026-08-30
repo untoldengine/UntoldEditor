@@ -13,13 +13,28 @@ jobs:
 
       - name: Install SwiftFormat
         run: |
-          brew update
-          brew install swiftformat
+          SWIFTFORMAT_VERSION="$(awk -F':=' '/^SWIFTFORMAT_VERSION/ { gsub(/[[:space:]]/, "", $2); print $2 }' Makefile)"
+          if [ -z "$SWIFTFORMAT_VERSION" ]; then
+            echo "Unable to determine SWIFTFORMAT_VERSION from Makefile"
+            exit 1
+          fi
+          curl -fsSL -o /tmp/swiftformat.zip \
+            "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip"
+          unzip -o /tmp/swiftformat.zip -d /tmp/swiftformat
+          CURRENT_SWIFTFORMAT="$(command -v swiftformat || true)"
+          if [ -n "$CURRENT_SWIFTFORMAT" ]; then
+            INSTALL_PATH="$CURRENT_SWIFTFORMAT"
+          else
+            INSTALL_PATH="/usr/local/bin/swiftformat"
+          fi
+          sudo install -m 755 /tmp/swiftformat/swiftformat "$INSTALL_PATH"
+          echo "$(dirname "$INSTALL_PATH")" >> "$GITHUB_PATH"
 
       - name: Show versions
         run: |
+          which swiftformat
           swiftformat --version
           swift --version
 
       - name: Run SwiftFormat (lint mode)
-        run: swiftformat --lint . --swiftversion 5.8 --reporter github-actions-log
+        run: make lint
