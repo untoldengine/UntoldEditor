@@ -62,6 +62,13 @@ extension UntoldRenderer {
             editorController.refreshInspector()
         }
 
+        @inline(__always)
+        func consumeMouseDragDelta() {
+            InputSystem.shared.mouseDeltaX = 0.0
+            InputSystem.shared.mouseDeltaY = 0.0
+            InputSystem.shared.mouseActive = false
+        }
+
         /// Remove static batching when entity is transformed via gizmo
         @inline(__always)
         func handleStaticBatchOnTransform(entityId: EntityID) {
@@ -74,8 +81,10 @@ extension UntoldRenderer {
         }
 
         if hasActiveAxisGizmoDrag() {
-            handleStaticBatchOnTransform(entityId: activeEntity)
-            refreshInspector()
+            if applyPendingGizmoDragUpdate() {
+                handleStaticBatchOnTransform(entityId: activeEntity)
+                refreshInspector()
+            }
             return
         }
 
@@ -97,6 +106,7 @@ extension UntoldRenderer {
             translateBy(entityId: activeEntity, position: t)
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
+            consumeMouseDragDelta()
 
         case (.translate, .y) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
@@ -111,6 +121,7 @@ extension UntoldRenderer {
             translateBy(entityId: activeEntity, position: t)
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
+            consumeMouseDragDelta()
 
         case (.translate, .z) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
@@ -125,6 +136,7 @@ extension UntoldRenderer {
             translateBy(entityId: activeEntity, position: t)
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
+            consumeMouseDragDelta()
 
         // MARK: - Rotate
 
@@ -144,6 +156,7 @@ extension UntoldRenderer {
             applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: -angle * 10)
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
+            consumeMouseDragDelta()
 
         case (.rotate, .y) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
@@ -161,6 +174,7 @@ extension UntoldRenderer {
             applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: angle * 10)
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
+            consumeMouseDragDelta()
 
         case (.rotate, .z) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
@@ -178,6 +192,7 @@ extension UntoldRenderer {
             applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: angle * 10)
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
+            consumeMouseDragDelta()
 
         // MARK: - Scale
 
@@ -196,6 +211,7 @@ extension UntoldRenderer {
                 applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: axis, projectedAmount: amt)
             }
             refreshInspector()
+            consumeMouseDragDelta()
 
         case (.scale, .y) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
@@ -212,6 +228,7 @@ extension UntoldRenderer {
                 applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: axis, projectedAmount: amt)
             }
             refreshInspector()
+            consumeMouseDragDelta()
 
         case (.scale, .z) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
@@ -228,6 +245,7 @@ extension UntoldRenderer {
                 applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: axis, projectedAmount: amt)
             }
             refreshInspector()
+            consumeMouseDragDelta()
 
         // MARK: - Light direction (view-plane drag)
 
@@ -295,6 +313,7 @@ extension UntoldRenderer {
             localTransformComponent.rotationZ = euler.roll
             translateTo(entityId: activeEntity, position: localTransformComponent.position)
             refreshInspector()
+            consumeMouseDragDelta()
 
         default:
             break

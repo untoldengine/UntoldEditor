@@ -82,6 +82,7 @@ private struct GizmoDragState {
 }
 
 private var gizmoDragState: GizmoDragState?
+private var pendingGizmoDragRay: GizmoDragRay?
 
 func gizmoRootWorldPosition() -> simd_float3 {
     guard parentEntityIdGizmo != .invalid else {
@@ -177,8 +178,24 @@ func updateGizmoDrag(ray: GizmoDragRay) {
     gizmoDragState = state
 }
 
+func queueGizmoDragUpdate(ray: GizmoDragRay) {
+    pendingGizmoDragRay = ray
+}
+
+@discardableResult
+func applyPendingGizmoDragUpdate() -> Bool {
+    guard let ray = pendingGizmoDragRay else {
+        return false
+    }
+
+    pendingGizmoDragRay = nil
+    updateGizmoDrag(ray: ray)
+    return true
+}
+
 func endGizmoDrag() {
     gizmoDragState = nil
+    pendingGizmoDragRay = nil
 }
 
 func hasActiveAxisGizmoDrag() -> Bool {

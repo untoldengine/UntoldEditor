@@ -350,7 +350,7 @@
                     if activeHitGizmoEntity != .invalid,
                        let rayContext = raycastContext(currentLocation: currentLocation, view: view)
                     {
-                        updateGizmoDrag(
+                        queueGizmoDragUpdate(
                             ray: GizmoDragRay(
                                 origin: rayContext.rayOrigin,
                                 direction: rayContext.rayDirection
