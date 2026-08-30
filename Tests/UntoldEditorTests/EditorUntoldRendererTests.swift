@@ -466,8 +466,8 @@ final class EditorUntoldRendererTests: XCTestCase {
         // Act
         renderer.handleSceneInput()
 
-        // Assert - Should process transformation (may fail due to other missing setup)
-        XCTAssertTrue(InputSystem.shared.mouseActive, "Mouse should be active")
+        // Assert - Should process and consume the mouse drag
+        XCTAssertFalse(InputSystem.shared.mouseActive, "Mouse drag should be consumed after transformation")
 
         removeGizmo()
     }

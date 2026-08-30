@@ -17,7 +17,7 @@ import XCTest
 
 /// A minimal harness exposing the private helpers of LogConsoleView for testing.
 private struct LogConsoleViewHarness {
-    let view = LogConsoleView()
+    let view = LogConsoleView(searchQuery: .constant(""), autoScroll: .constant(true))
 
     func tag(for level: LogLevel) -> String {
         // Mirror the production logic

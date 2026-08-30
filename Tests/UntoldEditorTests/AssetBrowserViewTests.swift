@@ -32,6 +32,7 @@ final class AssetBrowserViewTests: XCTestCase {
                           selectedAsset: Binding<Asset?>,
                           selectionManager: SelectionManager = SelectionManager(),
                           sceneGraphModel: SceneGraphModel = SceneGraphModel(),
+                          searchQuery: Binding<String> = .constant(""),
                           editor_addEntityWithAsset: @escaping () -> Void = {},
                           editor_loadSceneAuthoredFromAsset: @escaping (Asset) -> Void = { _ in }) -> AssetBrowserView
     {
@@ -40,6 +41,7 @@ final class AssetBrowserViewTests: XCTestCase {
             selectedAsset: selectedAsset,
             selectionManager: selectionManager,
             sceneGraphModel: sceneGraphModel,
+            searchQuery: searchQuery,
             editor_addEntityWithAsset: editor_addEntityWithAsset,
             editor_loadSceneAuthoredFromAsset: editor_loadSceneAuthoredFromAsset
         )
