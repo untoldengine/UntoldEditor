@@ -77,6 +77,26 @@ private func importTextureAsset(from sourceURL: URL) -> URL? {
     }
 }
 
+func editorMaterialSlotHoverText(textureType: TextureType, textureURL: URL?) -> String {
+    guard let textureURL else {
+        return "No \(textureType.displayName) texture assigned"
+    }
+
+    let materialName: String
+    if let host = textureURL.host, textureURL.scheme == "usdz-embedded", host.isEmpty == false {
+        materialName = host
+    } else {
+        let folderName = textureURL.deletingLastPathComponent().lastPathComponent
+        materialName = folderName.isEmpty ? "Unknown" : folderName
+    }
+
+    return """
+    \(textureType.displayName)
+    Material: \(materialName)
+    Texture: \(textureURL.lastPathComponent)
+    """
+}
+
 private func onAddMesh_Editor(entityId: EntityID, url: URL) {
     let filename = url.deletingPathExtension().lastPathComponent
     let withExtension = url.pathExtension
@@ -738,6 +758,8 @@ struct RenderingEditorView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 24) {
                         ForEach(TextureType.allCases) { type in
+                            let textureURL = getMaterialTextureURL(entityId: entityId, type: type, meshIndex: meshIndex)
+                            let hoverText = editorMaterialSlotHoverText(textureType: type, textureURL: textureURL)
                             let image: NSImage? = {
                                 if let img = getMaterialTextureImage(entityId: entityId, type: type, meshIndex: meshIndex) {
                                     return img
@@ -771,6 +793,7 @@ struct RenderingEditorView: View {
                                     }
                                 }
                                 .buttonStyle(PlainButtonStyle())
+                                .help(hoverText)
 
                                 HStack(spacing: 8) {
                                     Button(action: {

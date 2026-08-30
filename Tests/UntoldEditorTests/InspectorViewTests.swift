@@ -84,6 +84,30 @@ final class InspectorViewTests: XCTestCase {
 
     // MARK: - Tests
 
+    func test_editorMaterialSlotHoverText_showsEmptySlotFallback() {
+        let text = editorMaterialSlotHoverText(textureType: .roughness, textureURL: nil)
+
+        XCTAssertEqual(text, "No Roughness texture assigned")
+    }
+
+    func test_editorMaterialSlotHoverText_showsMaterialFolderAndTextureName() {
+        let url = URL(fileURLWithPath: "/Project/Materials/RustedIron/RustedIron_Roughness.png")
+        let text = editorMaterialSlotHoverText(textureType: .roughness, textureURL: url)
+
+        XCTAssertTrue(text.contains("Roughness"))
+        XCTAssertTrue(text.contains("Material: RustedIron"))
+        XCTAssertTrue(text.contains("Texture: RustedIron_Roughness.png"))
+    }
+
+    func test_editorMaterialSlotHoverText_showsEmbeddedTextureHostAsMaterialName() {
+        let url = URL(string: "usdz-embedded://Robot/normal")!
+        let text = editorMaterialSlotHoverText(textureType: .normal, textureURL: url)
+
+        XCTAssertTrue(text.contains("Normal"))
+        XCTAssertTrue(text.contains("Material: Robot"))
+        XCTAssertTrue(text.contains("Texture: normal"))
+    }
+
     func test_nameEditing_updatesEntityName_andRefreshesHierarchy() {
         // Arrange
         let e = createEntityWithName("Old Name")
