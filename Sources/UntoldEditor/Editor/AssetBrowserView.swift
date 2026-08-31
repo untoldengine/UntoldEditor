@@ -754,7 +754,6 @@ struct AssetBrowserView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 // MARK: - Finder-style split: directory tree | folder contents
-
                 HStack(spacing: 8) {
                     // Left: directory tree with a root node (right-click any
                     // folder — including the root — to create a subfolder).
@@ -788,6 +787,7 @@ struct AssetBrowserView: View {
                     .frame(maxHeight: .infinity)
                     .background(Color.editorFillSubtle)
                     .cornerRadius(8)
+                    .help("Right-click a folder to create a new directory. Select a folder to choose where imports go.")
 
                     // Right: contents of the selected directory
                     ScrollView(.vertical, showsIndicators: true) {
@@ -798,6 +798,7 @@ struct AssetBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.editorSurface.opacity(0.7))
                     .cornerRadius(8)
+                    .help("Right-click this area to import assets into the selected folder.")
                     .contextMenu {
                         Button {
                             importIntoCurrentDirectory()

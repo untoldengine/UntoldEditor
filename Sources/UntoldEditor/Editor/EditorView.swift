@@ -607,6 +607,7 @@ public struct EditorView: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
+        .help(tab == .assets ? "Show Asset Browser. Right-click the asset area to import." : "Show Console")
     }
 
     /// Bottom dock: a segmented Assets/Console selector (replacing the old
