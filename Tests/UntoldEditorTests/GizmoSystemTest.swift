@@ -419,6 +419,31 @@ final class GizmoSystemTests: XCTestCase {
         assertNearlyEqual(getLocalPosition(entityId: directionHandle), expectedOffset, accuracy: 0.0002)
     }
 
+    func test_createGizmo_placesLightDirectionHandleFromLocalRotationWhenWorldTransformIsStale() {
+        let light = makeEntity(name: "DirectionalLight", pos: SIMD3<Float>(0, 0, 0), isLight: true)
+        activeEntity = light
+
+        guard let localTransform = scene.get(component: LocalTransformComponent.self, for: light) else {
+            XCTFail("Expected LocalTransformComponent for light.")
+            return
+        }
+
+        localTransform.rotation = simd_quatf(
+            angle: degreesToRadians(degrees: 90.0),
+            axis: SIMD3<Float>(0.0, 1.0, 0.0)
+        )
+
+        createGizmo(mode: .translate)
+
+        let directionHandle = findGizmoHandle(mode: .lightRotate, axis: .none)
+        guard directionHandle != .invalid else {
+            XCTFail("Expected light direction handle.")
+            return
+        }
+
+        assertNearlyEqual(getLocalPosition(entityId: directionHandle), SIMD3<Float>(-1.0, 0.0, 0.0), accuracy: 0.0002)
+    }
+
     func test_createGizmo_placesAreaLightDirectionHandleAlongAreaEmission() {
         let area = createEntity()
         createAreaLight(entityId: area)

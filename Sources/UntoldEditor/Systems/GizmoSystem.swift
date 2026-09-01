@@ -419,9 +419,24 @@ private func initialLightDirectionHandleOffset() -> simd_float3 {
         return simd_float3(0.0, GizmoDimensions.directionHandleOffsetY, 0.0)
     }
 
-    let emissionDirection = getLightEmissionDirection(entityId: activeEntity)
-    let handleDirection = simd_length(emissionDirection) > 0.0001 ? simd_normalize(emissionDirection) : simd_float3(0.0, -1.0, 0.0)
+    let emissionDirection = localLightEmissionDirection(entityId: activeEntity)
+    let handleDirection = simd_length_squared(emissionDirection) > 0.0001 ? simd_normalize(emissionDirection) : simd_float3(0.0, -1.0, 0.0)
     return handleDirection * abs(GizmoDimensions.directionHandleOffsetY)
+}
+
+private func localLightEmissionDirection(entityId: EntityID) -> simd_float3 {
+    guard entityId != .invalid,
+          let localTransform = scene.get(component: LocalTransformComponent.self, for: entityId)
+    else {
+        return simd_float3(0.0, -1.0, 0.0)
+    }
+
+    let orientation = transformQuaternionToMatrix3x3(q: normalizedRotationOrIdentity(localTransform.rotation))
+    return -simd_float3(
+        orientation.columns.2.x,
+        orientation.columns.2.y,
+        orientation.columns.2.z
+    )
 }
 
 /// Repositions the light direction handle (and its hit proxy) to match the given light
