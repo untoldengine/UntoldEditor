@@ -1,63 +1,161 @@
-name: Build and Release
+name: Release Studio
 
 on:
   push:
     tags:
-      - 'v*'  # Triggers on version tags like v0.2.0, v0.3.0, etc.
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v. Leave empty to use 0.0.0-dev."
+        required: false
+        type: string
+      create_release:
+        description: "Create a GitHub Release when running manually."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
 
 jobs:
-  build-and-release:
-    runs-on: macos-14  # macOS 14 (Sonoma) with Apple Silicon support
-    
+  release:
+    name: Build DMG and Create Release
+    runs-on: macos-14
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
+        with:
+          fetch-depth: 0
+
       - name: Set up Swift
         uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.0"
-      
-      - name: Extract version from tag
-        id: get_version
+
+      - name: Extract version
+        id: version
+        shell: bash
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+            TAG_NAME="v${VERSION}"
           else
-            VERSION="0.2.0-dev"
+            VERSION="0.0.0-dev"
+            TAG_NAME=""
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-      
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "dmg_name=UntoldEngineStudio-${VERSION}.dmg" >> "$GITHUB_OUTPUT"
+
       - name: Build app bundle
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           chmod +x ./create_app_bundle.sh
-          # Update version in script
-          sed -i '' "s/VERSION=\".*\"/VERSION=\"${{ steps.get_version.outputs.VERSION }}\"/" create_app_bundle.sh
           ./create_app_bundle.sh
-      
+
       - name: Create DMG
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           chmod +x ./create_dmg.sh
-          # Update version in script
-          sed -i '' "s/VERSION=\".*\"/VERSION=\"${{ steps.get_version.outputs.VERSION }}\"/" create_dmg.sh
           ./create_dmg.sh
-      
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DMG_NAME: ${{ steps.version.outputs.dmg_name }}
+        run: |
+          {
+            echo 'body<<EOF'
+            echo "# Untold Engine Studio v${VERSION}"
+            echo ""
+            echo "Releasing Untold Engine Studio v${VERSION} - a standalone Scene Composition tool for the [Untold Engine](https://github.com/untoldengine/UntoldEngine)."
+            echo ""
+            echo "Untold Engine Studio is designed to help you prepare assets, compose scenes, and generate scene files that are later used inside your game projects."
+            echo ""
+            echo "> Important: Untold Engine Studio is not a standalone game engine."
+            echo "> To build and run games, you must also clone and use the [Untold Engine repository](https://github.com/untoldengine/UntoldEngine)."
+            echo ""
+            echo "---"
+            echo "# Installation"
+            echo ""
+            echo "macOS 26 required"
+            echo ""
+            echo "1. Download \`${DMG_NAME}\`"
+            echo "2. Open the DMG"
+            echo "3. Drag Untold Engine Studio into your Applications folder"
+            echo "4. Launch and start creating"
+            echo ""
+            echo "> Note: On first launch, macOS may display a security warning because the application is unsigned."
+            echo "> If this happens, right-click the app and choose Open."
+            echo ""
+            echo "---"
+            echo "# Getting Started"
+            echo ""
+            echo "1. Launch Untold Engine Studio"
+            echo "2. Create a new project or open an existing one"
+            echo "3. Set your project's asset folder"
+            echo "4. Start composing your scene"
+            echo ""
+            echo "Once your scene is ready, export the generated scene files and use them inside your Untold Engine game project."
+            echo ""
+            echo "---"
+            echo "# Blender Add-on & Asset Conversion"
+            echo ""
+            echo "Untold Engine Studio works together with the Untold Engine Blender Add-on, which allows you to convert assets into the \`.untold\` runtime format."
+            echo ""
+            echo "You can find setup instructions and usage details here:"
+            echo ""
+            echo "[Using the Blender Add-on](https://untoldengine.github.io/UntoldEngine/API/UsingBlenderAddon/)"
+            echo ""
+            echo "---"
+            echo "# Feedback & Support"
+            echo ""
+            echo "- Report Issues: https://github.com/untoldengine/UntoldEditor/issues"
+            echo "- Documentation: Coming soon"
+            echo ""
+            echo "---"
+            echo "# Thank You"
+            echo ""
+            echo "Thank you for trying Untold Engine Studio. Your feedback will help shape the future of the Untold Engine ecosystem."
+            echo ""
+            if [[ -f CHANGELOG.md ]]; then
+              CHANGES="$(awk "/^## v${VERSION}( |$|-)/{found=1;next} found && /^## /{exit} found{print}" CHANGELOG.md)"
+              if [[ -n "${CHANGES}" ]]; then
+                echo "---"
+                echo "# Changes in this Release"
+                echo ""
+                echo "${CHANGES}"
+              fi
+            fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.tag_name != '' && (startsWith(github.ref, 'refs/tags/') || inputs.create_release == true)
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            UntoldEngineStudio-${{ steps.get_version.outputs.VERSION }}.dmg
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: "🎉 Untold Engine Studio v${{ steps.version.outputs.version }}"
+          body: ${{ steps.notes.outputs.body }}
+          files: ${{ steps.version.outputs.dmg_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Upload DMG artifact (for manual builds)
-        if: github.event_name == 'workflow_dispatch'
+
+      - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UntoldEngineStudio-${{ steps.get_version.outputs.VERSION }}
-          path: UntoldEngineStudio-${{ steps.get_version.outputs.VERSION }}.dmg
+          name: UntoldEngineStudio-${{ steps.version.outputs.version }}
+          path: ${{ steps.version.outputs.dmg_name }}
