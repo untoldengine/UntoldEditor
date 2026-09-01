@@ -475,7 +475,7 @@ public struct EditorView: View {
                                 onLoadSceneAuthored: editor_loadSceneAuthoredFromAsset
                             )
                         case .effects:
-                            PostProcessingEditorView()
+                            PostProcessingEditorView(selectedAsset: $selectedAsset)
                         }
                     }
                     .editorPanel()
@@ -947,7 +947,7 @@ public struct EditorView: View {
             }
         }
 
-        let assetFolders = ["Models", "StreamModels", "Animations", "Scenes", "Scripts", "Gaussians", "Materials", "HDR", "Shaders"]
+        let assetFolders = ["Models", "StreamModels", "Animations", "Scenes", "Scripts", "Gaussians", "Materials", "HDR", "Shaders", "LUT"]
         for folder in assetFolders {
             let folderURL = gameDataPath.appendingPathComponent(folder, isDirectory: true)
             if !fm.fileExists(atPath: folderURL.path) {

@@ -289,6 +289,7 @@ enum AssetCategory: String, CaseIterable {
     case gaussians = "Gaussians"
     case materials = "Materials"
     case hdr = "HDR"
+    case lut = "LUT"
 
     var displayName: String {
         switch self {
@@ -309,6 +310,8 @@ enum AssetCategory: String, CaseIterable {
             return "square.stack.3d.up.fill"
         case .hdr:
             return "film"
+        case .lut:
+            return "camera.filters"
         case .materials:
             return "film"
         case .gaussians:
@@ -934,6 +937,8 @@ struct AssetBrowserView: View {
             openPanel.allowedContentTypes = [.png, .jpeg, .tiff]
         case .hdr:
             openPanel.allowedContentTypes = [UTType(filenameExtension: "hdr")!, UTType(filenameExtension: "exr")!]
+        case .lut:
+            openPanel.allowedContentTypes = [UTType(filenameExtension: "cube")!]
         }
 
         openPanel.canChooseDirectories = (category == .materials || category == .streamModels)
@@ -957,6 +962,11 @@ struct AssetBrowserView: View {
                     switch categoryString {
                     case "HDR":
                         // Copy .hdr directly into HDR folder
+                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
+                        if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
+                        try fm.copyItem(at: sourceURL, to: destURL)
+
+                    case "LUT":
                         let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
                         if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
                         try fm.copyItem(at: sourceURL, to: destURL)
@@ -1669,6 +1679,13 @@ struct AssetBrowserView: View {
                                                             path: item,
                                                             isFolder: false))
                             }
+                        } else if category == .lut {
+                            if item.pathExtension.lowercased() == "cube" {
+                                categoryAssets.append(Asset(name: item.lastPathComponent,
+                                                            category: category.rawValue,
+                                                            path: item,
+                                                            isFolder: false))
+                            }
                         } else if category == .gaussians {
                             // For Gaussians, allow gaussian files directly in the Gaussians folder
                             categoryAssets.append(Asset(name: item.lastPathComponent,
@@ -1798,7 +1815,7 @@ struct AssetBrowserView: View {
                     if isDir.boolValue {
                         return Asset(name: item.lastPathComponent, category: itemCategory, path: item, isFolder: true)
                     } else {
-                        let allowedExtensions: Set<String> = [runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "exr", "tif", "tiff", "ply", "json", "uscript", "remotestream"]
+                        let allowedExtensions: Set<String> = [runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "exr", "cube", "tif", "tiff", "ply", "json", "uscript", "remotestream"]
                         guard allowedExtensions.contains(item.pathExtension.lowercased()) else { return nil }
 
                         return Asset(name: item.lastPathComponent,

@@ -26,6 +26,8 @@ var directionHandleEntityId: EntityID = .invalid
 
 let gizmoDesiredScreenSize: Float = 75.0 // pixels
 
+var editorColorGradeLUTPath: String?
+
 var spawnDistance: Float = 2.0
 
 /// Visual Debugger

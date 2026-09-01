@@ -18,6 +18,7 @@ final class EditorUndoManagerTests: XCTestCase {
     override func setUp() {
         super.setUp()
         scene = Scene()
+        editorColorGradeLUTPath = nil
         EditorUndoManager.shared.clear()
         EditorUndoManager.shared.onStateRestored = nil
     }
@@ -25,6 +26,7 @@ final class EditorUndoManagerTests: XCTestCase {
     override func tearDown() {
         EditorUndoManager.shared.clear()
         EditorUndoManager.shared.onStateRestored = nil
+        editorColorGradeLUTPath = nil
         super.tearDown()
     }
 

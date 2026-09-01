@@ -729,7 +729,129 @@ struct ToneMappingEditorView: View {
     }
 }
 
+struct ColorGradeLUTEditorView: View {
+    @Binding var selectedAsset: Asset?
+    @State private var enableColorGradeLUT = ColorGradeLUTParams.shared.enabled
+    @State private var appliedLUTName: String?
+
+    private var selectedLUTAsset: Asset? {
+        guard let selectedAsset,
+              selectedAsset.category == AssetCategory.lut.rawValue,
+              selectedAsset.isFolder == false,
+              selectedAsset.path.pathExtension.lowercased() == "cube"
+        else {
+            return nil
+        }
+
+        return selectedAsset
+    }
+
+    private func applySelectedLUT() {
+        guard let lut = selectedLUTAsset else {
+            return
+        }
+
+        let before = EditorPostFXSnapshot()
+        setColorGradeLUT(filename: lut.path.path)
+        enableColorGradeLUT = ColorGradeLUTParams.shared.enabled
+        editorColorGradeLUTPath = ColorGradeLUTParams.shared.enabled ? lut.path.path : nil
+        appliedLUTName = ColorGradeLUTParams.shared.enabled ? lut.name : nil
+        EditorUndoManager.shared.registerPostFXChange(
+            name: "Apply Color Grade LUT",
+            before: before,
+            after: EditorPostFXSnapshot()
+        )
+    }
+
+    private func setLUTEnabled(_ isEnabled: Bool) {
+        let before = EditorPostFXSnapshot()
+
+        if isEnabled, ColorGradeLUTParams.shared.enabled == false, selectedLUTAsset != nil {
+            applySelectedLUT()
+            return
+        }
+
+        setPostFX(.colorGradeLUT(.enabled(isEnabled)))
+        enableColorGradeLUT = ColorGradeLUTParams.shared.enabled
+        if enableColorGradeLUT == false {
+            editorColorGradeLUTPath = nil
+            appliedLUTName = nil
+        }
+        EditorUndoManager.shared.registerPostFXChange(
+            name: isEnabled ? "Enable Color Grade LUT" : "Disable Color Grade LUT",
+            before: before,
+            after: EditorPostFXSnapshot()
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Enable LUT", systemImage: enableColorGradeLUT ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 12))
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { enableColorGradeLUT },
+                    set: setLUTEnabled
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .tint(Color.editorAccent)
+            }
+
+            Button(action: applySelectedLUT) {
+                HStack(spacing: 6) {
+                    Image(systemName: "camera.filters")
+                        .font(.system(size: 12))
+                    Text("Apply Selected LUT")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(selectedLUTAsset == nil ? Color.editorSurface.opacity(0.45) : Color.editorSurface)
+                .foregroundColor(selectedLUTAsset == nil ? .editorTextTertiary : .editorTextPrimary)
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.editorDivider, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedLUTAsset == nil)
+            .help("Select a .cube file in the Asset Browser's LUT folder, then apply it here.")
+
+            HStack {
+                Text("Selected")
+                    .foregroundColor(.editorTextSecondary)
+                Spacer()
+                Text(selectedLUTAsset?.name ?? "None")
+                    .foregroundColor(.editorTextTertiary)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 11))
+
+            HStack {
+                Text("Applied")
+                    .foregroundColor(.editorTextSecondary)
+                Spacer()
+                Text(appliedLUTName ?? "None")
+                    .foregroundColor(.editorTextTertiary)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 11))
+        }
+        .padding(.vertical, 4)
+        .onAppear {
+            enableColorGradeLUT = ColorGradeLUTParams.shared.enabled
+        }
+    }
+}
+
 struct PostProcessingEditorView: View {
+    @Binding var selectedAsset: Asset?
+
     private enum PresetOption: String, CaseIterable, Identifiable {
         case neutral = "Neutral"
         case cinematic = "Cinematic"
@@ -756,6 +878,7 @@ struct PostProcessingEditorView: View {
     @State private var selectedPreset: PresetOption = .neutral
     @State private var showAntiAliasing = false
     @State private var showToneMapping = false
+    @State private var showColorGradeLUT = false
     @State private var showWhiteBalance = false
     @State private var showColorGrading = false
     @State private var showBloom = false
@@ -794,6 +917,10 @@ struct PostProcessingEditorView: View {
 
                 DisclosureGroup("Tone Mapping", isExpanded: $showToneMapping) {
                     ToneMappingEditorView()
+                }
+
+                DisclosureGroup("Color Grade LUT", isExpanded: $showColorGradeLUT) {
+                    ColorGradeLUTEditorView(selectedAsset: $selectedAsset)
                 }
 
                 DisclosureGroup("Depth of Field", isExpanded: $showDoF) {

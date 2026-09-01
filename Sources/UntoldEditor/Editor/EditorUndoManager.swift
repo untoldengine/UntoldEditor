@@ -95,6 +95,8 @@ struct EditorValueChangeCommand<Value: Equatable>: EditorUndoCommand {
 
 struct EditorPostFXSnapshot: Equatable {
     var tonemapOperator: TonemapOperator
+    var colorGradeLUTEnabled: Bool
+    var colorGradeLUTPath: String?
     var colorGradingEnabled: Bool
     var exposure: Float
     var brightness: Float
@@ -122,6 +124,8 @@ struct EditorPostFXSnapshot: Equatable {
 
     init() {
         tonemapOperator = TonemapParams.shared.operator
+        colorGradeLUTEnabled = ColorGradeLUTParams.shared.enabled
+        colorGradeLUTPath = editorColorGradeLUTPath
 
         colorGradingEnabled = ColorGradingParams.shared.enabled
         exposure = ColorGradingParams.shared.exposure
@@ -156,6 +160,14 @@ struct EditorPostFXSnapshot: Equatable {
 
     func apply() {
         setPostFX(.tonemapOperator(tonemapOperator))
+        if let colorGradeLUTPath {
+            setColorGradeLUT(filename: colorGradeLUTPath)
+            editorColorGradeLUTPath = ColorGradeLUTParams.shared.enabled ? colorGradeLUTPath : nil
+            setPostFX(.colorGradeLUT(.enabled(colorGradeLUTEnabled)))
+        } else {
+            setPostFX(.colorGradeLUT(.enabled(false)))
+            editorColorGradeLUTPath = nil
+        }
 
         ColorGradingParams.shared.enabled = colorGradingEnabled
         ColorGradingParams.shared.exposure = exposure

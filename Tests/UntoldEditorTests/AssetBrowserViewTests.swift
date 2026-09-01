@@ -223,6 +223,40 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
+    func test_loadAssetsFromDisk_includesCubeFilesInLUTCategory() throws {
+        try withTempDirectory { base in
+            let lut = base.appendingPathComponent("LUT", isDirectory: true)
+            try FileManager.default.createDirectory(at: lut, withIntermediateDirectories: true)
+
+            let cubeFile = lut.appendingPathComponent("look.cube")
+            FileManager.default.createFile(atPath: cubeFile.path, contents: Data())
+            let pngFile = lut.appendingPathComponent("preview.png")
+            FileManager.default.createFile(atPath: pngFile.path, contents: Data())
+
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+
+            _ = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            var categoryAssets: [Asset] = []
+            if let contents = try? FileManager.default.contentsOfDirectory(at: lut, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                for item in contents where item.pathExtension.lowercased() == "cube" {
+                    categoryAssets.append(Asset(name: item.lastPathComponent, category: AssetCategory.lut.rawValue, path: item, isFolder: false))
+                }
+            }
+
+            let names = Set(categoryAssets.map(\.name))
+            XCTAssertTrue(names.contains("look.cube"))
+            XCTAssertFalse(names.contains("preview.png"))
+        }
+    }
+
     func test_selectingAssetUpdatesBinding() throws {
         var assetsState: [String: [Asset]] = [
             "Models": [
