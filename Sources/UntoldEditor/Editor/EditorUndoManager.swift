@@ -94,6 +94,7 @@ struct EditorValueChangeCommand<Value: Equatable>: EditorUndoCommand {
 }
 
 struct EditorPostFXSnapshot: Equatable {
+    var tonemapOperator: TonemapOperator
     var colorGradingEnabled: Bool
     var exposure: Float
     var brightness: Float
@@ -120,6 +121,8 @@ struct EditorPostFXSnapshot: Equatable {
     var ssaoIntensity: Float
 
     init() {
+        tonemapOperator = TonemapParams.shared.operator
+
         colorGradingEnabled = ColorGradingParams.shared.enabled
         exposure = ColorGradingParams.shared.exposure
         brightness = ColorGradingParams.shared.brightness
@@ -152,6 +155,8 @@ struct EditorPostFXSnapshot: Equatable {
     }
 
     func apply() {
+        setPostFX(.tonemapOperator(tonemapOperator))
+
         ColorGradingParams.shared.enabled = colorGradingEnabled
         ColorGradingParams.shared.exposure = exposure
         ColorGradingParams.shared.brightness = brightness

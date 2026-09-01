@@ -141,6 +141,7 @@ final class EditorUndoManagerTests: XCTestCase {
     }
 
     func test_postFXSnapshotUndoRedo_restoresPresetWideChanges() {
+        setPostFX(.tonemapOperator(.agx))
         ColorGradingParams.shared.enabled = false
         ColorGradingParams.shared.exposure = 0.0
         ColorGradingParams.shared.brightness = 0.0
@@ -160,6 +161,7 @@ final class EditorUndoManagerTests: XCTestCase {
         SSAOParams.shared.intensity = 0.0
 
         let before = EditorPostFXSnapshot()
+        setPostFX(.tonemapOperator(.aces))
         PostFX.apply(.cinematic)
         EditorUndoManager.shared.registerPostFXChange(
             name: "Apply Cinematic Preset",
@@ -169,10 +171,12 @@ final class EditorUndoManagerTests: XCTestCase {
 
         XCTAssertTrue(ColorGradingParams.shared.enabled)
         XCTAssertTrue(SSAOParams.shared.enabled)
+        XCTAssertEqual(TonemapParams.shared.operator, .aces)
         XCTAssertEqual(ColorGradingParams.shared.exposure, -0.2, accuracy: 0.0001)
 
         EditorUndoManager.shared.undo()
 
+        XCTAssertEqual(TonemapParams.shared.operator, .agx)
         XCTAssertFalse(ColorGradingParams.shared.enabled)
         XCTAssertFalse(SSAOParams.shared.enabled)
         XCTAssertEqual(ColorGradingParams.shared.exposure, 0.0, accuracy: 0.0001)
@@ -182,6 +186,7 @@ final class EditorUndoManagerTests: XCTestCase {
 
         XCTAssertTrue(ColorGradingParams.shared.enabled)
         XCTAssertTrue(SSAOParams.shared.enabled)
+        XCTAssertEqual(TonemapParams.shared.operator, .aces)
         XCTAssertEqual(ColorGradingParams.shared.exposure, -0.2, accuracy: 0.0001)
         XCTAssertEqual(SSAOParams.shared.intensity, PostFXPreset.cinematic.ssaoIntensity, accuracy: 0.0001)
     }

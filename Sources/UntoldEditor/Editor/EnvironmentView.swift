@@ -665,6 +665,70 @@ struct AntiAliasingEditorView: View {
     }
 }
 
+private enum EditorTonemapOption: String, CaseIterable, Hashable, Identifiable {
+    case agx = "AgX"
+    case aces = "ACES"
+
+    var id: String {
+        rawValue
+    }
+
+    var engineOperator: TonemapOperator {
+        switch self {
+        case .agx:
+            return .agx
+        case .aces:
+            return .aces
+        }
+    }
+
+    static func currentEngineOperator() -> EditorTonemapOption {
+        switch TonemapParams.shared.operator {
+        case .agx:
+            return .agx
+        case .aces:
+            return .aces
+        }
+    }
+}
+
+struct ToneMappingEditorView: View {
+    @State private var selectedOperator = EditorTonemapOption.currentEngineOperator()
+
+    private func selectOperator(_ newValue: EditorTonemapOption) {
+        let oldValue = selectedOperator
+        guard oldValue != newValue else { return }
+
+        let before = EditorPostFXSnapshot()
+        selectedOperator = newValue
+        setPostFX(.tonemapOperator(newValue.engineOperator))
+        EditorUndoManager.shared.registerPostFXChange(
+            name: "Change Tonemap Operator",
+            before: before,
+            after: EditorPostFXSnapshot()
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Operator", selection: Binding(
+                get: { selectedOperator },
+                set: selectOperator
+            )) {
+                ForEach(EditorTonemapOption.allCases) { option in
+                    Text(option.rawValue).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            .controlSize(.small)
+        }
+        .padding(.vertical, 4)
+        .onAppear {
+            selectedOperator = EditorTonemapOption.currentEngineOperator()
+        }
+    }
+}
+
 struct PostProcessingEditorView: View {
     private enum PresetOption: String, CaseIterable, Identifiable {
         case neutral = "Neutral"
@@ -726,6 +790,10 @@ struct PostProcessingEditorView: View {
 
                 DisclosureGroup("Anti-Aliasing", isExpanded: $showAntiAliasing) {
                     AntiAliasingEditorView()
+                }
+
+                DisclosureGroup("Tone Mapping", isExpanded: $showToneMapping) {
+                    ToneMappingEditorView()
                 }
 
                 DisclosureGroup("Depth of Field", isExpanded: $showDoF) {
