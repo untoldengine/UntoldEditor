@@ -754,6 +754,7 @@ struct AssetBrowserView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 // MARK: - Finder-style split: directory tree | folder contents
+
                 HStack(spacing: 8) {
                     // Left: directory tree with a root node (right-click any
                     // folder — including the root — to create a subfolder).
