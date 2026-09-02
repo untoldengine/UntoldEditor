@@ -695,6 +695,10 @@ private enum EditorTonemapOption: String, CaseIterable, Hashable, Identifiable {
 struct ToneMappingEditorView: View {
     @State private var selectedOperator = EditorTonemapOption.currentEngineOperator()
 
+    private func refreshFromEngine() {
+        selectedOperator = EditorTonemapOption.currentEngineOperator()
+    }
+
     private func selectOperator(_ newValue: EditorTonemapOption) {
         let oldValue = selectedOperator
         guard oldValue != newValue else { return }
@@ -723,8 +727,9 @@ struct ToneMappingEditorView: View {
             .controlSize(.small)
         }
         .padding(.vertical, 4)
-        .onAppear {
-            selectedOperator = EditorTonemapOption.currentEngineOperator()
+        .onAppear(perform: refreshFromEngine)
+        .onReceive(NotificationCenter.default.publisher(for: .editorPostFXStateDidChange)) { _ in
+            refreshFromEngine()
         }
     }
 }
@@ -733,6 +738,10 @@ struct ColorGradeLUTEditorView: View {
     @Binding var selectedAsset: Asset?
     @State private var enableColorGradeLUT = ColorGradeLUTParams.shared.enabled
     @State private var appliedLUTName: String?
+
+    private var appliedLUTDisplayName: String {
+        appliedLUTName ?? (enableColorGradeLUT ? "Scene Authored" : "None")
+    }
 
     private var selectedLUTAsset: Asset? {
         guard let selectedAsset,
@@ -744,6 +753,18 @@ struct ColorGradeLUTEditorView: View {
         }
 
         return selectedAsset
+    }
+
+    private func refreshFromEngine() {
+        enableColorGradeLUT = ColorGradeLUTParams.shared.enabled
+
+        if let source = ColorGradeLUTParams.shared.source {
+            appliedLUTName = URL(fileURLWithPath: source.filename).lastPathComponent
+        } else if let editorColorGradeLUTPath {
+            appliedLUTName = URL(fileURLWithPath: editorColorGradeLUTPath).lastPathComponent
+        } else {
+            appliedLUTName = nil
+        }
     }
 
     private func applySelectedLUT() {
@@ -836,15 +857,16 @@ struct ColorGradeLUTEditorView: View {
                 Text("Applied")
                     .foregroundColor(.editorTextSecondary)
                 Spacer()
-                Text(appliedLUTName ?? "None")
+                Text(appliedLUTDisplayName)
                     .foregroundColor(.editorTextTertiary)
                     .lineLimit(1)
             }
             .font(.system(size: 11))
         }
         .padding(.vertical, 4)
-        .onAppear {
-            enableColorGradeLUT = ColorGradeLUTParams.shared.enabled
+        .onAppear(perform: refreshFromEngine)
+        .onReceive(NotificationCenter.default.publisher(for: .editorPostFXStateDidChange)) { _ in
+            refreshFromEngine()
         }
     }
 }

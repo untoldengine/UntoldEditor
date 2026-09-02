@@ -145,6 +145,7 @@ class EditorController: SelectionDelegate, ObservableObject {
 extension Notification.Name {
     static let assetBrowserReload = Notification.Name("AssetBrowser.Reload")
     static let projectWillSwitch = Notification.Name("Project.WillSwitch")
+    static let editorPostFXStateDidChange = Notification.Name("Editor.PostFXStateDidChange")
 }
 
 func saveScene(sceneData: SceneData) {

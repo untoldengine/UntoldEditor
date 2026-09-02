@@ -779,6 +779,7 @@ public struct EditorView: View {
         if let importedCamera {
             applyGameCameraFrameToSceneCamera(importedCamera)
         }
+        NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
         completion(importedCamera != nil)
     }
 
@@ -1819,6 +1820,7 @@ public struct EditorView: View {
                     removeDefaultSceneAuthoredEntities(existingEntityIds: existingEntityIds)
                     let importedCamera = findImportedGameCamera(existingEntityIds: existingEntityIds)
                     refreshEditorAfterSceneAuthoredLoad(selecting: entityId, gameCamera: importedCamera)
+                    NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
                     print("✅ Scene-authored cameras/lights loaded: \(sourceName)")
                 } else {
                     print("⚠️ Failed to load scene-authored cameras/lights: \(sourceName)")
@@ -1840,6 +1842,7 @@ public struct EditorView: View {
                     removeDefaultSceneAuthoredEntities(existingEntityIds: existingEntityIds)
                     let importedCamera = findImportedGameCamera(existingEntityIds: existingEntityIds)
                     refreshEditorAfterSceneAuthoredLoad(selecting: entityId, gameCamera: importedCamera)
+                    NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
                     print("✅ Scene-authored cameras/lights loaded: \(sourceName)")
                 } else {
                     print("⚠️ Failed to load scene-authored cameras/lights: \(sourceName)")

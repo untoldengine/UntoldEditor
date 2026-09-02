@@ -336,6 +336,7 @@ final class EditorUndoManager: ObservableObject {
         operation()
         isReplaying = false
         onStateRestored?()
+        NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
     }
 
     private func updateAvailability() {
