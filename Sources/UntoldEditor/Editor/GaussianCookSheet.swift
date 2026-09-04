@@ -26,8 +26,20 @@ struct GaussianCookSettings: Equatable {
     var flipYZ: Bool = false
     var scale: Float = 1
     var minimumOpacity: Float = 0.005
+    /// Bake a translation so the capture sits at the origin instead of wherever the
+    /// training run left it. The cook reads the source bounds first to compute it.
+    var recenter: Bool = false
+    var recenterMode: GaussianRecenterMode = .baseOnGround
 
+    /// Options without recentering: the flip and scale only.
     var cookOptions: UntoldGSCookOptions {
+        cookOptions(recenteringBounds: nil)
+    }
+
+    /// Options with the recenter translation baked in after the flip and scale, computed
+    /// from the source splat-centre bounds. `nil` bounds (or `recenter` off) leave the
+    /// capture where it is.
+    func cookOptions(recenteringBounds bounds: (min: simd_float3, max: simd_float3)?) -> UntoldGSCookOptions {
         var options = UntoldGSCookOptions()
         options.log2ChunkSplats = UInt8(max(1, chunkSplats.trailingZeroBitCount))
         options.shDegree = shDegree.map { UInt8($0) }
@@ -36,13 +48,92 @@ struct GaussianCookSettings: Equatable {
         if flipYZ {
             transform = simd_mul(simd_float4x4(diagonal: [1, -1, -1, 1]), transform)
         }
+        if recenter, let bounds {
+            let translation = gaussianRecenterTranslation(
+                boundsMin: bounds.min,
+                boundsMax: bounds.max,
+                transform: transform,
+                mode: recenterMode
+            )
+            var translate = matrix_identity_float4x4
+            translate.columns.3 = simd_float4(translation, 1)
+            transform = simd_mul(translate, transform)
+        }
         options.transform = transform
         return options
     }
 }
 
+/// Where a recentred capture's bounding box ends up.
+enum GaussianRecenterMode: String, CaseIterable, Identifiable {
+    /// Centred on X and Z with its lowest point on Y = 0: props that stand on the floor.
+    case baseOnGround
+    /// Box centre at the origin: objects meant to be rotated or floated.
+    case centreAtOrigin
+
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .baseOnGround: "Base on the ground"
+        case .centreAtOrigin: "Centre at the origin"
+        }
+    }
+}
+
+/// Translation that moves a capture's bounding box, after `transform` has been applied to
+/// it, where `mode` says. The box is transformed corner by corner so a flip or scale is
+/// accounted for before the offset is measured.
+func gaussianRecenterTranslation(
+    boundsMin: simd_float3,
+    boundsMax: simd_float3,
+    transform: simd_float4x4,
+    mode: GaussianRecenterMode
+) -> simd_float3 {
+    var transformedMin = simd_float3(repeating: .greatestFiniteMagnitude)
+    var transformedMax = simd_float3(repeating: -.greatestFiniteMagnitude)
+    for corner in 0 ..< 8 {
+        let source = simd_float3(
+            corner & 1 == 0 ? boundsMin.x : boundsMax.x,
+            corner & 2 == 0 ? boundsMin.y : boundsMax.y,
+            corner & 4 == 0 ? boundsMin.z : boundsMax.z
+        )
+        let moved = simd_mul(transform, simd_float4(source, 1))
+        let point = simd_float3(moved.x, moved.y, moved.z)
+        transformedMin = simd_min(transformedMin, point)
+        transformedMax = simd_max(transformedMax, point)
+    }
+    let centre = (transformedMin + transformedMax) / 2
+    switch mode {
+    case .baseOnGround:
+        return -simd_float3(centre.x, transformedMin.y, centre.z)
+    case .centreAtOrigin:
+        return -centre
+    }
+}
+
+/// Bounds of the splat centres in a source `.ply`, in capture space. Reads the whole
+/// file, so a recentred cook parses the source twice (once here, once in the baker).
+func gaussianSourceBounds(plyURL: URL) throws -> (min: simd_float3, max: simd_float3) {
+    let splats = try PLYReader.readGaussianSplats(from: plyURL)
+    guard let first = splats.first else {
+        throw UntoldGSError.sizeMismatch("source .ply contains no splats")
+    }
+    var boundsMin = simd_float3(first.center.x, first.center.y, first.center.z)
+    var boundsMax = boundsMin
+    for splat in splats.dropFirst() {
+        let centre = simd_float3(splat.center.x, splat.center.y, splat.center.z)
+        boundsMin = simd_min(boundsMin, centre)
+        boundsMax = simd_max(boundsMax, centre)
+    }
+    return (boundsMin, boundsMax)
+}
+
 /// Writes `<ply name>.untoldgs` (or `<ply name>_lodN.untoldgs` tiers) beside `plyURL`,
 /// or inside `outputDirectory` when the editor is organizing the asset as a folder package.
+/// A recentred cook reads the source bounds first and bakes the offset into the transform.
 func cookGaussianPLY(
     plyURL: URL,
     settings: GaussianCookSettings,
@@ -55,11 +146,12 @@ func cookGaussianPLY(
         .appendingPathComponent(plyURL.deletingPathExtension().lastPathComponent)
         .appendingPathExtension("untoldgs")
         ?? plyURL.deletingPathExtension().appendingPathExtension("untoldgs")
+    let bounds = settings.recenter ? try gaussianSourceBounds(plyURL: plyURL) : nil
     return try bakeGaussianSplatProgressiveTiers(
         plyURL: plyURL,
         outputBaseURL: outputBaseURL,
         levelCount: max(1, settings.levelCount),
-        cookOptions: settings.cookOptions
+        cookOptions: settings.cookOptions(recenteringBounds: bounds)
     )
 }
 
@@ -163,7 +255,11 @@ func gaussianCookSheetSourceName(for urls: [URL]) -> String {
 /// Tasks panel detail while a cook runs. The baker reports no progress, so this is all
 /// the row shows next to its spinner.
 func gaussianCookTaskDetail(settings: GaussianCookSettings) -> String {
-    settings.levelCount > 1 ? "\(settings.levelCount) progressive tiers → .untoldgs" : "→ .untoldgs"
+    var detail = settings.levelCount > 1 ? "\(settings.levelCount) progressive tiers → .untoldgs" : "→ .untoldgs"
+    if settings.recenter {
+        detail += ", recentred"
+    }
+    return detail
 }
 
 /// Tasks panel detail once a cook succeeded.
@@ -582,9 +678,23 @@ struct GaussianCookSheet: View {
                     TextField("0.005", value: $settings.minimumOpacity, format: .number)
                         .frame(width: 80)
                 }
+                GridRow {
+                    Text("Recenter")
+                    HStack(spacing: 10) {
+                        Toggle("Move to the origin", isOn: $settings.recenter)
+                        if settings.recenter {
+                            Picker("", selection: $settings.recenterMode) {
+                                ForEach(GaussianRecenterMode.allCases) { mode in
+                                    Text(mode.label).tag(mode)
+                                }
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                }
             }
 
-            Text("Writes the file next to the source .ply. Re-cook after changing the .ply; version 3 files replace any earlier .untoldgs of the same name.")
+            Text("Writes the file next to the source .ply. Re-cook after changing the .ply; version 3 files replace any earlier .untoldgs of the same name. Recenter bakes a translation so the capture no longer sits wherever the training run left it.")
                 .font(.caption)
                 .foregroundColor(.editorTextSecondary)
 
