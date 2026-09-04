@@ -4,7 +4,7 @@
 //
 //  "Cook to .untoldgs" for a Gaussian splat .ply in the asset browser: the options
 //  the engine's baker takes (progressive tiers, spherical-harmonics degree, chunk
-//  size, axis flip, scale, opacity floor) and the call that writes the tiers next
+//  size, up axis, scale, opacity floor) and the call that writes the tiers next
 //  to the source file. Runs in-process through the engine, no CLI needed.
 //  `cookGaussianPLYTracked` is the entry point the browser uses: it queues the bake
 //  off the main thread and reports it as a job in the Tasks panel.
@@ -22,8 +22,14 @@ struct GaussianCookSettings: Equatable {
     var shDegree: Int?
     /// Splats per chunk: 1024 for objects, 4096 for environments.
     var chunkSplats: Int = 1024
-    /// Convert from the 3DGS training convention (Y down, Z forward) to the engine's.
-    var flipYZ: Bool = false
+    /// Which axis points up in the capture; the cook rotates it to the engine's Y-up frame.
+    var upAxis: UntoldGSCaptureUpAxis = .y
+    /// Legacy spelling of the 3DGS training convention (−Y up).
+    var flipYZ: Bool {
+        get { upAxis == .negativeY }
+        set { upAxis = newValue ? .negativeY : .y }
+    }
+
     var scale: Float = 1
     var minimumOpacity: Float = 0.005
     /// Bake a translation so the capture sits at the origin instead of wherever the
@@ -31,12 +37,12 @@ struct GaussianCookSettings: Equatable {
     var recenter: Bool = false
     var recenterMode: GaussianRecenterMode = .baseOnGround
 
-    /// Options without recentering: the flip and scale only.
+    /// Options without recentering: the up-axis rotation and scale only.
     var cookOptions: UntoldGSCookOptions {
         cookOptions(recenteringBounds: nil)
     }
 
-    /// Options with the recenter translation baked in after the flip and scale, computed
+    /// Options with the recenter translation baked in after the up-axis rotation and scale, computed
     /// from the source splat-centre bounds. `nil` bounds (or `recenter` off) leave the
     /// capture where it is.
     func cookOptions(recenteringBounds bounds: (min: simd_float3, max: simd_float3)?) -> UntoldGSCookOptions {
@@ -44,10 +50,7 @@ struct GaussianCookSettings: Equatable {
         options.log2ChunkSplats = UInt8(max(1, chunkSplats.trailingZeroBitCount))
         options.shDegree = shDegree.map { UInt8($0) }
         options.minimumOpacity = minimumOpacity
-        var transform = simd_float4x4(diagonal: [scale, scale, scale, 1])
-        if flipYZ {
-            transform = simd_mul(simd_float4x4(diagonal: [1, -1, -1, 1]), transform)
-        }
+        var transform = UntoldGSCookOptions.transform(upAxis: upAxis, scale: scale)
         if recenter, let bounds {
             let translation = gaussianRecenterTranslation(
                 boundsMin: bounds.min,
@@ -665,8 +668,13 @@ struct GaussianCookSheet: View {
                     .labelsHidden()
                 }
                 GridRow {
-                    Text("Axes")
-                    Toggle("Flip Y/Z (3DGS training convention)", isOn: $settings.flipYZ)
+                    Text("Up axis")
+                    Picker("", selection: $settings.upAxis) {
+                        Text("Y up (engine convention)").tag(UntoldGSCaptureUpAxis.y)
+                        Text("Z up (scanner, CAD)").tag(UntoldGSCaptureUpAxis.z)
+                        Text("−Y up (3DGS training convention)").tag(UntoldGSCaptureUpAxis.negativeY)
+                    }
+                    .labelsHidden()
                 }
                 GridRow {
                     Text("Scale")

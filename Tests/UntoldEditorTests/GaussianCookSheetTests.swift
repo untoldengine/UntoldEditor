@@ -42,6 +42,20 @@ final class GaussianCookSheetTests: XCTestCase {
 
         XCTAssertNil(GaussianCookSettings().shDegree)
         XCTAssertEqual(GaussianCookSettings().cookOptions.log2ChunkSplats, 10)
+        XCTAssertEqual(GaussianCookSettings().upAxis, .y)
+    }
+
+    func test_upAxisRotatesTheCaptureToYUp() {
+        var settings = GaussianCookSettings()
+        settings.upAxis = .z
+        let zUp = settings.cookOptions.transform * SIMD4<Float>(0, 0, 1, 1)
+        XCTAssertEqual(zUp.y, 1, accuracy: 1e-6)
+        XCTAssertEqual(zUp.z, 0, accuracy: 1e-6)
+
+        settings.upAxis = .negativeY
+        XCTAssertTrue(settings.flipYZ, "the legacy flip spelling maps onto −Y up")
+        settings.flipYZ = false
+        XCTAssertEqual(settings.upAxis, .y)
     }
 
     func test_cookWritesTiersBesideTheSource() throws {
