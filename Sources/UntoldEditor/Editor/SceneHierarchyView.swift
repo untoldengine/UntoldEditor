@@ -280,8 +280,9 @@ struct SceneHierarchyView: View {
         )
         .contentShape(Rectangle())
         // Only the active scene takes asset drops (they go to the scene root);
-        // entity-id text from a hierarchy row is not accepted here.
-        .onDrop(of: [.untoldEditorAsset], isTargeted: item.isActive ? $isSceneDropTargeted : .constant(false)) { providers in
+        // entity-id plain text from a hierarchy row does not conform to the
+        // payload type, so it is not accepted here.
+        .onDrop(of: [AssetDragPayload.contentType], isTargeted: item.isActive ? $isSceneDropTargeted : .constant(false)) { providers in
             guard item.isActive else { return false }
             return loadAssetDragPayload(from: providers) { payload in
                 onDropAsset(payload, nil)
@@ -412,7 +413,7 @@ struct HierarchyNode: View {
             .contextMenu {
                 contextMenuContent
             }
-            .onDrop(of: [.text, .untoldEditorAsset], isTargeted: $isDragOver) { providers in
+            .onDrop(of: [.text, AssetDragPayload.contentType], isTargeted: $isDragOver) { providers in
                 handleDrop(providers: providers)
             }
             .background(

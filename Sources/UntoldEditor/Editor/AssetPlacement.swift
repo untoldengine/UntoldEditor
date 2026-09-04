@@ -20,14 +20,15 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UntoldEngine
 
-extension UTType {
-    /// In-process drag type for an asset browser row. The payload is a small JSON
-    /// record, not the file, so nothing is read from disk until the drop lands.
-    static let untoldEditorAsset = UTType(exportedAs: "com.untoldengine.editor.asset")
-}
-
-/// What an asset browser row puts on the drag pasteboard.
+/// What an asset browser row puts on the drag pasteboard: a small JSON record,
+/// not the file, so nothing is read from disk until the drop lands.
 struct AssetDragPayload: Codable, Equatable, Transferable {
+    /// The pasteboard type the payload travels under. A standard type on purpose:
+    /// a custom `UTType(exportedAs:)` has to be declared in the app's Info.plist,
+    /// which a SwiftPM debug binary does not have, and AppKit refuses to match an
+    /// undeclared type at the drop, so every target silently rejected it.
+    static let contentType: UTType = .json
+
     var name: String
     var category: String
     var path: URL
@@ -49,7 +50,7 @@ struct AssetDragPayload: Codable, Equatable, Transferable {
     }
 
     static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .untoldEditorAsset)
+        CodableRepresentation(contentType: contentType)
     }
 
     func encoded() throws -> Data {
@@ -66,7 +67,7 @@ struct AssetDragPayload: Codable, Equatable, Transferable {
 /// can decline drops of other types (the hierarchy's entity-id text, say).
 @discardableResult
 func loadAssetDragPayload(from providers: [NSItemProvider], completion: @escaping (AssetDragPayload) -> Void) -> Bool {
-    let identifier = UTType.untoldEditorAsset.identifier
+    let identifier = AssetDragPayload.contentType.identifier
     guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(identifier) }) else {
         return false
     }

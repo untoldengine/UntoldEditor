@@ -77,9 +77,17 @@ final class AssetPlacementTests: XCTestCase {
         XCTAssertTrue(decoded.asset.isFolder)
     }
 
-    func test_dragPayloadUsesAnInProcessType() {
-        XCTAssertEqual(UTType.untoldEditorAsset.identifier, "com.untoldengine.editor.asset")
-        XCTAssertFalse(UTType.untoldEditorAsset.conforms(to: .text))
+    func test_dragPayloadTravelsAsStandardJSON() throws {
+        // A declared system type, not a custom exported one: the SwiftPM binary has
+        // no Info.plist to declare a custom type in and undeclared types never match
+        // at the drop. The hierarchy's entity-id plain text must not be mistaken
+        // for a payload.
+        XCTAssertEqual(AssetDragPayload.contentType, .json)
+        XCTAssertFalse(UTType.utf8PlainText.conforms(to: AssetDragPayload.contentType))
+
+        let payload = AssetDragPayload(name: "a.ply", category: AssetCategory.gaussians.rawValue, path: URL(fileURLWithPath: "/tmp/a.ply"))
+        let object = try JSONSerialization.jsonObject(with: payload.encoded()) as? [String: Any]
+        XCTAssertEqual(object?["name"] as? String, "a.ply")
     }
 
     // MARK: - Placeable dispatch
