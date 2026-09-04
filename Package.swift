@@ -13,7 +13,9 @@ let package = Package(
         // Use a branch during active development:
         // .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
         // Or pin to a release:
-        .package(url: "https://github.com/untoldengine/UntoldEngine.git", exact: "0.18.1"),
+        // Temporarily tracks the Gaussian splat streaming series on the fork until those engine
+        // PRs land in a release; restore the exact pin afterwards.
+        .package(url: "https://github.com/miolabs/UntoldEngine.git", branch: "feature/gaussian_usplat_runtime"),
     ],
     targets: [
         .executableTarget(

@@ -190,7 +190,7 @@ struct PreviewImportGalleryView: View {
                 .font(.headline)
                 .foregroundColor(.editorTextPrimary)
 
-            Text("Export from Blender with the Untold exporter add-on, or use the CLI exporter to produce .untold runtime assets and tiled .json scene manifests. Gaussian splats can be loaded directly from .ply files.")
+            Text("Export from Blender with the Untold exporter add-on, or use the CLI exporter to produce .untold runtime assets and tiled .json scene manifests. Gaussian splats can be loaded from .ply files or baked .untoldgs files.")
                 .font(.caption)
                 .foregroundColor(.editorTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -342,7 +342,7 @@ private extension QuickPreviewImportMode {
         case .tiledScene:
             return ".json"
         case .gaussian:
-            return ".ply"
+            return ".ply, .untoldgs"
         }
     }
 
