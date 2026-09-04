@@ -420,7 +420,7 @@ public struct EditorView: View {
             // Asset rows dropped on the Metal view. The MTKView registers no drag
             // types, so AppKit hands the drop to the SwiftUI host and this modifier;
             // the camera and gizmo recognizers never see the drag session.
-            .onDrop(of: [.untoldEditorAsset], isTargeted: $isViewportDropTargeted) { providers, location in
+            .onDrop(of: [AssetDragPayload.contentType], isTargeted: $isViewportDropTargeted) { providers, location in
                 editor_dropAssetOnViewport(providers: providers, location: location)
             }
             .overlay {
