@@ -549,4 +549,21 @@ final class EditorControllerTests: XCTestCase {
 
         XCTAssertEqual(decoded.entities.count, 0, "Loaded scene should match saved scene")
     }
+
+    func test_editorController_didClearSelection_clearsSelectionManager() {
+        let entity = createEntity()
+        selectionManager.selectedEntity = entity
+        activeEntity = entity
+
+        controller.didClearSelection()
+
+        let expectation = expectation(description: "Clear update")
+        DispatchQueue.main.async {
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1.0)
+
+        XCTAssertNil(selectionManager.selectedEntity)
+        XCTAssertEqual(activeEntity, .invalid)
+    }
 }

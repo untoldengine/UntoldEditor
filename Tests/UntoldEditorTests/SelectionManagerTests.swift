@@ -376,4 +376,22 @@ final class SelectionManagerTests: XCTestCase {
 
         cancellable.cancel()
     }
+
+    func test_selectionManager_clearSelection_resetsEverything() {
+        let manager = SelectionManager()
+        let entity = createEntity()
+        manager.selectedEntity = entity
+        manager.projectSelected = true
+        manager.sceneSelected = true
+        activeEntity = entity
+
+        manager.clearSelection()
+
+        XCTAssertNil(manager.selectedEntity)
+        XCTAssertNil(manager.inspectedMesh)
+        XCTAssertFalse(manager.projectSelected)
+        XCTAssertFalse(manager.sceneSelected)
+        XCTAssertEqual(activeEntity, .invalid)
+        XCTAssertFalse(gizmoActive)
+    }
 }

@@ -44,6 +44,8 @@ protocol SelectionDelegate: AnyObject {
     func didSelectEntity(_ entityId: EntityID)
     func didInspectEntity(_ entityId: EntityID)
     func didInspectMesh(_ entityId: EntityID, meshIndex: Int)
+    /// A click on empty viewport space: nothing is selected any more.
+    func didClearSelection()
     func resetActiveAxis()
 }
 
@@ -123,6 +125,18 @@ class SelectionManager: ObservableObject {
         projectSelected = false
         inspectedMesh = nil
         selectedEntity = nil
+    }
+
+    /// Nothing selected: no entity, mesh, scene or project, and no gizmo in the
+    /// viewport. What a click on empty viewport space leaves behind.
+    func clearSelection() {
+        projectSelected = false
+        sceneSelected = false
+        inspectedMesh = nil
+        selectedEntity = nil
+        activeEntity = .invalid
+        gizmoActive = false
+        removeGizmo()
     }
 
     func selectEntity(entityId: EntityID) {
