@@ -214,11 +214,69 @@ final class InspectorViewTests: XCTestCase {
         let initialIntensity = getLightIntensity(entityId: e)
 
         // Act: mimic the binding setter used by PointLightEditorView
-        updateLightIntensity(entityId: e, intensity: initialIntensity + 2.0)
+        setLight(entityId: e, .power(initialIntensity + 2.0))
         sut.selectionManager.objectWillChange.send()
 
         // Assert
         XCTAssertEqual(getLightIntensity(entityId: e), initialIntensity + 2.0, accuracy: 0.0001)
+        XCTAssertTrue(scene.get(component: LightComponent.self, for: e)?.usesRadiometricUnits ?? false, "editing Power (W) in the Inspector should mark the light as radiometric")
+    }
+
+    func test_dirLightEditor_updatesSunElevationAndAzimuth_viaBindings() {
+        // Arrange
+        let e = createEntityWithName("Sun")
+        addTransform(to: e)
+        createDirLight(entityId: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Act: mimic the binding setters used by DirLightEditorView.
+        editorSetSunElevation(entityId: e, elevation: 35.0)
+        editorSetSunAzimuth(entityId: e, azimuth: 50.0)
+        sut.selectionManager.objectWillChange.send()
+
+        // Assert
+        let angles = getSunElevationAzimuth(entityId: e)
+        XCTAssertEqual(angles.elevation, 35.0, accuracy: 0.0001)
+        XCTAssertEqual(angles.azimuth, 50.0, accuracy: 0.0001)
+    }
+
+    func test_dirLightEditor_changesStrength_viaBinding() {
+        // Arrange
+        let e = createEntityWithName("Sun")
+        addTransform(to: e)
+        createDirLight(entityId: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Precondition
+        let initialIntensity = getLightIntensity(entityId: e)
+
+        // Act: mimic the binding setter used by DirLightEditorView's "Strength (W/m\u{b2})" field
+        setLight(entityId: e, .strength(initialIntensity + 500.0))
+        sut.selectionManager.objectWillChange.send()
+
+        // Assert
+        XCTAssertEqual(getLightIntensity(entityId: e), initialIntensity + 500.0, accuracy: 0.0001)
+        XCTAssertTrue(scene.get(component: LightComponent.self, for: e)?.usesRadiometricUnits ?? false, "editing Strength (W/m\u{b2}) in the Inspector should mark the sun as radiometric")
+    }
+
+    func test_dirLightEditor_passesSunAnglesThroughToLightingSystem() {
+        // Arrange
+        let e = createEntityWithName("Sun")
+        addTransform(to: e)
+        createDirLight(entityId: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        // Act
+        editorSetSunElevation(entityId: e, elevation: -45.0)
+        editorSetSunAzimuth(entityId: e, azimuth: 410.0)
+
+        // Assert
+        let angles = getSunElevationAzimuth(entityId: e)
+        XCTAssertEqual(angles.elevation, -45.0, accuracy: 0.0001)
+        XCTAssertEqual(angles.azimuth, 50.0, accuracy: 0.0001)
     }
 
     func test_pointLightEditor_togglesShadowCasting_viaBinding() {
@@ -392,5 +450,49 @@ final class InspectorViewTests: XCTestCase {
         // Assert: GaussianComponent should be hidden from inspector composition mode
         let key = ObjectIdentifier(GaussianComponent.self)
         XCTAssertNil(merged[key], "GaussianComponent should be excluded from merged components.")
+    }
+
+    func test_visibleInspectorComponents_hidesTransformForDirectionalLight() {
+        // Arrange
+        let e = createEntityWithName("Sun")
+        addTransform(to: e)
+        createDirLight(entityId: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        let merged = mergeEntityComponents(selectedEntity: e, editor_availableComponents: availableComponents_Editor)
+
+        // Act
+        let visible = visibleInspectorComponents(
+            mergedComponents: merged,
+            entityId: e,
+            isInspectedMeshEntity: false
+        )
+
+        // Assert
+        XCTAssertNil(visible[ObjectIdentifier(LocalTransformComponent.self)])
+        XCTAssertNotNil(visible[ObjectIdentifier(DirectionalLightComponent.self)])
+    }
+
+    func test_visibleInspectorComponents_keepsTransformForNonDirectionalLightEntity() {
+        // Arrange
+        let e = createEntityWithName("Point")
+        addTransform(to: e)
+        createPointLight(entityId: e)
+        selectionManager.selectedEntity = e
+        sut = makeSUT()
+
+        let merged = mergeEntityComponents(selectedEntity: e, editor_availableComponents: availableComponents_Editor)
+
+        // Act
+        let visible = visibleInspectorComponents(
+            mergedComponents: merged,
+            entityId: e,
+            isInspectedMeshEntity: false
+        )
+
+        // Assert
+        XCTAssertNotNil(visible[ObjectIdentifier(LocalTransformComponent.self)])
+        XCTAssertNotNil(visible[ObjectIdentifier(PointLightComponent.self)])
     }
 }

@@ -92,6 +92,43 @@ func gizmoRootWorldPosition() -> simd_float3 {
     return getPosition(entityId: parentEntityIdGizmo)
 }
 
+func gizmoWorldScaleForScreenSize(
+    cameraEntityId: EntityID,
+    gizmoWorldPosition: simd_float3,
+    viewport: simd_float2? = renderInfo.viewPort
+) -> Float? {
+    guard cameraEntityId != .invalid,
+          let viewport,
+          viewport.y > 0.0
+    else {
+        return nil
+    }
+
+    let distanceToCamera = length(getCameraPosition(entityId: cameraEntityId) - gizmoWorldPosition)
+    let worldScale = 2.0 * distanceToCamera * tan(fov * 0.5) * (gizmoDesiredScreenSize / viewport.y)
+    guard worldScale.isFinite, worldScale > 0.0 else {
+        return nil
+    }
+
+    return worldScale
+}
+
+@discardableResult
+func updateGizmoScreenSpaceScale(cameraEntityId: EntityID) -> Bool {
+    guard gizmoActive,
+          parentEntityIdGizmo != .invalid,
+          let worldScale = gizmoWorldScaleForScreenSize(
+              cameraEntityId: cameraEntityId,
+              gizmoWorldPosition: gizmoRootWorldPosition()
+          )
+    else {
+        return false
+    }
+
+    scaleTo(entityId: parentEntityIdGizmo, scale: simd_float3(repeating: worldScale))
+    return true
+}
+
 func beginGizmoDrag(ray: GizmoDragRay) {
     guard activeEntity != .invalid,
           parentEntityIdGizmo != .invalid,
@@ -854,6 +891,10 @@ func createGizmo(mode: GizmoMode) {
     }
 
     gizmoActive = true
+
+    if let cameraEntityId = CameraSystem.shared.activeCamera {
+        updateGizmoScreenSpaceScale(cameraEntityId: cameraEntityId)
+    }
 }
 
 func processGizmoAction(entityId: EntityID) {

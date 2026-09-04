@@ -94,22 +94,15 @@ extension RenderPasses {
             return
         }
 
-        guard let gizmoRootWorldTransform = scene.get(component: WorldTransformComponent.self, for: parentEntityIdGizmo),
-              let gizmoRootLocalTransform = scene.get(component: LocalTransformComponent.self, for: parentEntityIdGizmo)
+        guard scene.get(component: WorldTransformComponent.self, for: parentEntityIdGizmo) != nil,
+              scene.get(component: LocalTransformComponent.self, for: parentEntityIdGizmo) != nil
         else {
             return
         }
 
         // Keep gizmo size approximately constant in screen space by scaling the root only.
         // Child handles keep fixed local offsets, so cones/cubes stay attached to shafts.
-        let gizmoRootWorldPosition = simd_float3(
-            gizmoRootWorldTransform.space.columns.3.x,
-            gizmoRootWorldTransform.space.columns.3.y,
-            gizmoRootWorldTransform.space.columns.3.z
-        )
-        let distanceToCamera = length(getCameraPosition(entityId: camera) - gizmoRootWorldPosition)
-        let worldScale = 2.0 * distanceToCamera * tan(fov * 0.5) * (gizmoDesiredScreenSize / renderInfo.viewPort.y)
-        gizmoRootLocalTransform.scale = simd_float3(repeating: worldScale)
+        updateGizmoScreenSpaceScale(cameraEntityId: camera)
 
         // Iterate over the entities found by the component query
         for entityId in entities {

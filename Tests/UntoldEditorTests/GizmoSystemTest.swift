@@ -21,6 +21,8 @@ final class GizmoSystemTests: XCTestCase {
     private var originalGizmoActive: Bool!
     private var originalActiveHitGizmoEntity: EntityID!
     private var originalDirectionHandleEntityId: EntityID!
+    private var originalActiveCamera: EntityID?
+    private var originalViewport: simd_float2?
 
     #if canImport(AppKit)
         /// Editor controller mock up
@@ -39,6 +41,8 @@ final class GizmoSystemTests: XCTestCase {
         originalGizmoActive = gizmoActive
         originalActiveHitGizmoEntity = activeHitGizmoEntity
         originalDirectionHandleEntityId = directionHandleEntityId
+        originalActiveCamera = CameraSystem.shared.activeCamera
+        originalViewport = renderInfo.viewPort
 
         // Put engine in a clean state
         activeEntity = .invalid
@@ -69,6 +73,8 @@ final class GizmoSystemTests: XCTestCase {
         gizmoActive = originalGizmoActive
         activeHitGizmoEntity = originalActiveHitGizmoEntity
         directionHandleEntityId = originalDirectionHandleEntityId
+        CameraSystem.shared.activeCamera = originalActiveCamera
+        renderInfo.viewPort = originalViewport
 
         super.tearDown()
     }
@@ -87,6 +93,14 @@ final class GizmoSystemTests: XCTestCase {
         if let p = pos { translateTo(entityId: e, position: p) }
         if isLight { registerComponent(entityId: e, componentType: LightComponent.self) }
         return e
+    }
+
+    private func makeCamera(eye: SIMD3<Float>, target: SIMD3<Float> = .zero) -> EntityID {
+        let camera = createEntity()
+        createGameCamera(entityId: camera)
+        cameraLookAt(entityId: camera, eye: eye, target: target, up: cameraUpDefault)
+        CameraSystem.shared.activeCamera = camera
+        return camera
     }
 
     private func makeGizmoHandle(mode: TransformManipulationMode, axis: TransformAxis) -> EntityID {
@@ -185,6 +199,24 @@ final class GizmoSystemTests: XCTestCase {
         XCTAssertEqual(getPosition(entityId: parentEntityIdGizmo),
                        getPosition(entityId: active),
                        "Gizmo should be placed at active entity’s position.")
+    }
+
+    func test_createGizmo_appliesScreenSpaceScaleImmediatelyForFarEntity() {
+        renderInfo.viewPort = simd_float2(1280.0, 720.0)
+        let camera = makeCamera(eye: simd_float3(0.0, 0.0, 0.0))
+        let active = makeEntity(name: "FarCube", pos: SIMD3<Float>(0.0, 0.0, -60.0))
+        activeEntity = active
+
+        createGizmo(name: "translateGizmo")
+
+        let expectedScale = gizmoWorldScaleForScreenSize(
+            cameraEntityId: camera,
+            gizmoWorldPosition: getPosition(entityId: parentEntityIdGizmo),
+            viewport: renderInfo.viewPort
+        )
+        XCTAssertNotNil(expectedScale)
+        XCTAssertEqual(getScale(entityId: parentEntityIdGizmo).x, expectedScale!, accuracy: 0.0001)
+        XCTAssertGreaterThan(getScale(entityId: parentEntityIdGizmo).x, 1.0)
     }
 
     func test_createGizmo_overridesNameForLightEntities() {

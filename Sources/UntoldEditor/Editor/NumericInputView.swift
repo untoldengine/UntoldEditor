@@ -183,11 +183,21 @@
     public struct TextInputNumberView: View {
         let label: String
         @Binding var value: Float
+        /// When set, displayed values are rounded to this many decimal places
+        /// (e.g. to keep long floats from overflowing the field's fixed width).
+        /// Editing still accepts full-precision input.
+        let fractionDigits: Int?
         @State private var tempValues: String = "0"
 
-        public init(label: String, value: Binding<Float>) {
+        public init(label: String, value: Binding<Float>, fractionDigits: Int? = nil) {
             self.label = label
             _value = value
+            self.fractionDigits = fractionDigits
+        }
+
+        private func displayString(for value: Float) -> String {
+            guard let fractionDigits else { return String(value) }
+            return String(format: "%.\(fractionDigits)f", value)
         }
 
         public var body: some View {
@@ -206,13 +216,13 @@
                     })
                     .frame(width: 60)
                     .onChange(of: value) { _, newValue in
-                        tempValues = String(newValue) // Update when entity changes
+                        tempValues = displayString(for: newValue) // Update when entity changes
                     }
                 }
             }
             .padding(.vertical, 4)
             .onAppear {
-                tempValues = String(value)
+                tempValues = displayString(for: value)
             }
         }
     }

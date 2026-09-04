@@ -296,6 +296,30 @@ func mergeEntityComponents(
     return mergedComponents.filter { canShowComponentInInspector(componentType: $0.value.type, for: entityId) }
 }
 
+func shouldHideGenericTransformInspector(entityId: EntityID) -> Bool {
+    hasComponent(entityId: entityId, componentType: DirectionalLightComponent.self)
+}
+
+func visibleInspectorComponents(
+    mergedComponents: [ObjectIdentifier: ComponentOption_Editor],
+    entityId: EntityID,
+    isInspectedMeshEntity: Bool
+) -> [ObjectIdentifier: ComponentOption_Editor] {
+    mergedComponents.filter { key, _ in
+        if isInspectedMeshEntity, key == ObjectIdentifier(RenderComponent.self) {
+            return false
+        }
+
+        if shouldHideGenericTransformInspector(entityId: entityId),
+           key == ObjectIdentifier(LocalTransformComponent.self)
+        {
+            return false
+        }
+
+        return true
+    }
+}
+
 func sortEntityComponents(componentOption_Editor: [ObjectIdentifier: ComponentOption_Editor]) -> [ComponentOption_Editor] {
     Array(componentOption_Editor.values).sorted { lhs, rhs in
         let order: [String: Int] = [
@@ -403,9 +427,11 @@ struct InspectorView: View {
                             // this same entity. Skip the generic entry here so Material
                             // Properties / Wrap Mode don't render twice.
                             let isInspectedMeshEntity = selectionManager.inspectedMesh?.entityId == entityId
-                            let visibleComponents = isInspectedMeshEntity
-                                ? mergedComponents.filter { $0.key != ObjectIdentifier(RenderComponent.self) }
-                                : mergedComponents
+                            let visibleComponents = visibleInspectorComponents(
+                                mergedComponents: mergedComponents,
+                                entityId: entityId,
+                                isInspectedMeshEntity: isInspectedMeshEntity
+                            )
 
                             let sortedComponents = sortEntityComponents(componentOption_Editor: visibleComponents)
 
@@ -1552,17 +1578,74 @@ struct DirLightEditorView: View {
                 ))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                TextInputNumberView(label: "Intensity", value: Binding(
+                TextInputNumberView(label: "Strength (W/m\u{b2})", value: Binding(
                     get: { intensity },
                     set: { newIntensity in
-                        updateLightIntensity(entityId: entityId, intensity: newIntensity)
+                        setLight(entityId: entityId, .strength(newIntensity))
                         refreshView()
                     }
                 ))
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Sun Direction")
+                        .font(.headline)
+
+                    TextInputNumberView(label: "Elevation", value: Binding(
+                        get: { getSunElevationAzimuth(entityId: entityId).elevation },
+                        set: { newElevation in
+                            let before = EditorTransformSnapshot(entityId: entityId)
+                            editorSetSunElevation(entityId: entityId, elevation: newElevation)
+                            EditorUndoManager.shared.registerTransformChange(
+                                entityId: entityId,
+                                before: before,
+                                after: EditorTransformSnapshot(entityId: entityId)
+                            )
+                            refreshView()
+                        }
+                    ), fractionDigits: 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    TextInputNumberView(label: "Azimuth", value: Binding(
+                        get: { getSunElevationAzimuth(entityId: entityId).azimuth },
+                        set: { newAzimuth in
+                            let before = EditorTransformSnapshot(entityId: entityId)
+                            editorSetSunAzimuth(entityId: entityId, azimuth: newAzimuth)
+                            EditorUndoManager.shared.registerTransformChange(
+                                entityId: entityId,
+                                before: before,
+                                after: EditorTransformSnapshot(entityId: entityId)
+                            )
+                            refreshView()
+                        }
+                    ), fractionDigits: 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
+}
+
+func editorSetSunElevation(entityId: EntityID, elevation: Float) {
+    let angles = getSunElevationAzimuth(entityId: entityId)
+    setSunElevationAzimuth(
+        entityId: entityId,
+        elevation: elevation,
+        azimuth: angles.azimuth
+    )
+    syncLightDirectionHandleToActiveLight(entityId: entityId)
+}
+
+func editorSetSunAzimuth(entityId: EntityID, azimuth: Float) {
+    let angles = getSunElevationAzimuth(entityId: entityId)
+    setSunElevationAzimuth(
+        entityId: entityId,
+        elevation: angles.elevation,
+        azimuth: azimuth
+    )
+    syncLightDirectionHandleToActiveLight(entityId: entityId)
 }
 
 struct PointLightEditorView: View {
@@ -1594,7 +1677,7 @@ struct PointLightEditorView: View {
                     TextInputNumberView(label: "Power (W)", value: Binding(
                         get: { intensity },
                         set: { newIntensity in
-                            updateLightIntensity(entityId: entityId, intensity: newIntensity)
+                            setLight(entityId: entityId, .power(newIntensity))
                             refreshView()
                         }
                     ))
@@ -1672,7 +1755,7 @@ struct SpotLightEditorView: View {
                     TextInputNumberView(label: "Power (W)", value: Binding(
                         get: { intensity },
                         set: { newIntensity in
-                            updateLightIntensity(entityId: entityId, intensity: newIntensity)
+                            setLight(entityId: entityId, .power(newIntensity))
                             refreshView()
                         }
                     ))
@@ -1762,7 +1845,7 @@ struct AreaLightEditorView: View {
                     TextInputNumberView(label: "Power (W)", value: Binding(
                         get: { intensity },
                         set: { newIntensity in
-                            updateLightIntensity(entityId: entityId, intensity: newIntensity)
+                            setLight(entityId: entityId, .power(newIntensity))
                             refreshView()
                         }
                     ))
