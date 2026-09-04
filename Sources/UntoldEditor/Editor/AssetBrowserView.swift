@@ -473,9 +473,10 @@ struct AssetBrowserView: View {
     @State private var showRemoteStreamSheet = false
     @State private var remoteStreamURLString = ""
     @State private var showGaussianCookSheet = false
-    @State private var pendingGaussianCookAsset: Asset?
+    /// `.ply` files waiting for the cook sheet: one from the context menu, or every
+    /// source in an import batch (the sheet is shown once per batch).
+    @State private var pendingGaussianCookURLs: [URL] = []
     @State private var gaussianCookSettings = GaussianCookSettings()
-    @State private var isCookingGaussian = false
     @State private var pendingRuntimeExport: RuntimeExportRequest?
     @State private var runtimeExportQueue: [RuntimeExportRequest] = []
     @State private var isExportingRuntimeAsset = false
@@ -850,7 +851,14 @@ struct AssetBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.editorSurface.opacity(0.7))
                     .cornerRadius(8)
-                    .help("Right-click this area to import assets into the selected folder.")
+                    // Double-click on the empty area (not a row: rows own their own
+                    // double-click, which places the asset) opens the same import dialog
+                    // as the context menu, for the folder currently shown.
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
+                        importIntoCurrentDirectory()
+                    }
+                    .help("Double-click or right-click this area to import assets into the selected folder.")
                     .contextMenu {
                         Button {
                             importIntoCurrentDirectory()
@@ -937,17 +945,17 @@ struct AssetBrowserView: View {
         }
         .sheet(isPresented: $showGaussianCookSheet) {
             GaussianCookSheet(
-                sourceName: pendingGaussianCookAsset?.name ?? "",
+                sourceName: gaussianCookSheetSourceName(for: pendingGaussianCookURLs),
                 settings: $gaussianCookSettings,
                 onCook: {
                     showGaussianCookSheet = false
-                    if let asset = pendingGaussianCookAsset {
-                        cookGaussianAsset(asset)
-                    }
+                    let sources = pendingGaussianCookURLs
+                    pendingGaussianCookURLs = []
+                    cookGaussianSources(sources)
                 },
                 onCancel: {
                     showGaussianCookSheet = false
-                    pendingGaussianCookAsset = nil
+                    pendingGaussianCookURLs = []
                 }
             )
         }
@@ -1019,6 +1027,8 @@ struct AssetBrowserView: View {
         let categoryRoot = destinationOverride ?? basePath.appendingPathComponent(categoryString, isDirectory: true)
         // Ensure the destination folder exists (e.g., <Base>/Models or a subfolder)
         try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
+        // Gaussian files copied in this batch; the `.ply` ones get cooked afterwards.
+        var importedGaussianURLs: [URL] = []
 
         if openPanel.runModal() == .OK {
             for sourceURL in openPanel.urls {
@@ -1044,6 +1054,7 @@ struct AssetBrowserView: View {
                             try fm.removeItem(at: destURL)
                         }
                         try fm.copyItem(at: sourceURL, to: destURL)
+                        importedGaussianURLs.append(destURL)
 
                     case "Materials":
                         if sourceURL.hasDirectoryPath {
@@ -1137,6 +1148,14 @@ struct AssetBrowserView: View {
                tilesExportQueue.isEmpty, pendingTilesExport == nil
             {
                 showStatus("Queued import of \(openPanel.urls.count) item(s) (see Console)")
+            }
+
+            // Imported `.ply` sources are cooked to `.untoldgs` right away: one options
+            // sheet for the whole batch, then one Tasks-panel job per file.
+            let sourcesToCook = gaussianSourcesToCook(in: importedGaussianURLs)
+            if !sourcesToCook.isEmpty {
+                pendingGaussianCookURLs = sourcesToCook
+                showGaussianCookSheet = true
             }
         }
     }
@@ -1877,36 +1896,29 @@ struct AssetBrowserView: View {
         return asset.name.localizedCaseInsensitiveContains(query)
     }
 
-    /// Bakes a Gaussian .ply into .untoldgs tier(s) beside it through the engine's baker,
-    /// off the main thread, then refreshes the browser so the new file(s) appear.
-    private func cookGaussianAsset(_ asset: Asset) {
+    /// Cooks each `.ply` to `.untoldgs` with the sheet's current settings. Every file is
+    /// its own job in the Tasks panel (the context-menu cook and an import batch share
+    /// this path); the bakes run one after another on the cook queue and the browser
+    /// refreshes as each one lands. A failed cook leaves the `.ply` untouched.
+    private func cookGaussianSources(_ plyURLs: [URL]) {
         let settings = gaussianCookSettings
-        isCookingGaussian = true
-        showStatus("Cooking \(asset.name)...")
-        // The in-process baker has no cancellation hook, so this task is tracked but not cancellable.
-        let task = TaskCenter.begin(
-            "Cooking \(asset.name)",
-            detail: settings.levelCount > 1 ? "\(settings.levelCount) progressive tiers → .untoldgs" : "→ .untoldgs"
-        )
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let result = try cookGaussianPLY(plyURL: asset.path, settings: settings)
-                let report = result.cookReport
-                task.succeed("Kept \(report.keptSplatCount) of \(report.inputSplatCount) splats")
-                DispatchQueue.main.async {
-                    isCookingGaussian = false
-                    pendingGaussianCookAsset = nil
+        showStatus(plyURLs.count == 1
+            ? "Cooking \(plyURLs[0].lastPathComponent)..."
+            : "Cooking \(plyURLs.count) Gaussian files (see Tasks)...")
+        for plyURL in plyURLs {
+            let name = plyURL.lastPathComponent
+            cookGaussianPLYTracked(plyURL: plyURL, settings: settings) { result in
+                switch result {
+                case let .success(bake):
                     loadAssets()
-                    let names = result.tiers.map(\.url.lastPathComponent).joined(separator: ", ")
+                    let report = bake.cookReport
+                    let names = bake.tiers.map(\.url.lastPathComponent).joined(separator: ", ")
                     showStatus("Cooked \(report.keptSplatCount) of \(report.inputSplatCount) splats → \(names)")
-                    Logger.log(message: "Cooked \(asset.name): kept \(report.keptSplatCount) of \(report.inputSplatCount) (opacity \(report.prunedByOpacity), degenerate \(report.prunedByDegenerateGeometry), crop \(report.prunedByCrop)), SH degree \(report.shDegree)")
-                }
-            } catch {
-                task.fail("\(error)")
-                DispatchQueue.main.async {
-                    isCookingGaussian = false
-                    pendingGaussianCookAsset = nil
-                    showStatus("Cook failed: \(error)", isError: true)
+                    Logger.log(message: "Cooked \(name): kept \(report.keptSplatCount) of \(report.inputSplatCount) (opacity \(report.prunedByOpacity), degenerate \(report.prunedByDegenerateGeometry), crop \(report.prunedByCrop)), SH degree \(report.shDegree)")
+                case let .failure(error):
+                    let detail = gaussianCookFailureDetail(error)
+                    showStatus("Cook failed for \(name): \(detail)", isError: true)
+                    Logger.log(message: "❌ Cook failed for \(name): \(detail). The .ply is unchanged; re-cook from its context menu.")
                 }
             }
         }
@@ -1969,12 +1981,11 @@ struct AssetBrowserView: View {
                            asset.path.pathExtension.lowercased() == "ply"
                         {
                             Button {
-                                pendingGaussianCookAsset = asset
+                                pendingGaussianCookURLs = [asset.path]
                                 showGaussianCookSheet = true
                             } label: {
                                 Label("Cook to .untoldgs…", systemImage: "sparkles")
                             }
-                            .disabled(isCookingGaussian)
                         }
                         Button(role: .destructive) {
                             pendingDeleteAsset = asset

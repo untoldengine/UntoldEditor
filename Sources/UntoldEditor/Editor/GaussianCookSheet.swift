@@ -6,6 +6,8 @@
 //  the engine's baker takes (progressive tiers, spherical-harmonics degree, chunk
 //  size, axis flip, scale, opacity floor) and the call that writes the tiers next
 //  to the source file. Runs in-process through the engine, no CLI needed.
+//  `cookGaussianPLYTracked` is the entry point the browser uses: it queues the bake
+//  off the main thread and reports it as a job in the Tasks panel.
 //
 
 import simd
@@ -48,6 +50,72 @@ func cookGaussianPLY(plyURL: URL, settings: GaussianCookSettings) throws -> Gaus
         levelCount: max(1, settings.levelCount),
         cookOptions: settings.cookOptions
     )
+}
+
+/// Bakes run one at a time: the engine baker saturates the cores on its own, and an
+/// import batch of several `.ply` files should queue up rather than contend.
+let gaussianCookQueue = DispatchQueue(label: "com.untoldengine.editor.gaussian-cook", qos: .userInitiated)
+
+/// The files an import batch should cook: `.ply` sources. Baked `.untoldgs` files are
+/// imported as they are.
+func gaussianSourcesToCook(in urls: [URL]) -> [URL] {
+    urls.filter { $0.pathExtension.lowercased() == "ply" }
+}
+
+/// Heading for the cook sheet: the file name, or the batch size for an import of several.
+func gaussianCookSheetSourceName(for urls: [URL]) -> String {
+    urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) .ply files"
+}
+
+/// Tasks panel detail while a cook runs. The baker reports no progress, so this is all
+/// the row shows next to its spinner.
+func gaussianCookTaskDetail(settings: GaussianCookSettings) -> String {
+    settings.levelCount > 1 ? "\(settings.levelCount) progressive tiers → .untoldgs" : "→ .untoldgs"
+}
+
+/// Tasks panel detail once a cook succeeded.
+func gaussianCookSummary(_ report: UntoldGSCookReport) -> String {
+    "Kept \(report.keptSplatCount) of \(report.inputSplatCount) splats"
+}
+
+/// Tasks panel detail for a failed cook. The engine's own errors carry a readable
+/// `description` but no localized text; Foundation errors (a missing file, say) are
+/// the other way round.
+func gaussianCookFailureDetail(_ error: Error) -> String {
+    switch error {
+    case let cook as UntoldGSCookError: cook.description
+    case let format as UntoldGSError: format.description
+    default: error.localizedDescription
+    }
+}
+
+/// Cooks `plyURL` as a job in the Tasks panel. The bake runs on `queue` (the shared
+/// serial cook queue by default) so the UI never blocks; the task is indeterminate
+/// and finishes with the kept/pruned summary or the error's description. The `.ply`
+/// is never modified, so a failed cook leaves it in place to re-cook from the
+/// context menu. `completion` runs on the main queue after the task is finished.
+@discardableResult
+func cookGaussianPLYTracked(
+    plyURL: URL,
+    settings: GaussianCookSettings,
+    queue: DispatchQueue = gaussianCookQueue,
+    completion: @escaping (Result<GaussianProgressiveBakeResult, Error>) -> Void
+) -> EditorTaskHandle {
+    let task = TaskCenter.begin(
+        "Cooking \(plyURL.lastPathComponent)",
+        detail: gaussianCookTaskDetail(settings: settings)
+    )
+    queue.async {
+        let result = Result { try cookGaussianPLY(plyURL: plyURL, settings: settings) }
+        switch result {
+        case let .success(bake):
+            task.succeed(gaussianCookSummary(bake.cookReport))
+        case let .failure(error):
+            task.fail(gaussianCookFailureDetail(error))
+        }
+        DispatchQueue.main.async { completion(result) }
+    }
+    return task
 }
 
 /// For `<base>_lodN.untoldgs`, the progressive base name and the number of sibling tiers.

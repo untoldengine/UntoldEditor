@@ -3,7 +3,8 @@
 //  UntoldEditorTests
 //
 //  The "Cook to .untoldgs" path: settings → engine cook options, the bake beside the
-//  source .ply, and progressive tier detection for placement.
+//  source .ply, the Tasks-panel wrapper the browser runs cooks through, and
+//  progressive tier detection for placement.
 //
 
 import simd
@@ -73,6 +74,133 @@ final class GaussianCookSheetTests: XCTestCase {
         let single = try cookGaussianPLY(plyURL: plyURL, settings: settings)
         XCTAssertEqual(single.tiers.map(\.url.lastPathComponent), ["chair.untoldgs"])
         XCTAssertNil(progressiveGaussianTiers(for: single.tiers[0].url))
+    }
+
+    func test_importBatchHelpers() {
+        let ply = URL(fileURLWithPath: "/tmp/Gaussians/room.PLY")
+        let baked = URL(fileURLWithPath: "/tmp/Gaussians/room.untoldgs")
+        XCTAssertEqual(gaussianSourcesToCook(in: [baked, ply]), [ply], "only .ply sources are cooked, any case")
+        XCTAssertEqual(gaussianSourcesToCook(in: [baked]), [])
+
+        XCTAssertEqual(gaussianCookSheetSourceName(for: [ply]), "room.PLY")
+        XCTAssertEqual(gaussianCookSheetSourceName(for: [ply, ply]), "2 .ply files")
+
+        var settings = GaussianCookSettings()
+        XCTAssertEqual(gaussianCookTaskDetail(settings: settings), "→ .untoldgs")
+        settings.levelCount = 3
+        XCTAssertEqual(gaussianCookTaskDetail(settings: settings), "3 progressive tiers → .untoldgs")
+
+        let report = UntoldGSCookReport(inputSplatCount: 10, keptSplatCount: 7, prunedByOpacity: 3, prunedByDegenerateGeometry: 0, prunedByCrop: 0, shDegree: 0)
+        XCTAssertEqual(gaussianCookSummary(report), "Kept 7 of 10 splats")
+        XCTAssertEqual(gaussianCookFailureDetail(UntoldGSCookError.noSplatsLeftAfterPruning(report)), UntoldGSCookError.noSplatsLeftAfterPruning(report).description)
+        XCTAssertEqual(gaussianCookFailureDetail(CocoaError(.fileNoSuchFile)), CocoaError(.fileNoSuchFile).localizedDescription)
+    }
+
+    func test_trackedCookSucceedsAsATask() async throws {
+        let plyURL = try makeTemporaryPLY(named: "chair.ply", splatCount: 200)
+        var settings = GaussianCookSettings()
+        settings.levelCount = 2
+
+        let finished = expectation(description: "completion on main")
+        var completionResult: Result<GaussianProgressiveBakeResult, Error>?
+        let handle = cookGaussianPLYTracked(plyURL: plyURL, settings: settings) { result in
+            XCTAssertTrue(Thread.isMainThread)
+            completionResult = result
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 30)
+        await settleTaskCenter()
+
+        let bake = try XCTUnwrap(completionResult?.get())
+        XCTAssertEqual(bake.tiers.map(\.url.lastPathComponent), ["chair_lod0.untoldgs", "chair_lod1.untoldgs"])
+
+        let tracked = await trackedTask(handle.id)
+        let task = try XCTUnwrap(tracked)
+        XCTAssertEqual(task.title, "Cooking chair.ply")
+        XCTAssertEqual(task.state, .succeeded)
+        XCTAssertNil(task.progress, "the baker reports no progress; the row stays indeterminate")
+        XCTAssertFalse(task.isCancellable)
+        XCTAssertEqual(task.detail, "Kept 200 of 200 splats")
+    }
+
+    func test_trackedCookFailureMarksTaskFailedAndKeepsTheSource() async throws {
+        let plyURL = try makeTemporaryPLY(named: "empty.ply", splatCount: 50)
+        var settings = GaussianCookSettings()
+        settings.minimumOpacity = 1.5 // above every opacity: nothing survives pruning
+
+        let finished = expectation(description: "completion on main")
+        var completionResult: Result<GaussianProgressiveBakeResult, Error>?
+        let handle = cookGaussianPLYTracked(plyURL: plyURL, settings: settings) { result in
+            completionResult = result
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 30)
+        await settleTaskCenter()
+
+        guard case let .failure(error)? = completionResult else {
+            return XCTFail("expected the cook to fail")
+        }
+        guard case let .noSplatsLeftAfterPruning(report)? = error as? UntoldGSCookError else {
+            return XCTFail("unexpected error \(error)")
+        }
+        XCTAssertEqual(report.prunedByOpacity, 50)
+
+        let tracked = await trackedTask(handle.id)
+        let task = try XCTUnwrap(tracked)
+        XCTAssertEqual(task.state, .failed)
+        XCTAssertEqual(task.detail, gaussianCookFailureDetail(error))
+        XCTAssertTrue(task.detail.hasPrefix("no splats left after pruning"))
+
+        let directory = plyURL.deletingLastPathComponent()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: plyURL.path), "a failed cook leaves the .ply in place")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("empty.untoldgs").path))
+    }
+
+    func test_trackedCooksRunInOrderOnTheirQueue() async throws {
+        let first = try makeTemporaryPLY(named: "a.ply", splatCount: 20)
+        let second = try makeTemporaryPLY(named: "b.ply", splatCount: 20)
+        let queue = DispatchQueue(label: "GaussianCookSheetTests.serial")
+
+        var order: [String] = []
+        let done = expectation(description: "both cooks reported")
+        done.expectedFulfillmentCount = 2
+        for url in [first, second] {
+            cookGaussianPLYTracked(plyURL: url, settings: GaussianCookSettings(), queue: queue) { _ in
+                order.append(url.lastPathComponent)
+                done.fulfill()
+            }
+        }
+        await fulfillment(of: [done], timeout: 30)
+        XCTAssertEqual(order, ["a.ply", "b.ply"])
+    }
+
+    // MARK: - Helpers
+
+    /// `TaskCenter` applies every update on the main actor via `Task {}`; give those a
+    /// moment to land before reading the task back.
+    private func settleTaskCenter() async {
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+    }
+
+    @MainActor
+    private func trackedTask(_ id: UUID) -> EditorTask? {
+        TaskCenter.shared.tasks.first { $0.id == id }
+    }
+
+    private func makeTemporaryPLY(named name: String, splatCount: Int) throws -> URL {
+        let directory = try temporaryDirectory ?? {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            temporaryDirectory = url
+            return url
+        }()
+        let plyURL = directory.appendingPathComponent(name)
+        try makeTestPLY(splatCount: splatCount).write(to: plyURL)
+        return plyURL
     }
 
     private func makeTestPLY(splatCount: Int) -> Data {
