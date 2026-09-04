@@ -112,6 +112,12 @@ class EditorController: SelectionDelegate, ObservableObject {
         }
     }
 
+    func didClearSelection() {
+        DispatchQueue.main.async {
+            self.selectionManager.clearSelection()
+        }
+    }
+
     func resetActiveAxis() {
         activeAxis = .none
     }

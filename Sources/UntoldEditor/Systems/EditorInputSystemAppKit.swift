@@ -45,6 +45,13 @@
             let rightClickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleRightClick(_:)))
             view.addGestureRecognizer(rightClickGesture)
             rightClickGesture.buttonMask = 0x2 // 0x1 = left, 0x2 = right, 0x4 = middle
+
+            // A left click (no drag) on empty space clears the selection. The
+            // click recogniser fails as soon as the pointer moves, so it never
+            // competes with the pan recogniser for drags.
+            let leftClickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleLeftClick(_:)))
+            leftClickGesture.buttonMask = 0x1
+            view.addGestureRecognizer(leftClickGesture)
         }
 
         func setupEventMonitors() {
@@ -146,6 +153,10 @@
 
         @objc internal func handleRightClick(_ gestureRecognizer: NSClickGestureRecognizer) {
             mouseRaycast(gestureRecognizer: gestureRecognizer, in: gestureRecognizer.view!)
+        }
+
+        @objc internal func handleLeftClick(_ gestureRecognizer: NSClickGestureRecognizer) {
+            clearSelectionOnEmptyClick(gestureRecognizer: gestureRecognizer, in: gestureRecognizer.view!)
         }
 
         func handleMouseScroll(_ event: NSEvent) {
@@ -404,9 +415,43 @@
                 selectionDelegate?.resetActiveAxis()
 
             } else {
-                activeEntity = .invalid
-                removeGizmo()
+                clearViewportSelection()
             }
+        }
+
+        /// Left click that lands on nothing: drop the selection so the Inspector
+        /// empties and a following ⇧-drag moves the camera instead of an entity.
+        /// A click on an entity or a gizmo axis is left to the right-click
+        /// selection path and the pan recogniser.
+        func clearSelectionOnEmptyClick(gestureRecognizer: NSClickGestureRecognizer, in view: NSView) {
+            guard editorController?.isEnabled == true else {
+                return
+            }
+
+            guard scene.get(component: CameraComponent.self, for: findSceneCamera()) != nil else {
+                handleError(.noActiveCamera)
+                return
+            }
+
+            let currentLocation = gestureRecognizer.location(in: view)
+            let (_, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
+            guard hit == false else {
+                return
+            }
+
+            gizmoActive = false
+            editorController?.activeMode = .none
+            editorController?.activeAxis = .none
+            activeHitGizmoEntity = .invalid
+            clearViewportSelection()
+        }
+
+        /// Drops the engine-side selection and tells the editor so the SwiftUI
+        /// selection (Inspector, hierarchy highlight) follows.
+        func clearViewportSelection() {
+            activeEntity = .invalid
+            removeGizmo()
+            selectionDelegate?.didClearSelection()
         }
 
         func handlePanGesture(_ gestureRecognizer: NSPanGestureRecognizer, in view: NSView) {
