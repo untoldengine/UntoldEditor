@@ -20,6 +20,10 @@
         /// Set when a left-button press landed on the canvas, so the drag that
         /// follows keeps feeding the canvas even if the pointer leaves it.
         var isTrackingLeftMouseDrag = false
+        /// What the in-progress left-button drag does to the camera. Resolved
+        /// once when the drag begins so a modifier released mid-drag does not
+        /// flip a pan into an orbit halfway through.
+        var activeDragAction: CameraDragAction = .none
     }
 
     private let editorInputTargetViewRef = EditorInputTargetViewRef()
@@ -287,6 +291,67 @@
             cameraLookAt(entityId: camera, eye: newEye, target: target, up: up)
         }
 
+        /// Slides the camera and its orbit target along the view plane so the
+        /// scene follows the cursor (Blender ⇧-drag). The step scales with the
+        /// distance to the target so panning feels the same at any zoom level.
+        private func panSceneCamera(by delta: simd_float2) {
+            guard delta.x.isFinite, delta.y.isFinite, simd_length(delta) > 0.0001 else {
+                return
+            }
+
+            let camera = findSceneCamera()
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
+                handleError(.noActiveCamera)
+                return
+            }
+
+            let target = getCameraTarget(entityId: camera)
+            let eye = cameraComponent.localPosition
+            let rawDistance = simd_length(target - eye)
+            guard rawDistance > 0.001 else {
+                return
+            }
+            let distance = Swift.max(rawDistance, 0.25)
+            let currentUp = getCameraUp(entityId: camera)
+            let up = simd_length(currentUp) > 0.001 ? simd_normalize(currentUp) : cameraUpDefault
+
+            let right = simd_normalize(simd_cross(up, (eye - target) / rawDistance))
+            guard right.x.isFinite, right.y.isFinite, right.z.isFinite else {
+                return
+            }
+
+            // Move the camera opposite to the cursor so the scene tracks it.
+            // View y already points up in the (non-flipped) canvas.
+            let offset = (-right * delta.x - up * delta.y) * distance * InputSystem.dragPanSpeed
+            cameraLookAt(entityId: camera, eye: eye + offset, target: target + offset, up: up)
+        }
+
+        /// Dollies toward / away from the orbit target from a drag (Blender
+        /// ⌘-drag). Dragging up or right zooms in; the step scales with the
+        /// distance to the target.
+        private func dragZoomSceneCamera(by delta: simd_float2) {
+            let camera = findSceneCamera()
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
+                handleError(.noActiveCamera)
+                return
+            }
+            let distance = Swift.max(simd_length(getCameraTarget(entityId: camera) - cameraComponent.localPosition), 0.5)
+            let amount = InputSystem.dragZoomAmount(delta: delta, distance: distance)
+            zoomSceneCamera(by: amount)
+        }
+
+        /// Pan distance per point of drag, as a fraction of the camera-to-target distance.
+        static let dragPanSpeed: Float = 0.002
+
+        /// World-space dolly step for a drag delta (in points) at a given
+        /// camera-to-target distance. Up / right zooms in.
+        static func dragZoomAmount(delta: simd_float2, distance: Float) -> Float {
+            guard delta.x.isFinite, delta.y.isFinite else {
+                return 0
+            }
+            return (delta.y + delta.x) * 0.005 * distance
+        }
+
         func mouseRaycast(gestureRecognizer: NSClickGestureRecognizer, in view: NSView) {
             guard editorController?.isEnabled == true else {
                 return
@@ -357,12 +422,21 @@
             // Editor is optional; only gates editor-specific logic
             let isEditorEnabled = editorController?.isEnabled ?? (editorController != nil)
 
-            // If the editor is active and user is manipulating an entity (e.g., with Shift),
-            // exit *only* the camera-orbit logic, not the entire gesture handler.
-            if isEditorEnabled,
-               activeEntity != .invalid,
-               keyState.shiftPressed
-            {
+            // Decide once, when the drag starts, what it does to the camera.
+            // ⇧-drag with a selected entity is reserved for manipulating that
+            // entity (in every navigation style) and never moves the camera.
+            if gestureRecognizer.state == .began {
+                editorInputTargetViewRef.activeDragAction = EditorNavigationSettings.shared.dragAction(
+                    shiftPressed: keyState.shiftPressed,
+                    commandPressed: keyState.commandPressed,
+                    hasSelection: isEditorEnabled && activeEntity != .invalid
+                )
+            }
+            let dragAction = editorInputTargetViewRef.activeDragAction
+
+            // Exit *only* the camera logic, not the entire gesture handler, so
+            // entity manipulation keeps receiving mouse deltas.
+            if dragAction == .none {
                 return
             }
 
@@ -376,7 +450,7 @@
                     entityId: findSceneCamera(),
                     uTargetOffset: orbitDistance > 0.001 ? orbitDistance : length(cameraComponent.localPosition)
                 )
-                cameraControlMode = .orbiting
+                cameraControlMode = dragAction == .orbit ? .orbiting : .moving
 
                 // Editor-only: hit-test gizmo if editor/gizmo mode is active
                 if gizmoActive, isEditorEnabled {
@@ -422,6 +496,23 @@
                     }
                 }
 
+                // Blender-style ⇧ pan / ⌘ zoom use the raw two-axis delta;
+                // orbit below keeps its dominant-axis lock.
+                if dragAction == .pan || dragAction == .zoom {
+                    let rawDelta = simd_float2(
+                        Float(currentPanLocation.x - (initialPanLocation?.x ?? currentPanLocation.x)),
+                        Float(currentPanLocation.y - (initialPanLocation?.y ?? currentPanLocation.y))
+                    )
+                    initialPanLocation = currentPanLocation
+                    currentPanGestureState = .changed
+                    if dragAction == .pan {
+                        panSceneCamera(by: rawDelta)
+                    } else {
+                        dragZoomSceneCamera(by: rawDelta)
+                    }
+                    return
+                }
+
                 // Camera orbit pan (unaffected by editor being absent/disabled)
                 var deltaX = currentPanLocation.x - (initialPanLocation?.x ?? currentPanLocation.x)
                 var deltaY = currentPanLocation.y - (initialPanLocation?.y ?? currentPanLocation.y)
@@ -435,8 +526,12 @@
                 }
 
                 // Dead zone
-                if abs(deltaX) <= 1.0 { deltaX = 0.0 }
-                if abs(deltaY) <= 1.0 { deltaY = 0.0 }
+                if abs(deltaX) <= 1.0 {
+                    deltaX = 0.0
+                }
+                if abs(deltaY) <= 1.0 {
+                    deltaY = 0.0
+                }
 
                 panDelta = simd_float2(Float(deltaX), Float(deltaY))
                 currentPanGestureState = .changed
@@ -457,6 +552,7 @@
                 initialPanLocation = nil
                 currentPanGestureState = .ended
                 cameraControlMode = .idle
+                editorInputTargetViewRef.activeDragAction = .none
                 endGizmoDrag()
 
             default:

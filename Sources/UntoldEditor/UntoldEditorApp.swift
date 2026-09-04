@@ -42,6 +42,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var leftPanelItem: NSMenuItem?
     private var bottomPanelItem: NSMenuItem?
     private var rightPanelItem: NSMenuItem?
+    private var navigationStyleItems: [CameraNavigationStyle: NSMenuItem] = [:]
 
     func applicationDidFinishLaunching(_: Notification) {
         Logger.log(message: "Launching \(appName) v\(Self.editorVersion)")
@@ -149,6 +150,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showFPSAdvancedItem = addItem(to: viewMenu, title: "Show FPS Advanced", action: #selector(menuToggleFPSAdvanced), key: "")
         viewMenu.addItem(.separator())
         sceneCamItem = addItem(to: viewMenu, title: "Use Scene Camera During Play", action: #selector(menuToggleSceneCam), key: "")
+        viewMenu.addItem(.separator())
+
+        // Camera navigation style (radio-style checkmarks, synced in menuNeedsUpdate).
+        let navigationItem = NSMenuItem(title: "Camera Navigation", action: nil, keyEquivalent: "")
+        let navigationMenu = NSMenu(title: "Camera Navigation")
+        navigationMenu.autoenablesItems = false
+        for style in CameraNavigationStyle.allCases {
+            let item = addItem(to: navigationMenu, title: style.title, action: #selector(menuSelectNavigationStyle(_:)), key: "")
+            item.representedObject = style.rawValue
+            item.toolTip = style.summary
+            navigationStyleItems[style] = item
+        }
+        navigationItem.submenu = navigationMenu
+        viewMenu.addItem(navigationItem)
 
         NSApp.mainMenu = mainMenu
     }
@@ -173,6 +188,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         leftPanelItem?.state = panels.showLeftPanel ? .on : .off
         bottomPanelItem?.state = panels.showBottomPanel ? .on : .off
         rightPanelItem?.state = panels.showRightPanel ? .on : .off
+
+        let activeStyle = EditorNavigationSettings.shared.style
+        for (style, item) in navigationStyleItems {
+            item.state = style == activeStyle ? .on : .off
+        }
     }
 
     // MARK: - File actions (bridged to SwiftUI via notifications)
@@ -228,6 +248,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func menuToggleSceneCam() {
         EditorPlaybackSettings.shared.useSceneCameraDuringPlay.toggle()
+    }
+
+    @objc private func menuSelectNavigationStyle(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let style = CameraNavigationStyle(rawValue: raw)
+        else {
+            return
+        }
+        EditorNavigationSettings.shared.style = style
     }
 
     /// Animation + render-pause are driven by EditorView (which observes these
