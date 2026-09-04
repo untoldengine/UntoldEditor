@@ -132,8 +132,11 @@ public struct EditorView: View {
             InputSystem.shared.setupEventMonitors()
         }
 
-        gameMode = isPlaying
-        AnimationSystem.shared.isEnabled = isPlaying
+        // Do not read `isPlaying` here: accessing a @State value inside init
+        // (before the view is installed) triggers a SwiftUI runtime warning.
+        // The editor always starts in edit mode, matching `isPlaying`'s default.
+        gameMode = false
+        AnimationSystem.shared.isEnabled = false
     }
 
     public var body: some View {
