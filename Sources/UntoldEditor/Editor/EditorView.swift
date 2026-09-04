@@ -18,6 +18,23 @@ public struct Asset: Identifiable {
     var isFolder: Bool = false
 }
 
+/// Transient result of an asset drop on the viewport or the hierarchy, in the
+/// style of the asset browser's status line.
+private struct DropStatusToast: View {
+    let message: String
+    let isError: Bool
+
+    var body: some View {
+        Text(message)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.editorTextPrimary)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            .background(isError ? Color.editorError.opacity(0.85) : Color.editorSuccess.opacity(0.85))
+            .cornerRadius(8)
+    }
+}
+
 private struct CameraControlHintsView: View {
     var onDismiss: () -> Void
 
@@ -113,6 +130,9 @@ public struct EditorView: View {
     @State private var activePreviewSceneTitle: String?
     @State private var activePreviewImportMode: QuickPreviewImportMode?
     @State private var pendingQuickPreviewLoadsInExplore = false
+    @State private var isViewportDropTargeted = false
+    @State private var dropStatusMessage: String?
+    @State private var dropStatusIsError = false
 
     var renderer: UntoldRenderer?
 
@@ -172,7 +192,10 @@ public struct EditorView: View {
                                         onAddAreaLight: editor_createAreaLight,
                                         onParentEntity: editor_parentEntity,
                                         onUnparentEntity: editor_unparentEntity,
-                                        onDeleteEntity: editor_removeEntity(_:)
+                                        onDeleteEntity: editor_removeEntity(_:),
+                                        onDropAsset: { payload, parent in
+                                            editor_placeDroppedAsset(payload, parent: parent)
+                                        }
                                     )
                                 }
                             }
@@ -394,6 +417,19 @@ public struct EditorView: View {
     private var editorSceneViewport: some View {
         EditorSceneView(renderer: renderer!)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Asset rows dropped on the Metal view. The MTKView registers no drag
+            // types, so AppKit hands the drop to the SwiftUI host and this modifier;
+            // the camera and gizmo recognizers never see the drag session.
+            .onDrop(of: [.untoldEditorAsset], isTargeted: $isViewportDropTargeted) { providers, location in
+                editor_dropAssetOnViewport(providers: providers, location: location)
+            }
+            .overlay {
+                if isViewportDropTargeted {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.editorInfo, lineWidth: 2)
+                        .allowsHitTesting(false)
+                }
+            }
             .overlay(alignment: .topLeading) {
                 EngineStatsOverlayView()
             }
@@ -459,6 +495,61 @@ public struct EditorView: View {
                         .padding(.top, 12)
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                if let dropStatusMessage {
+                    DropStatusToast(message: dropStatusMessage, isError: dropStatusIsError)
+                        .padding(14)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+    }
+
+    // MARK: - Asset drag-and-drop
+
+    /// Viewport drop: the entity lands where the cursor's ray meets the ground plane,
+    /// or at the origin when the ray misses it (looking at the sky, say).
+    private func editor_dropAssetOnViewport(providers: [NSItemProvider], location: CGPoint) -> Bool {
+        let viewportSize = renderer?.metalView.bounds.size ?? .zero
+        return loadAssetDragPayload(from: providers) { payload in
+            let position = sceneCameraGroundPlaneHit(atViewportLocation: location, viewportSize: viewportSize)
+            editor_placeDroppedAsset(payload, parent: nil, at: position)
+        }
+    }
+
+    /// Places a dropped asset browser row, parenting it under `parent` for a
+    /// hierarchy drop. Unsupported kinds only show a status message.
+    private func editor_placeDroppedAsset(_ payload: AssetDragPayload, parent: EntityID?, at position: simd_float3? = nil) {
+        let asset = payload.asset
+        guard let placeable = placeableAsset(for: asset) else {
+            showDropStatus(unsupportedAssetDropMessage(for: asset), isError: true)
+            return
+        }
+
+        let placement = placeAsset(
+            placeable,
+            at: position,
+            sceneGraphModel: sceneGraphModel,
+            selectionManager: selectionManager
+        )
+        if let parent {
+            editor_parentEntity(childId: placement.entityId, parentId: parent)
+        }
+        editor_entities = getAllGameEntities()
+        showDropStatus(placement.statusMessage)
+    }
+
+    private func showDropStatus(_ message: String, isError: Bool = false) {
+        withAnimation {
+            dropStatusMessage = message
+            dropStatusIsError = isError
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            if dropStatusMessage == message {
+                withAnimation {
+                    dropStatusMessage = nil
+                }
+            }
+        }
     }
 
     private enum BottomPanelTab: Hashable {

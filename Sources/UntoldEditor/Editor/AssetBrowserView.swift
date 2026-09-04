@@ -12,8 +12,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UntoldEngine
 
-private let runtimeAssetExtension = "untold"
-private let runtimeModelAssetExtensions: Set<String> = [runtimeAssetExtension, "untoldpack"]
+let runtimeAssetExtension = "untold"
+let runtimeModelAssetExtensions: Set<String> = [runtimeAssetExtension, "untoldpack"]
 private let runtimeAnimationAssetExtensions: Set<String> = [runtimeAssetExtension, "untoldanim"]
 private let allRuntimeAssetExtensions = runtimeModelAssetExtensions.union(runtimeAnimationAssetExtensions)
 private let runtimeTextureFolderNames = ["Textures", "textures"]
@@ -2243,6 +2243,9 @@ struct AssetBrowserView: View {
         VStack(alignment: .leading, spacing: spacing) {
             ForEach(assets) { asset in
                 assetRow(asset)
+                    // Rows drag into the viewport or the hierarchy; the drop decides
+                    // whether the asset can be placed (see AssetPlacement.swift).
+                    .draggable(AssetDragPayload(asset: asset))
                     .contextMenu {
                         if asset.category == AssetCategory.gaussians.rawValue,
                            asset.path.pathExtension.lowercased() == "ply"
@@ -2726,32 +2729,11 @@ struct AssetBrowserView: View {
         let runtimeFilename = runtimeAssetFilenameForLoading(asset.path)
         let withExtension = asset.path.pathExtension
 
-        // Handle model files (.untold runtime assets)
-        if asset.category == AssetCategory.models.rawValue,
-           runtimeModelAssetExtensions.contains(withExtension.lowercased())
-        {
-            // Create entity
-            let entityId = createEntity()
-
-            // Use a generated name to avoid duplicate names when importing repeatedly
-            let uniqueName = generateEntityName()
-            setEntityName(entityId: entityId, name: uniqueName)
-
-            // Add mesh to entity asynchronously
-            setEntityMeshAsync(entityId: entityId, filename: runtimeFilename, withExtension: withExtension) { success in
-                if success {
-                    print("✅ Model imported: \(uniqueName)")
-                } else {
-                    print("⚠️ Failed to load model, using fallback: \(uniqueName)")
-                }
-                // Refresh scene hierarchy after loading completes
-                sceneGraphModel.refreshHierarchy()
-            }
-
-            // Select the newly created entity in the editor
-            selectionManager.selectedEntity = entityId
-
-            showStatus("Importing model: \(uniqueName)...")
+        // Models (.untold) and Gaussian splats (.ply, or baked .untoldgs single file /
+        // progressive tiers) take the same path as a drag-and-drop onto the scene.
+        if let placeable = placeableAsset(for: asset) {
+            let placement = placeAsset(placeable, sceneGraphModel: sceneGraphModel, selectionManager: selectionManager)
+            showStatus(placement.statusMessage)
         }
         // Handle Animation files (.untold runtime assets in Animations category)
         else if asset.category == AssetCategory.animations.rawValue,

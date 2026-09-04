@@ -82,8 +82,12 @@ struct SceneHierarchyView: View {
     var onParentEntity: (EntityID, EntityID) -> Void = { _, _ in }
     var onUnparentEntity: (EntityID) -> Void = { _ in }
     var onDeleteEntity: (EntityID) -> Void = { _ in }
+    /// An asset browser row dropped on the tree: on the scene row the parent is
+    /// `nil` (scene root), on an entity row it is that entity.
+    var onDropAsset: (AssetDragPayload, EntityID?) -> Void = { _, _ in }
 
     @State private var activeSceneExpanded = true
+    @State private var isSceneDropTargeted = false
 
     private var addActions: AddEntityActions {
         AddEntityActions(
@@ -154,6 +158,7 @@ struct SceneHierarchyView: View {
                                     onParentEntity: onParentEntity,
                                     onUnparentEntity: onUnparentEntity,
                                     onDeleteEntity: onDeleteEntity,
+                                    onDropAsset: onDropAsset,
                                     addActions: addActions
                                 )
                             }
@@ -267,13 +272,21 @@ struct SceneHierarchyView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
-        .background(isSceneSelected ? Color.editorAccentSoft : (item.isActive ? Color.editorSurface.opacity(0.5) : Color.clear))
+        .background(sceneRowBackground(item, isSelected: isSceneSelected))
         .cornerRadius(6)
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(isSceneSelected ? Color.editorAccent : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
+        // Only the active scene takes asset drops (they go to the scene root);
+        // entity-id text from a hierarchy row is not accepted here.
+        .onDrop(of: [.untoldEditorAsset], isTargeted: item.isActive ? $isSceneDropTargeted : .constant(false)) { providers in
+            guard item.isActive else { return false }
+            return loadAssetDragPayload(from: providers) { payload in
+                onDropAsset(payload, nil)
+            }
+        }
         .onTapGesture {
             if item.isActive {
                 // Select the active scene (its properties show in the Inspector).
@@ -283,6 +296,16 @@ struct SceneHierarchyView: View {
             }
         }
         .help(item.isActive ? "Select scene" : "Load this scene")
+    }
+
+    private func sceneRowBackground(_ item: SceneItem, isSelected: Bool) -> Color {
+        if item.isActive, isSceneDropTargeted {
+            return Color.editorInfo.opacity(0.2)
+        }
+        if isSelected {
+            return Color.editorAccentSoft
+        }
+        return item.isActive ? Color.editorSurface.opacity(0.5) : Color.clear
     }
 }
 
@@ -355,6 +378,7 @@ struct HierarchyNode: View {
     var onParentEntity: (EntityID, EntityID) -> Void = { _, _ in }
     var onUnparentEntity: (EntityID) -> Void = { _ in }
     var onDeleteEntity: (EntityID) -> Void = { _ in }
+    var onDropAsset: (AssetDragPayload, EntityID?) -> Void = { _, _ in }
     var addActions: AddEntityActions = .init()
     @State private var isDragOver = false
 
@@ -388,7 +412,7 @@ struct HierarchyNode: View {
             .contextMenu {
                 contextMenuContent
             }
-            .onDrop(of: [.text], isTargeted: $isDragOver) { providers in
+            .onDrop(of: [.text, .untoldEditorAsset], isTargeted: $isDragOver) { providers in
                 handleDrop(providers: providers)
             }
             .background(
@@ -409,6 +433,7 @@ struct HierarchyNode: View {
                         onParentEntity: onParentEntity,
                         onUnparentEntity: onUnparentEntity,
                         onDeleteEntity: onDeleteEntity,
+                        onDropAsset: onDropAsset,
                         addActions: addActions
                     )
                 }
@@ -417,7 +442,17 @@ struct HierarchyNode: View {
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        guard isDerivedAssetNode(entityId) == false else { return false }
+        // An asset browser row: place it as a child of this node. Asset nodes
+        // can't be parents, so a drop on one adds at the scene root instead.
+        let droppedOnAssetNode = isDerivedAssetNode(entityId)
+        if loadAssetDragPayload(from: providers, completion: { payload in
+            onDropAsset(payload, droppedOnAssetNode ? nil : entityId)
+        }) {
+            return true
+        }
+
+        // Otherwise an entity id dragged from another row: reparent it here.
+        guard droppedOnAssetNode == false else { return false }
         guard let provider = providers.first else { return false }
 
         provider.loadObject(ofClass: NSString.self) { object, _ in
