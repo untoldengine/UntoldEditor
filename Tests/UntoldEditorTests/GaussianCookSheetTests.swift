@@ -348,6 +348,96 @@ final class GaussianCookSheetTests: XCTestCase {
         return plyURL
     }
 
+    // MARK: - Recenter
+
+    func test_recenterTranslationFollowsTheMode() {
+        let boundsMin = simd_float3(0.8, 0, 0.4)
+        let boundsMax = simd_float3(1.3, 0.9, 0.9)
+
+        let grounded = gaussianRecenterTranslation(boundsMin: boundsMin, boundsMax: boundsMax, transform: matrix_identity_float4x4, mode: .baseOnGround)
+        XCTAssertEqual(grounded.x, -1.05, accuracy: 1e-6)
+        XCTAssertEqual(grounded.y, 0, accuracy: 1e-6)
+        XCTAssertEqual(grounded.z, -0.65, accuracy: 1e-6)
+
+        let centred = gaussianRecenterTranslation(boundsMin: boundsMin, boundsMax: boundsMax, transform: matrix_identity_float4x4, mode: .centreAtOrigin)
+        XCTAssertEqual(centred.x, -1.05, accuracy: 1e-6)
+        XCTAssertEqual(centred.y, -0.45, accuracy: 1e-6)
+        XCTAssertEqual(centred.z, -0.65, accuracy: 1e-6)
+
+        // The offset is measured after the flip and scale: diag(0.5, -0.5, -0.5) maps the
+        // box to x [0.4, 0.65], y [-0.45, 0], z [-0.45, -0.2].
+        let flipped = simd_float4x4(diagonal: [0.5, -0.5, -0.5, 1])
+        let groundedFlipped = gaussianRecenterTranslation(boundsMin: boundsMin, boundsMax: boundsMax, transform: flipped, mode: .baseOnGround)
+        XCTAssertEqual(groundedFlipped.x, -0.525, accuracy: 1e-6)
+        XCTAssertEqual(groundedFlipped.y, 0.45, accuracy: 1e-6)
+        XCTAssertEqual(groundedFlipped.z, 0.325, accuracy: 1e-6)
+    }
+
+    func test_recenterBakesTheTranslationAfterFlipAndScale() {
+        var settings = GaussianCookSettings()
+        settings.flipYZ = true
+        settings.scale = 0.5
+        settings.recenter = true
+        settings.recenterMode = .baseOnGround
+        let bounds = (min: simd_float3(0.8, 0, 0.4), max: simd_float3(1.3, 0.9, 0.9))
+
+        let transform = settings.cookOptions(recenteringBounds: bounds).transform
+        XCTAssertEqual(transform.columns.0.x, 0.5)
+        XCTAssertEqual(transform.columns.1.y, -0.5)
+        XCTAssertEqual(transform.columns.2.z, -0.5)
+        XCTAssertEqual(transform.columns.3.x, -0.525, accuracy: 1e-6)
+        XCTAssertEqual(transform.columns.3.y, 0.45, accuracy: 1e-6)
+        XCTAssertEqual(transform.columns.3.z, 0.325, accuracy: 1e-6)
+
+        // The lowest corner of the source box lands on the ground, centred on X and Z.
+        let lowest = simd_mul(transform, simd_float4(0.8, 0.9, 0.9, 1))
+        XCTAssertEqual(lowest.y, 0, accuracy: 1e-6)
+
+        // Off, or without bounds, nothing moves.
+        XCTAssertEqual(settings.cookOptions.transform.columns.3, simd_float4(0, 0, 0, 1))
+        settings.recenter = false
+        XCTAssertEqual(settings.cookOptions(recenteringBounds: bounds).transform.columns.3, simd_float4(0, 0, 0, 1))
+        XCTAssertEqual(gaussianCookTaskDetail(settings: settings), "→ .untoldgs")
+        settings.recenter = true
+        XCTAssertEqual(gaussianCookTaskDetail(settings: settings), "→ .untoldgs, recentred")
+    }
+
+    func test_sourceBoundsComeFromTheSplatCentres() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectory = directory
+        let plyURL = directory.appendingPathComponent("grid.ply")
+        try makeTestPLY(splatCount: 200).write(to: plyURL)
+
+        let bounds = try gaussianSourceBounds(plyURL: plyURL)
+        XCTAssertEqual(bounds.min, simd_float3(0, 0, 0))
+        XCTAssertEqual(bounds.max.x, 0.9, accuracy: 1e-6)
+        XCTAssertEqual(bounds.max.y, 0.9, accuracy: 1e-6)
+        XCTAssertEqual(bounds.max.z, 0.1, accuracy: 1e-6)
+    }
+
+    func test_recentredCookWritesCentredSplats() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectory = directory
+        let plyURL = directory.appendingPathComponent("grid.ply")
+        try makeTestPLY(splatCount: 200).write(to: plyURL)
+
+        var settings = GaussianCookSettings()
+        settings.recenter = true
+        settings.recenterMode = .baseOnGround
+        let result = try cookGaussianPLY(plyURL: plyURL, settings: settings)
+
+        // The stored splat-centre bounds: x and z centred on 0, lowest y on 0.
+        let header = try UntoldGSFormat.readHeaderV3(from: XCTUnwrap(result.tiers.first).url)
+        XCTAssertEqual((header.boundsMin.x + header.boundsMax.x) / 2, 0, accuracy: 1e-3)
+        XCTAssertEqual((header.boundsMin.z + header.boundsMax.z) / 2, 0, accuracy: 1e-3)
+        XCTAssertEqual(header.boundsMin.y, 0, accuracy: 1e-3)
+        XCTAssertEqual(header.boundsMax.y, 0.9, accuracy: 1e-3)
+    }
+
     private func makeTestPLY(splatCount: Int) -> Data {
         var body = ""
         for index in 0 ..< splatCount {
