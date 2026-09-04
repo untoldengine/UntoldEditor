@@ -25,7 +25,7 @@ enum QuickPreviewImportMode: String, CaseIterable {
         case .tiledScene:
             return "Load Tiled Stream (.json)"
         case .gaussian:
-            return "Load Gaussian (.ply)"
+            return "Load Gaussian (.ply, .untoldgs)"
         }
     }
 
@@ -58,7 +58,7 @@ enum QuickPreviewImportMode: String, CaseIterable {
         case .tiledScene:
             return "Select a tiled stream manifest to preview without creating a project"
         case .gaussian:
-            return "Select a Gaussian PLY file to preview without creating a project"
+            return "Select a Gaussian .ply or baked .untoldgs file to preview without creating a project"
         }
     }
 
@@ -69,7 +69,7 @@ enum QuickPreviewImportMode: String, CaseIterable {
         case .tiledScene:
             return [.json]
         case .gaussian:
-            return [UTType(filenameExtension: "ply") ?? .data]
+            return ["ply", "untoldgs"].compactMap { UTType(filenameExtension: $0) }
         }
     }
 }

@@ -845,7 +845,7 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
-    func test_importAssetForCategory_gaussiansFiltersOnlyPLY() throws {
+    func test_importAssetForCategory_gaussiansAllowsPLYAndUntoldgs() throws {
         try withTempDirectory { base in
             // Create Gaussians directory
             let gaussians = base.appendingPathComponent("Gaussians", isDirectory: true)
@@ -853,8 +853,10 @@ final class AssetBrowserViewTests: XCTestCase {
 
             // Create test files
             let plyFile = gaussians.appendingPathComponent("cloud.ply")
+            let bakedFile = gaussians.appendingPathComponent("cloud.untoldgs")
             let untoldFile = gaussians.appendingPathComponent("model.untold")
             FileManager.default.createFile(atPath: plyFile.path, contents: Data())
+            FileManager.default.createFile(atPath: bakedFile.path, contents: Data())
             FileManager.default.createFile(atPath: untoldFile.path, contents: Data())
 
             assetBasePath = base
@@ -868,11 +870,12 @@ final class AssetBrowserViewTests: XCTestCase {
                 selectedAsset: .init(get: { selected }, set: { selected = $0 })
             )
 
-            // Verify that only .ply files would be allowed for Gaussians category
+            // .ply sources and baked .untoldgs files are both Gaussian assets
             let gaussiansCategory = AssetCategory.gaussians
             XCTAssertEqual(gaussiansCategory.rawValue, "Gaussians", "Gaussians category should have correct name")
 
             XCTAssertTrue(FileManager.default.fileExists(atPath: plyFile.path), "PLY file should exist")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: bakedFile.path), "Baked file should exist")
             XCTAssertTrue(FileManager.default.fileExists(atPath: untoldFile.path), "Untold file should exist")
         }
     }
