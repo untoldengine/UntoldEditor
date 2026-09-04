@@ -1,5 +1,5 @@
 //
-//  main.swift
+//  UntoldEditorApp.swift
 //  UntoldEngine
 //
 // Copyright (C) Untold Engine Studios
@@ -249,10 +249,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 }
 
-// Entry point
-
-let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
-
-app.run()
+/// Entry point. An `@main` type rather than top-level code in a `main.swift`: Xcode 26
+/// compiles a package executable that test targets import with `-parse-as-library`
+/// (so `@testable import UntoldEditor` works), which forbids top-level statements.
+/// `swift build` / `swift test` handle `@main` executables the same way.
+@main
+enum UntoldEditorApp {
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.run()
+    }
+}
