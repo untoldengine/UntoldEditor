@@ -10,6 +10,7 @@
 //
 
 import AppKit
+import Combine
 import MetalKit
 import SwiftUI
 import UntoldEngine
@@ -19,6 +20,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var window: NSWindow!
 
     private let appName = "Untold Engine Editor"
+    static let editorVersion = "0.18.1"
+
+    private var projectTitleSubscription: AnyCancellable?
+
+    /// Window title: "<project> - <app> v<version>" once a project is open,
+    /// otherwise "<app> v<version>". The app name always stays next to the
+    /// version so it reads as the editor's version, not the project's.
+    static func windowTitle(projectName: String?, appName: String = "Untold Engine Editor", version: String = editorVersion) -> String {
+        let editorLabel = "\(appName) v\(version)"
+        if let projectName, !projectName.isEmpty {
+            return "\(projectName) - \(editorLabel)"
+        }
+        return editorLabel
+    }
 
     // View-menu items whose checkmark / enabled state is synced on open.
     private var showFPSItem: NSMenuItem?
@@ -29,7 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var rightPanelItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_: Notification) {
-        Logger.log(message: "Launching Untold Engine Editor v0.18.1")
+        Logger.log(message: "Launching \(appName) v\(Self.editorVersion)")
 
         setupMainMenu()
 
@@ -41,7 +56,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             defer: false
         )
 
-        window.title = "Untold Engine Editor v0.18.1"
+        window.title = Self.windowTitle(projectName: nil, appName: appName)
+        // Retitle the window whenever a project is opened, created, or closed.
+        projectTitleSubscription = EditorAssetBasePath.shared.$basePath
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                window.title = Self.windowTitle(projectName: EditorAssetBasePath.shared.projectName, appName: appName)
+            }
         // Force dark appearance so AppKit-drawn chrome (title bar, native tab
         // strips, segmented controls) matches the dark editor theme.
         window.appearance = NSAppearance(named: .darkAqua)
