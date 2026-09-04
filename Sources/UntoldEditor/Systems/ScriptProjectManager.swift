@@ -148,11 +148,13 @@ class ScriptProjectManager {
         }
 
         // Run swift run in background
+        let task = TaskCenter.begin("Building scripts", detail: "swift run in \(scriptsDir.lastPathComponent)/")
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.currentDirectoryURL = scriptsDir
             process.executableURL = URL(fileURLWithPath: "/usr/bin/swift")
             process.arguments = ["run"]
+            task.attach(process: process)
 
             let pipe = Pipe()
             let errorPipe = Pipe()
@@ -171,7 +173,14 @@ class ScriptProjectManager {
 
                 let combinedOutput = output + errorOutput
 
-                if process.terminationStatus == 0 {
+                let wasCancelled = task.isCancelRequested
+                if wasCancelled {
+                    task.markCancelled("Cancelled by user")
+                } else {
+                    task.finish(processStatus: process.terminationStatus, failureDetail: "swift run failed (status \(process.terminationStatus))")
+                }
+
+                if process.terminationStatus == 0, !wasCancelled {
                     DispatchQueue.main.async {
                         // Notify Asset Browser to reload (new .uscript files likely created)
                         NotificationCenter.default.post(name: .assetBrowserReload, object: nil)
@@ -179,10 +188,11 @@ class ScriptProjectManager {
                     }
                 } else {
                     DispatchQueue.main.async {
-                        completion(.failure(NSError(domain: "ScriptBuild", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: combinedOutput])))
+                        completion(.failure(NSError(domain: "ScriptBuild", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: wasCancelled ? "Build cancelled" : combinedOutput])))
                     }
                 }
             } catch {
+                task.fail(error.localizedDescription)
                 DispatchQueue.main.async {
                     completion(.failure(error))
                 }

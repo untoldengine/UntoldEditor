@@ -190,14 +190,17 @@ struct CreateProjectView: View {
         EditorAssetBasePath.shared.basePath = nil
 
         Task {
+            let buildTask = TaskCenter.begin("Creating project", detail: "Preparing…")
             do {
                 let settings = createBuildSettings()
 
                 let result = try await BuildSystem.shared.build(settings: settings) { progress in
+                    buildTask.setDetail(progress)
                     Task { @MainActor in
                         buildProgress = progress
                     }
                 }
+                buildTask.succeed("Created in \(String(format: "%.1f", result.buildTime))s")
 
                 await MainActor.run {
                     isBuilding = false
@@ -225,6 +228,7 @@ struct CreateProjectView: View {
                 }
 
             } catch {
+                buildTask.fail(error.localizedDescription)
                 await MainActor.run {
                     isBuilding = false
                     buildSucceeded = false

@@ -76,6 +76,7 @@ public struct EditorView: View {
     @State private var isPlaying = false
     @State private var showCreateProject = false
     @State private var bottomPanelTab: BottomPanelTab = .assets
+    @ObservedObject private var taskCenter = TaskCenter.shared
     @State private var rightPanelEnvTab: EnvEffectsTab = .environment
     @State private var bottomSearchQuery: String = ""
     @State private var consoleAutoScroll: Bool = true
@@ -249,6 +250,9 @@ public struct EditorView: View {
         // menus, buttons) render light-on-dark to match the editor theme.
         .preferredColorScheme(.dark)
         .onAppear {
+            // Surface engine-side asset loads in the Tasks panel.
+            EngineLoadTaskBridge.shared.start()
+
             EditorUndoManager.shared.onStateRestored = {
                 editor_entities = getAllGameEntities()
                 selectionManager.objectWillChange.send()
@@ -448,6 +452,7 @@ public struct EditorView: View {
     private enum BottomPanelTab: Hashable {
         case assets
         case console
+        case tasks
     }
 
     private enum EnvEffectsTab: Hashable {
@@ -581,6 +586,7 @@ public struct EditorView: View {
         HStack(spacing: 2) {
             panelTabButton(.assets, title: "Assets", icon: "shippingbox")
             panelTabButton(.console, title: "Console", icon: "terminal")
+            panelTabButton(.tasks, title: "Tasks", icon: "list.bullet.rectangle")
         }
         .padding(3)
         .background(Color.editorSurface.opacity(0.6))
@@ -593,12 +599,23 @@ public struct EditorView: View {
 
     private func panelTabButton(_ tab: BottomPanelTab, title: String, icon: String) -> some View {
         let isSelected = bottomPanelTab == tab
+        let runningCount = tab == .tasks ? taskCenter.activeCount : 0
         return Button(action: { bottomPanelTab = tab }) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .semibold))
                 Text(title)
                     .font(.system(size: 12, weight: .semibold))
+                if runningCount > 0 {
+                    // Live badge so running work is visible even when another tab is selected.
+                    Text("\(runningCount)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(isSelected ? .editorTextInverse : .editorTextPrimary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(isSelected ? Color.editorTextPrimary.opacity(0.85) : Color.editorAccent)
+                        .clipShape(Capsule())
+                }
             }
             .padding(.vertical, 5)
             .padding(.horizontal, 12)
@@ -609,7 +626,23 @@ public struct EditorView: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .help(tab == .assets ? "Show Asset Browser. Right-click the asset area to import." : "Show Console")
+        .help(panelTabHelp(tab))
+    }
+
+    private func panelTabHelp(_ tab: BottomPanelTab) -> String {
+        switch tab {
+        case .assets: return "Show Asset Browser. Right-click the asset area to import."
+        case .console: return "Show Console"
+        case .tasks: return "Show background tasks (exports, cooks, builds, loads)"
+        }
+    }
+
+    private var bottomSearchPlaceholder: String {
+        switch bottomPanelTab {
+        case .assets: return "Filter assets"
+        case .console: return "Filter console"
+        case .tasks: return "Filter tasks"
+        }
     }
 
     /// Bottom dock: a segmented Assets/Console selector (replacing the old
@@ -693,7 +726,7 @@ public struct EditorView: View {
                         .foregroundColor(.editorTextSecondary)
                     ExplicitClickTextField(
                         text: $bottomSearchQuery,
-                        placeholder: bottomPanelTab == .assets ? "Filter assets" : "Filter console"
+                        placeholder: bottomSearchPlaceholder
                     )
                 }
                 .padding(.horizontal, 8)
@@ -715,6 +748,25 @@ public struct EditorView: View {
                     .focusable(false)
                     .help("Clear console")
                 }
+
+                if bottomPanelTab == .tasks {
+                    Button(action: { taskCenter.cancelAll() }) {
+                        Image(systemName: "stop.circle")
+                            .foregroundColor(.editorTextSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .disabled(taskCenter.activeCount == 0)
+                    .help("Cancel all running tasks")
+
+                    Button(action: { taskCenter.clearFinished() }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.editorTextSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .help("Clear finished tasks")
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -735,6 +787,8 @@ public struct EditorView: View {
                     )
                 case .console:
                     LogConsoleView(searchQuery: $bottomSearchQuery, autoScroll: $consoleAutoScroll)
+                case .tasks:
+                    TasksPanelView(searchQuery: $bottomSearchQuery)
                 }
             }
             .frame(height: 200)
@@ -2214,6 +2268,10 @@ public struct EditorView: View {
         }
 
         isExportingQuickPreviewAsset = true
+        let task = TaskCenter.begin(
+            "Quick preview: \(request.sourceURL.lastPathComponent)",
+            detail: "Exporting for preview…"
+        )
         let convertOrientation = quickPreviewConvertOrientation
         let sourceOrientation = quickPreviewSourceOrientation
         let compressGeometry = quickPreviewCompressGeometry
@@ -2225,6 +2283,7 @@ public struct EditorView: View {
             let tempDirectory = FileManager.default.temporaryDirectory
             let outputLogURL = tempDirectory.appendingPathComponent("quick-preview-export-\(UUID().uuidString).out")
             let errorLogURL = tempDirectory.appendingPathComponent("quick-preview-export-\(UUID().uuidString).err")
+            task.attach(process: process)
 
             do {
                 try FileManager.default.createDirectory(at: request.outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -2263,7 +2322,8 @@ public struct EditorView: View {
 
                 let stdout = (try? String(contentsOf: outputLogURL, encoding: .utf8)) ?? ""
                 let stderr = (try? String(contentsOf: errorLogURL, encoding: .utf8)) ?? ""
-                let exportSucceeded = process.terminationStatus == 0
+                let wasCancelled = task.isCancelRequested
+                let exportSucceeded = process.terminationStatus == 0 && !wasCancelled
 
                 DispatchQueue.main.async {
                     if !stdout.isEmpty {
@@ -2279,7 +2339,9 @@ public struct EditorView: View {
                     if FileManager.default.fileExists(atPath: texturesDir.path),
                        let texbakeScript = findTexbakeScript()
                     {
+                        task.setDetail("Baking textures (ASTC)…")
                         let bakeResult = runTexbakeStep(script: texbakeScript, arguments: ["--dir", texturesDir.path], astcencBin: astcencBin)
+                        task.setDetail("Patching texture references…")
                         let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputURL.path], astcencBin: astcencBin)
                         DispatchQueue.main.async {
                             if !bakeResult.stdout.isEmpty {
@@ -2305,10 +2367,21 @@ public struct EditorView: View {
                     }
                 }
 
+                if wasCancelled {
+                    task.markCancelled("Cancelled by user")
+                } else if exportSucceeded {
+                    task.succeed("Loaded into viewport")
+                } else {
+                    task.fail("export-untold exited with status \(process.terminationStatus) (see Console)")
+                }
+
                 DispatchQueue.main.async {
                     isExportingQuickPreviewAsset = false
                     pendingQuickPreviewExport = nil
-                    if exportSucceeded {
+                    if wasCancelled {
+                        QuickPreviewRuntimeExportCache.removeCacheDirectory(at: request.outputURL.deletingLastPathComponent())
+                        Logger.log(message: "Quick Preview export cancelled for \(request.sourceURL.lastPathComponent)")
+                    } else if exportSucceeded {
                         editor_loadQuickPreviewAsset(from: request.outputURL, originalSourceURL: request.sourceURL)
                     } else {
                         QuickPreviewRuntimeExportCache.removeCacheDirectory(at: request.outputURL.deletingLastPathComponent())
@@ -2316,6 +2389,7 @@ public struct EditorView: View {
                     }
                 }
             } catch {
+                task.fail(error.localizedDescription)
                 DispatchQueue.main.async {
                     isExportingQuickPreviewAsset = false
                     pendingQuickPreviewExport = nil
