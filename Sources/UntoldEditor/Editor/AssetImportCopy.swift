@@ -5,8 +5,9 @@
 //  Importing an asset copies its source into the project as a job in the Tasks panel.
 //  The copy runs off the main thread and is written to a hidden sibling first, so the
 //  content panel never lists a half-copied file; once it is done the item is moved into
-//  place. A copy that runs longer than `assetImportPlaceholderDelay` gets a placeholder
-//  row (icon + file name) in the content panel until it finishes.
+//  place. The job reports bytes copied against the total, can be cancelled, and a copy
+//  that runs longer than `assetImportPlaceholderDelay` gets a placeholder row (icon,
+//  file name, progress) in the content panel until it finishes.
 //
 // Copyright (C) Untold Engine Studios
 //
@@ -17,8 +18,8 @@
 import Foundation
 
 /// How long an import copy may run before the content panel shows a placeholder row
-/// for it. Small files finish well inside this and simply appear when they are done.
-let assetImportPlaceholderDelay: TimeInterval = 5
+/// for it. Same-volume copies are APFS clones and finish at once, so they never show one.
+let assetImportPlaceholderDelay: TimeInterval = 1
 
 /// Serial queue for import copies so they never block the UI and run one at a time.
 let assetImportQueue = DispatchQueue(label: "com.untoldengine.editor.asset-import", qos: .userInitiated)
@@ -31,6 +32,8 @@ struct PendingAssetImport: Identifiable, Equatable {
     let isFolder: Bool
     /// Set after the copy has run longer than `assetImportPlaceholderDelay`.
     var showsPlaceholder = false
+    /// Bytes copied so far, once the copy has reported anything.
+    var progress: AssetCopyProgress?
 
     var name: String {
         destinationURL.lastPathComponent
@@ -85,28 +88,169 @@ func commitStagedImport(from staging: URL, to destination: URL, fileManager fm: 
     try fm.moveItem(at: staging, to: destination)
 }
 
-/// Runs an import copy as a job in the Tasks panel. `work` receives the staging URL and
-/// writes the imported item there (a file, or a folder with its contents); when it
-/// returns, the item is moved to `destination`. Everything runs on `queue`, never on the
-/// main thread. A failure removes the staging item so nothing half-copied is left behind.
-/// `completion` runs on the main queue after the task is finished.
+// MARK: - Copying with progress
+
+/// Bytes copied so far against the total, for the Tasks row and the placeholder.
+struct AssetCopyProgress: Equatable {
+    let copied: Int64
+    let total: Int64
+
+    /// 0…1, or `nil` when the total is unknown (empty item).
+    var fraction: Double? {
+        total > 0 ? min(Double(copied) / Double(total), 1) : nil
+    }
+}
+
+/// "12.3 MB of 744 MB"
+func assetCopyProgressDetail(_ progress: AssetCopyProgress) -> String {
+    let formatter = ByteCountFormatter()
+    formatter.countStyle = .file
+    return "\(formatter.string(fromByteCount: progress.copied)) of \(formatter.string(fromByteCount: progress.total))"
+}
+
+/// Size of a file, or the sum of every file under a folder.
+func assetItemByteCount(at url: URL, fileManager fm: FileManager = .default) -> Int64 {
+    var isDir: ObjCBool = false
+    guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return 0 }
+    if isDir.boolValue {
+        let children = (try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [])) ?? []
+        return children.reduce(0) { $0 + assetItemByteCount(at: $1, fileManager: fm) }
+    }
+    return (try? fm.attributesOfItem(atPath: url.path))?[.size] as? Int64 ?? 0
+}
+
+/// Copies a file or a folder tree from `source` to `destination`, reporting bytes copied.
+/// A same-volume copy is an APFS clone and completes at once (progress jumps to the
+/// total); otherwise the data is streamed in chunks so the progress is real and
+/// `isCancelled` is honoured between chunks (throwing `CancellationError`). Modification
+/// dates are kept, like `FileManager.copyItem`.
+func copyAssetItem(
+    from source: URL,
+    to destination: URL,
+    fileManager fm: FileManager = .default,
+    allowClone: Bool = true,
+    isCancelled: () -> Bool = { false },
+    progress: (AssetCopyProgress) -> Void = { _ in }
+) throws {
+    let total = assetItemByteCount(at: source, fileManager: fm)
+    if allowClone, clonefile(source.path, destination.path, 0) == 0 {
+        progress(AssetCopyProgress(copied: total, total: total))
+        return
+    }
+
+    var copied: Int64 = 0
+    var lastReport = Date.distantPast
+    func report(force: Bool) {
+        let now = Date()
+        guard force || now.timeIntervalSince(lastReport) >= 0.1 else { return }
+        lastReport = now
+        progress(AssetCopyProgress(copied: copied, total: total))
+    }
+
+    func copyFile(_ src: URL, _ dst: URL) throws {
+        let input = try FileHandle(forReadingFrom: src)
+        defer { try? input.close() }
+        guard fm.createFile(atPath: dst.path, contents: nil) else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: dst.path])
+        }
+        let output = try FileHandle(forWritingTo: dst)
+        defer { try? output.close() }
+        while true {
+            if isCancelled() {
+                throw CancellationError()
+            }
+            let chunk = try input.read(upToCount: 4 << 20) ?? Data()
+            if chunk.isEmpty {
+                break
+            }
+            try output.write(contentsOf: chunk)
+            copied += Int64(chunk.count)
+            report(force: false)
+        }
+        if let date = (try? fm.attributesOfItem(atPath: src.path))?[.modificationDate] {
+            try? fm.setAttributes([.modificationDate: date], ofItemAtPath: dst.path)
+        }
+    }
+
+    func copyTree(_ src: URL, _ dst: URL) throws {
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: src.path, isDirectory: &isDir) else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: src.path])
+        }
+        if isDir.boolValue {
+            try fm.createDirectory(at: dst, withIntermediateDirectories: true)
+            for child in try fm.contentsOfDirectory(at: src, includingPropertiesForKeys: nil, options: []) {
+                if isCancelled() {
+                    throw CancellationError()
+                }
+                try copyTree(child, dst.appendingPathComponent(child.lastPathComponent))
+            }
+        } else {
+            try copyFile(src, dst)
+        }
+    }
+
+    try copyTree(source, destination)
+    report(force: true)
+}
+
+// MARK: - Tracked import
+
+/// What an import job's `work` gets: where to write, the task to poll for cancellation,
+/// and a copy helper that reports progress to the task.
+struct AssetImportContext {
+    let stagingURL: URL
+    let task: EditorTaskHandle
+    let report: (AssetCopyProgress) -> Void
+
+    /// Copies `source` to `destination` (a file or a folder) with progress on the task.
+    /// Throws `CancellationError` if the user cancelled the job.
+    func copy(_ source: URL, to destination: URL, fileManager fm: FileManager = .default) throws {
+        try copyAssetItem(
+            from: source,
+            to: destination,
+            fileManager: fm,
+            isCancelled: { task.isCancelRequested },
+            progress: report
+        )
+    }
+}
+
+/// Runs an import copy as a job in the Tasks panel. `work` writes the imported item to
+/// the context's staging URL (a file, or a folder with its contents) using the context's
+/// `copy`, so the row shows bytes copied and can be cancelled; when it returns, the item
+/// is moved to `destination`. Everything runs on `queue`, never on the main thread. A
+/// failure or a cancel removes the staging item so nothing half-copied is left behind.
+/// `onProgress` and `completion` run on the main queue.
 @discardableResult
 func importAssetTracked(
     destination: URL,
     detail: String = "",
     queue: DispatchQueue = assetImportQueue,
     fileManager fm: FileManager = .default,
-    work: @escaping (URL) throws -> Void,
+    onProgress: ((AssetCopyProgress) -> Void)? = nil,
+    work: @escaping (AssetImportContext) throws -> Void,
     completion: @escaping (Result<URL, Error>) -> Void
 ) -> EditorTaskHandle {
     let name = destination.lastPathComponent
-    let task = TaskCenter.begin("Importing \(name)", detail: detail)
+    let task = TaskCenter.begin("Importing \(name)", detail: detail, progress: 0, onCancel: {})
     queue.async {
         let staging = assetImportStagingURL(for: destination)
+        let report: (AssetCopyProgress) -> Void = { progress in
+            task.setProgress(progress.fraction)
+            let bytes = assetCopyProgressDetail(progress)
+            task.setDetail(detail.isEmpty ? bytes : "\(detail) · \(bytes)")
+            if let onProgress {
+                DispatchQueue.main.async { onProgress(progress) }
+            }
+        }
         let result = Result<URL, Error> {
             try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             do {
-                try work(staging)
+                try work(AssetImportContext(stagingURL: staging, task: task, report: report))
+                if task.isCancelRequested {
+                    throw CancellationError()
+                }
                 try commitStagedImport(from: staging, to: destination, fileManager: fm)
             } catch {
                 try? fm.removeItem(at: staging)
@@ -117,6 +261,8 @@ func importAssetTracked(
         switch result {
         case .success:
             task.succeed("Copied \(name)")
+        case .failure(is CancellationError):
+            task.markCancelled("Cancelled")
         case let .failure(error):
             task.fail(error.localizedDescription)
         }
