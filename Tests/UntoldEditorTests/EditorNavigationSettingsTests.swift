@@ -72,6 +72,22 @@ final class EditorNavigationSettingsTests: XCTestCase {
 
     // MARK: - Persistence
 
+    func test_classic_scrollAlwaysZooms() {
+        for shift in [false, true] {
+            for command in [false, true] {
+                XCTAssertEqual(EditorNavigationSettings.scrollAction(style: .classic, shiftPressed: shift, commandPressed: command), .zoom)
+            }
+        }
+    }
+
+    func test_blender_scrollOrbitsShiftPansCommandZooms() {
+        XCTAssertEqual(EditorNavigationSettings.scrollAction(style: .blender, shiftPressed: false, commandPressed: false), .orbit)
+        XCTAssertEqual(EditorNavigationSettings.scrollAction(style: .blender, shiftPressed: true, commandPressed: false), .pan)
+        XCTAssertEqual(EditorNavigationSettings.scrollAction(style: .blender, shiftPressed: false, commandPressed: true), .zoom)
+        // ⇧ wins over ⌘, as for drags.
+        XCTAssertEqual(EditorNavigationSettings.scrollAction(style: .blender, shiftPressed: true, commandPressed: true), .pan)
+    }
+
     func test_styleDefaultsToClassicAndPersistsAcrossInstances() throws {
         let suiteName = "EditorNavigationSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

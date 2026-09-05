@@ -164,8 +164,16 @@
                 return
             }
 
-            var deltaX: Double = event.scrollingDeltaX
-            var deltaY: Double = event.scrollingDeltaY
+            let rawDelta = simd_float2(Float(event.scrollingDeltaX), Float(event.scrollingDeltaY))
+            guard rawDelta.x.isFinite, rawDelta.y.isFinite else {
+                return
+            }
+            let precise = event.hasPreciseScrollingDeltas
+
+            // Orbit and zoom lock to the dominant axis, with X inverted and a
+            // one-unit dead zone, as they always have.
+            var deltaX = rawDelta.x
+            var deltaY = rawDelta.y
 
             if abs(deltaX) < abs(deltaY) {
                 deltaX = 0.0
@@ -182,12 +190,65 @@
                 deltaY = 0.0
             }
 
-            scrollDelta = 0.01 * simd_float2(Float(deltaX), Float(deltaY))
+            scrollDelta = 0.01 * simd_float2(deltaX, deltaY)
 
-            if deltaY != 0.0 {
-                let zoomScale: Float = event.hasPreciseScrollingDeltas ? 0.025 : 0.15
-                zoomSceneCamera(by: Float(deltaY) * zoomScale)
+            switch EditorNavigationSettings.shared.scrollAction(
+                shiftPressed: keyState.shiftPressed,
+                commandPressed: keyState.commandPressed
+            ) {
+            case .orbit:
+                orbitSceneCamera(byScroll: simd_float2(deltaX, deltaY), precise: precise)
+            case .pan:
+                // A pan follows both axes at once; no lock or dead zone.
+                panSceneCamera(byScroll: rawDelta, precise: precise)
+            case .zoom:
+                if deltaY != 0.0 {
+                    let zoomScale: Float = precise ? 0.025 : 0.15
+                    zoomSceneCamera(by: deltaY * zoomScale)
+                }
             }
+        }
+
+        /// Pan per line of a mouse wheel relative to a point of trackpad scroll;
+        /// a wheel reports a few units per notch where a swipe reports points.
+        static let scrollWheelPanMultiplier: Float = 10
+
+        /// Pans from a scroll delta. Scroll deltas are document-style (positive Y
+        /// means the content moves down the screen) while the view's Y points up,
+        /// so Y is flipped before the shared pan moves the scene with the scroll.
+        func panSceneCamera(byScroll delta: simd_float2, precise: Bool) {
+            let viewDelta = simd_float2(delta.x, -delta.y) * (precise ? 1 : InputSystem.scrollWheelPanMultiplier)
+            panSceneCamera(by: viewDelta)
+        }
+
+        /// Orbit per point of trackpad scroll, matching the drag orbit's feel.
+        static let scrollOrbitSpeedPrecise: Float = 0.005
+        /// Orbit per line of a mouse wheel, which reports a few units per notch.
+        static let scrollOrbitSpeedWheel: Float = 0.05
+
+        /// Orbits the scene camera around its target from a scroll delta that the
+        /// caller has already locked to its dominant axis, with X negated the way
+        /// the drag orbit does. Each event re-anchors the orbit on the current
+        /// target, as a drag does when it begins, so pans and zooms in between are
+        /// respected.
+        func orbitSceneCamera(byScroll delta: simd_float2, precise: Bool) {
+            guard delta.x.isFinite, delta.y.isFinite, delta.x != 0 || delta.y != 0 else {
+                return
+            }
+
+            let camera = findSceneCamera()
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
+                handleError(.noActiveCamera)
+                return
+            }
+
+            let orbitDistance = simd_length(cameraComponent.localPosition - getCameraTarget(entityId: camera))
+            setOrbitOffset(
+                entityId: camera,
+                uTargetOffset: orbitDistance > 0.001 ? orbitDistance : simd_length(cameraComponent.localPosition)
+            )
+            let speed = precise ? InputSystem.scrollOrbitSpeedPrecise : InputSystem.scrollOrbitSpeedWheel
+            orbitAround(entityId: camera, uPosition: delta * speed)
         }
 
         private func isEventInsideEditorInputView(_ event: NSEvent) -> Bool {
