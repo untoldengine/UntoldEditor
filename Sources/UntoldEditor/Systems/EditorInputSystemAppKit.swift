@@ -236,36 +236,48 @@
 
         /// Idle time between scroll events that starts a new navigation session.
         static let scrollSessionGap: TimeInterval = 0.35
-        /// Nearest and farthest the pivot may sit ahead of the camera. Beyond the
-        /// far limit a wheel notch sweeps a long arc; the default is used instead.
+        /// Nearest and farthest the pivot may sit ahead of the camera. The orbit
+        /// is meant to turn around a point close to where the camera is, whatever
+        /// it flew past or zoomed through before, so the far limit is short and a
+        /// wheel notch never sweeps a long arc around distant ground.
         static let minimumOrbitPivotDistance: Float = 0.25
-        static let maximumOrbitPivotDistance: Float = 100
-        /// Pivot distance when the view sees neither the ground nor its previous target.
-        static let defaultOrbitPivotDistance: Float = 10
+        static let maximumOrbitPivotDistance: Float = 5
+        /// Pivot distance when nothing within range lies ahead (sky, far ground).
+        static let defaultOrbitPivotDistance: Float = 3
 
         /// Where the camera should orbit, zoom and pan around, always on the view
-        /// ray so adopting it never turns the camera: the point the ray meets the
-        /// ground plane; failing that (sky, or ground too far) the previous target's
-        /// depth if it still lies ahead within range; failing that a default depth.
-        static func orbitPivot(eye: simd_float3, forward: simd_float3, currentTarget: simd_float3) -> simd_float3 {
+        /// ray so adopting it never turns the camera. The nearest of three depths
+        /// wins, each only if it lies within range: the scene geometry under the
+        /// view centre (`sceneHitDistance`), the ground plane, and the previous
+        /// target's depth. Nearest, so zooming in close keeps a close pivot even
+        /// when the view skims over the object to ground far behind it, while
+        /// flying away from a stale target lets the ground or an object take
+        /// over. With no candidate (sky, nothing ahead) a default depth is used.
+        static func orbitPivot(
+            eye: simd_float3,
+            forward: simd_float3,
+            currentTarget: simd_float3,
+            sceneHitDistance: Float? = nil
+        ) -> simd_float3 {
             let forwardLength = simd_length(forward)
             guard forwardLength > 0.0001, forwardLength.isFinite else {
                 return currentTarget
             }
             let direction = forward / forwardLength
 
-            if let hit = pickGroundPosition(rayOrigin: eye, rayDirection: direction),
-               hit.distance >= minimumOrbitPivotDistance, hit.distance <= maximumOrbitPivotDistance
-            {
-                return hit.worldPosition
+            var candidates: [Float] = []
+            if let sceneHitDistance {
+                candidates.append(sceneHitDistance)
             }
-
-            let depth = simd_dot(currentTarget - eye, direction)
-            if depth >= minimumOrbitPivotDistance, depth <= maximumOrbitPivotDistance {
-                return eye + direction * depth
+            if let hit = pickGroundPosition(rayOrigin: eye, rayDirection: direction) {
+                candidates.append(hit.distance)
             }
+            candidates.append(simd_dot(currentTarget - eye, direction))
 
-            return eye + direction * defaultOrbitPivotDistance
+            let depth = candidates
+                .filter { $0.isFinite && $0 >= minimumOrbitPivotDistance && $0 <= maximumOrbitPivotDistance }
+                .min() ?? defaultOrbitPivotDistance
+            return eye + direction * depth
         }
 
         /// Re-anchors the scene camera's target on `orbitPivot` before a navigation
@@ -279,10 +291,17 @@
             }
             let eye = cameraComponent.localPosition
             // The camera looks down its negative Z axis, as the spawn code assumes.
+            let forward = -forwardDirectionVector(from: cameraComponent.rotation)
+            let sceneHit = pickEntity(
+                rayOrigin: eye,
+                rayDirection: forward,
+                options: ScenePickOptions(isGizmoActive: gizmoActive, backend: .octreeGPUPreferred)
+            )
             let pivot = InputSystem.orbitPivot(
                 eye: eye,
-                forward: -forwardDirectionVector(from: cameraComponent.rotation),
-                currentTarget: getCameraTarget(entityId: camera)
+                forward: forward,
+                currentTarget: getCameraTarget(entityId: camera),
+                sceneHitDistance: sceneHit?.distance
             )
             let currentUp = getCameraUp(entityId: camera)
             let up = simd_length(currentUp) > 0.001 ? currentUp : cameraUpDefault
