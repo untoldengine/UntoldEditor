@@ -208,12 +208,12 @@ final class CameraNavigationDragTests: XCTestCase {
     }
 
     func test_orbitPivotKeepsThePreviousDepthWhenLookingAtTheSky() {
-        // Looking up: no ground hit. The old target sits 4 ahead but off to the
+        // Looking up: no ground hit. The old target sits 8 ahead but off to the
         // side; only its depth is kept so adopting the pivot does not turn the view.
         let eye = simd_float3(0, 5, 0)
         let forward = simd_float3(0, 1, -1)
-        let pivot = InputSystem.orbitPivot(eye: eye, forward: forward, currentTarget: eye + simd_normalize(forward) * 4 + simd_float3(2, 0, 0))
-        XCTAssertEqual(simd_distance(pivot, eye + simd_normalize(forward) * 4), 0, accuracy: 1e-4)
+        let pivot = InputSystem.orbitPivot(eye: eye, forward: forward, currentTarget: eye + simd_normalize(forward) * 8 + simd_float3(2, 0, 0))
+        XCTAssertEqual(simd_distance(pivot, eye + simd_normalize(forward) * 8), 0, accuracy: 1e-4)
     }
 
     func test_orbitPivotFallsBackToTheDefaultDepth() {
@@ -242,10 +242,30 @@ final class CameraNavigationDragTests: XCTestCase {
         let object = InputSystem.orbitPivot(eye: level, forward: grazing, currentTarget: level + grazing * 80, sceneHitDistance: 2)
         XCTAssertEqual(simd_distance(object, level), 2, accuracy: 1e-4)
 
-        // Out-of-range candidates are ignored: a hit right at the lens, ground
-        // and target past the limit. Only the default depth is left.
+        // Out-of-range candidates are ignored: a hit right at the lens and a target
+        // past the limit leave the ground, 50 away, as the only valid candidate.
         let ignored = InputSystem.orbitPivot(eye: level, forward: grazing, currentTarget: level + grazing * 500, sceneHitDistance: 0.1)
-        XCTAssertEqual(simd_distance(ignored, level), InputSystem.defaultOrbitPivotDistance, accuracy: 1e-4)
+        XCTAssertEqual(simd_distance(ignored, level), 50, accuracy: 0.05)
+    }
+
+    func test_gaussianBoundsUnderTheViewCentreSetThePivot() {
+        // A splat box 1 unit across, sitting on the ground at the origin, between the
+        // camera and the ground hit: the pivot lands on the box, not the ground behind it.
+        let splat = createEntity()
+        registerComponent(entityId: splat, componentType: GaussianComponent.self)
+        scene.get(component: LocalTransformComponent.self, for: splat)?.boundingBox = (
+            min: simd_float3(-0.5, -0.5, -0.5), max: simd_float3(0.5, 0.5, 0.5)
+        )
+        translateTo(entityId: splat, position: simd_float3(0, 0.5, 0))
+
+        let forward = simd_normalize(simd_float3(0, -2, -3))
+        let depth = InputSystem.gaussianBoundsDepth(rayOrigin: eye, rayDirection: forward)
+        XCTAssertEqual(depth ?? -1, 3.0, accuracy: 0.01, "ray enters the box on its front face")
+
+        InputSystem.shared.reanchorSceneCameraTarget()
+
+        XCTAssertEqual(simd_distance(target, simd_float3(0, 1.0 / 3.0, 0.5)), 0, accuracy: 0.01)
+        XCTAssertNil(InputSystem.gaussianBoundsDepth(rayOrigin: eye, rayDirection: simd_float3(0, 1, 0)), "looking up misses the box")
     }
 
     func test_reanchorAfterFlyingMovesTheTargetNotTheCamera() throws {

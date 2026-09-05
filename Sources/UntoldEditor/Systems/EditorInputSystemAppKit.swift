@@ -236,14 +236,11 @@
 
         /// Idle time between scroll events that starts a new navigation session.
         static let scrollSessionGap: TimeInterval = 0.35
-        /// Nearest and farthest the pivot may sit ahead of the camera. The orbit
-        /// is meant to turn around a point close to where the camera is, whatever
-        /// it flew past or zoomed through before, so the far limit is short and a
-        /// wheel notch never sweeps a long arc around distant ground.
+        /// Nearest and farthest the pivot may sit ahead of the camera.
         static let minimumOrbitPivotDistance: Float = 0.25
-        static let maximumOrbitPivotDistance: Float = 5
+        static let maximumOrbitPivotDistance: Float = 100
         /// Pivot distance when nothing within range lies ahead (sky, far ground).
-        static let defaultOrbitPivotDistance: Float = 3
+        static let defaultOrbitPivotDistance: Float = 10
 
         /// Where the camera should orbit, zoom and pan around, always on the view
         /// ray so adopting it never turns the camera. The nearest of three depths
@@ -292,20 +289,73 @@
             let eye = cameraComponent.localPosition
             // The camera looks down its negative Z axis, as the spawn code assumes.
             let forward = -forwardDirectionVector(from: cameraComponent.rotation)
-            let sceneHit = pickEntity(
-                rayOrigin: eye,
-                rayDirection: forward,
-                options: ScenePickOptions(isGizmoActive: gizmoActive, backend: .octreeGPUPreferred)
-            )
             let pivot = InputSystem.orbitPivot(
                 eye: eye,
                 forward: forward,
                 currentTarget: getCameraTarget(entityId: camera),
-                sceneHitDistance: sceneHit?.distance
+                sceneHitDistance: sceneDepthUnderViewCentre(eye: eye, forward: forward)
             )
             let currentUp = getCameraUp(entityId: camera)
             let up = simd_length(currentUp) > 0.001 ? currentUp : cameraUpDefault
             cameraLookAt(entityId: camera, eye: eye, target: pivot, up: up)
+        }
+
+        /// Distance along the view ray to the first thing in the scene: meshes
+        /// through the scene pick, and Gaussian splats through their bounding
+        /// boxes, which the pick's octree does not know about.
+        func sceneDepthUnderViewCentre(eye: simd_float3, forward: simd_float3) -> Float? {
+            var candidates: [Float] = []
+            if let hit = pickEntity(
+                rayOrigin: eye,
+                rayDirection: forward,
+                options: ScenePickOptions(isGizmoActive: gizmoActive, backend: .octreeGPUPreferred)
+            ) {
+                candidates.append(hit.distance)
+            }
+            if let gaussian = InputSystem.gaussianBoundsDepth(rayOrigin: eye, rayDirection: forward) {
+                candidates.append(gaussian)
+            }
+            return candidates.min()
+        }
+
+        /// Distance along the ray to the nearest Gaussian splat entity's world-space
+        /// bounding box, or to its centre's depth when the ray starts inside the box
+        /// (zoomed right into a capture). `nil` when the ray meets none.
+        static func gaussianBoundsDepth(rayOrigin: simd_float3, rayDirection: simd_float3) -> Float? {
+            let length = simd_length(rayDirection)
+            guard length > 0.0001, length.isFinite else { return nil }
+            let direction = rayDirection / length
+
+            var nearest: Float?
+            let gaussianId = getComponentId(for: GaussianComponent.self)
+            for entityId in queryEntitiesWithComponentIds([gaussianId], in: scene) {
+                guard let local = scene.get(component: LocalTransformComponent.self, for: entityId),
+                      let world = scene.get(component: WorldTransformComponent.self, for: entityId)
+                else { continue }
+
+                var boxMin = simd_float3(repeating: .greatestFiniteMagnitude)
+                var boxMax = simd_float3(repeating: -.greatestFiniteMagnitude)
+                for corner in 0 ..< 8 {
+                    let point = simd_float4(
+                        corner & 1 == 0 ? local.boundingBox.min.x : local.boundingBox.max.x,
+                        corner & 2 == 0 ? local.boundingBox.min.y : local.boundingBox.max.y,
+                        corner & 4 == 0 ? local.boundingBox.min.z : local.boundingBox.max.z,
+                        1
+                    )
+                    let moved = simd_mul(world.space, point)
+                    boxMin = simd_min(boxMin, simd_float3(moved.x, moved.y, moved.z))
+                    boxMax = simd_max(boxMax, simd_float3(moved.x, moved.y, moved.z))
+                }
+
+                var entry: Float = 0
+                guard rayIntersectsAABB(rayOrigin: rayOrigin, rayDir: direction, boxMin: boxMin, boxMax: boxMax, tmin: &entry) else {
+                    continue
+                }
+                let depth = entry >= 0 ? entry : simd_dot((boxMin + boxMax) / 2 - rayOrigin, direction)
+                guard depth > 0, depth.isFinite else { continue }
+                nearest = Swift.min(nearest ?? depth, depth)
+            }
+            return nearest
         }
 
         /// Orbit per point of trackpad scroll, matching the drag orbit's feel.
