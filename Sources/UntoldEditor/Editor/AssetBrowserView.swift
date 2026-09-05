@@ -52,6 +52,28 @@ func copyRuntimeAssetSidecars(for sourceURL: URL, to destinationFolder: URL, fil
     }
 }
 
+/// Importing a source asset (USD, .blend, …) means two things: the file is copied into
+/// the project, and then it is converted to the engine's runtime format. This does the
+/// first part. The source lands in `destinationFolder` (next to where the converter will
+/// write its output) together with any sibling texture folder, so the project keeps the
+/// original even if only the cooked file is ever used, and it can be re-converted later
+/// without the file it came from. Returns the project copy, which is what converters
+/// should run on. A source that already lives in `destinationFolder` is left alone.
+func importSourceAsset(sourceURL: URL, destinationFolder: URL, fileManager fm: FileManager = .default) throws -> URL {
+    try fm.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
+
+    let destinationURL = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
+    if destinationURL.standardizedFileURL.path == sourceURL.standardizedFileURL.path {
+        return sourceURL
+    }
+    if fm.fileExists(atPath: destinationURL.path) {
+        try fm.removeItem(at: destinationURL)
+    }
+    try fm.copyItem(at: sourceURL, to: destinationURL)
+    try copyRuntimeAssetSidecars(for: sourceURL, to: destinationFolder, fileManager: fm)
+    return destinationURL
+}
+
 func primaryRuntimeAsset(in folder: URL, fileManager fm: FileManager = .default) -> URL? {
     guard let contents = try? fm.contentsOfDirectory(
         at: folder,
@@ -477,6 +499,9 @@ struct AssetBrowserView: View {
     /// source in an import batch (the sheet is shown once per batch).
     @State private var pendingGaussianCookURLs: [URL] = []
     @State private var gaussianCookSettings = GaussianCookSettings()
+    /// Import copies still running (see `AssetImportCopy.swift`). Past the placeholder
+    /// delay each one is drawn as a placeholder row in the folder that will receive it.
+    @State private var pendingImports: [PendingAssetImport] = []
     @State private var pendingRuntimeExport: RuntimeExportRequest?
     @State private var runtimeExportQueue: [RuntimeExportRequest] = []
     @State private var isExportingRuntimeAsset = false
@@ -777,14 +802,21 @@ struct AssetBrowserView: View {
                 folderContentsView(for: currentFolderPath, selectionManager: selectionManager)
             } else if let categoryAssets = assets[selectedCategory] {
                 let filtered = categoryAssets.filter { matchesSearch($0) }
-                if filtered.isEmpty {
+                let categoryRoot = AssetCategory(rawValue: selectedCategory).flatMap(categoryRootURL)
+                let placeholders = categoryRoot.map { placeholderImports(pendingImports, in: $0) } ?? []
+                if filtered.isEmpty, placeholders.isEmpty {
                     Text("No assets available")
                         .foregroundColor(.editorTextTertiary)
                         .padding()
                 } else {
-                    assetRowList(filtered, spacing: 4) { asset in
-                        if !isScripts {
-                            folderPathStack.append(asset.path)
+                    VStack(alignment: .leading, spacing: 4) {
+                        assetRowList(filtered, spacing: 4) { asset in
+                            if !isScripts {
+                                folderPathStack.append(asset.path)
+                            }
+                        }
+                        if let categoryRoot {
+                            importPlaceholderRows(in: categoryRoot)
                         }
                     }
                 }
@@ -1027,127 +1059,122 @@ struct AssetBrowserView: View {
         let categoryRoot = destinationOverride ?? basePath.appendingPathComponent(categoryString, isDirectory: true)
         // Ensure the destination folder exists (e.g., <Base>/Models or a subfolder)
         try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
+
+        guard openPanel.runModal() == .OK else { return }
+
+        // Every copy is its own Tasks-panel job on the import queue; the batch group
+        // fires once they have all landed (or failed).
+        let batch = DispatchGroup()
         // Gaussian files copied in this batch; the `.ply` ones get cooked afterwards.
         var importedGaussianURLs: [URL] = []
 
-        if openPanel.runModal() == .OK {
-            for sourceURL in openPanel.urls {
-                do {
-                    switch categoryString {
-                    case "HDR":
-                        // Copy .hdr directly into HDR folder
-                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
-                        if fm.fileExists(atPath: destURL.path) {
-                            try fm.removeItem(at: destURL)
-                        }
-                        try fm.copyItem(at: sourceURL, to: destURL)
-
-                    case "LUT":
-                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
-                        if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
-                        try fm.copyItem(at: sourceURL, to: destURL)
-
-                    case "Gaussians":
-                        // Copy Gaussian files directly into Gaussians folder
-                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
-                        if fm.fileExists(atPath: destURL.path) {
-                            try fm.removeItem(at: destURL)
-                        }
-                        try fm.copyItem(at: sourceURL, to: destURL)
-                        importedGaussianURLs.append(destURL)
-
-                    case "Materials":
-                        if sourceURL.hasDirectoryPath {
-                            // Copy entire material folder (recommended)
-                            let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
-                            if fm.fileExists(atPath: destURL.path) {
-                                try fm.removeItem(at: destURL)
-                            }
-                            try fm.copyItem(at: sourceURL, to: destURL)
-                        } else {
-                            // Single texture fallback → create folder named after the file (without ext)
-                            let baseName = sourceURL.deletingPathExtension().lastPathComponent
-                            let materialFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                            if fm.fileExists(atPath: materialFolder.path) {
-                                try fm.removeItem(at: materialFolder)
-                            }
-                            try fm.createDirectory(at: materialFolder, withIntermediateDirectories: true)
-                            let destFile = materialFolder.appendingPathComponent(sourceURL.lastPathComponent)
-                            try fm.copyItem(at: sourceURL, to: destFile)
-                        }
-
-                    case "Models", "Animations":
-                        let baseName = sourceURL.deletingPathExtension().lastPathComponent
-                        let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                        let sourceExtension = sourceURL.pathExtension.lowercased()
-
-                        if sourceExtension == runtimeAssetExtension {
-                            try importRuntimeAsset(sourceURL: sourceURL, destinationFolder: destFolder, fileManager: fm)
-                        } else if sourceAssetExtensions.contains(sourceExtension) {
-                            queueRuntimeExport(
-                                sourceURL: sourceURL,
-                                category: category,
-                                destinationFolder: destFolder
-                            )
-                        }
-
-                    case "StreamModels":
-                        let sourceExtension = sourceURL.pathExtension.lowercased()
-                        if sourceAssetExtensions.contains(sourceExtension) {
-                            let baseName = sourceURL.deletingPathExtension().lastPathComponent
-                            let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                            queueTilesExport(sourceURL: sourceURL, destinationFolder: destFolder)
-                        } else if sourceURL.hasDirectoryPath {
-                            guard primaryTiledSceneManifest(in: sourceURL, fileManager: fm) != nil else {
-                                showStatus("No tiled scene manifest found in selected folder", isError: true)
-                                continue
-                            }
-
-                            let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
-                            if fm.fileExists(atPath: destURL.path) {
-                                try fm.removeItem(at: destURL)
-                            }
-                            try fm.copyItem(at: sourceURL, to: destURL)
-                        } else if isTiledSceneManifest(sourceURL) {
-                            let baseName = sourceURL.deletingPathExtension().lastPathComponent
-                            let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                            if fm.fileExists(atPath: destFolder.path) {
-                                try fm.removeItem(at: destFolder)
-                            }
-                            try importStreamModelManifest(sourceURL: sourceURL, destinationFolder: destFolder, fileManager: fm)
-                        } else {
-                            showStatus("Selected JSON is not a tiled scene manifest", isError: true)
-                        }
-
-                    case "Scenes":
-                        // Copy Scenes files directly into Scenes folder
-                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
-                        if fm.fileExists(atPath: destURL.path) {
-                            try fm.removeItem(at: destURL)
-                        }
-                        try fm.copyItem(at: sourceURL, to: destURL)
-
-                    case "Scripts":
-                        // Copy Scripts files directly into Scripts folder
-                        let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
-                        if fm.fileExists(atPath: destURL.path) {
-                            try fm.removeItem(at: destURL)
-                        }
-                        try fm.copyItem(at: sourceURL, to: destURL)
-
-                    default:
-                        break
-                    }
-                } catch {
-                    print("Error copying \(sourceURL.lastPathComponent): \(error)")
+        for sourceURL in openPanel.urls {
+            switch categoryString {
+            case "HDR", "LUT", "Scenes", "Scripts":
+                // Plain copy into the folder
+                let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
+                enqueueImport(destination: destURL, isFolder: false, batch: batch) { staging in
+                    try fm.copyItem(at: sourceURL, to: staging)
                 }
-            }
 
+            case "Gaussians":
+                // Copy the .ply / .untoldgs; a .ply is cooked once the whole batch is in.
+                let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
+                enqueueImport(destination: destURL, isFolder: false, batch: batch) { staging in
+                    try fm.copyItem(at: sourceURL, to: staging)
+                } completion: { url in
+                    importedGaussianURLs.append(url)
+                }
+
+            case "Materials":
+                if sourceURL.hasDirectoryPath {
+                    // Copy entire material folder (recommended)
+                    let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
+                    enqueueImport(destination: destURL, isFolder: true, batch: batch) { staging in
+                        try fm.copyItem(at: sourceURL, to: staging)
+                    }
+                } else {
+                    // Single texture fallback → folder named after the file (without ext)
+                    let baseName = sourceURL.deletingPathExtension().lastPathComponent
+                    let materialFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
+                    enqueueImport(destination: materialFolder, isFolder: true, batch: batch) { staging in
+                        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+                        try fm.copyItem(at: sourceURL, to: staging.appendingPathComponent(sourceURL.lastPathComponent))
+                    }
+                }
+
+            case "Models", "Animations":
+                let baseName = sourceURL.deletingPathExtension().lastPathComponent
+                let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
+                let sourceExtension = sourceURL.pathExtension.lowercased()
+
+                if sourceExtension == runtimeAssetExtension {
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { staging in
+                        try importRuntimeAsset(sourceURL: sourceURL, destinationFolder: staging, fileManager: fm)
+                    }
+                } else if sourceAssetExtensions.contains(sourceExtension) {
+                    // Import = copy the source into the project, then convert the
+                    // project copy. The original stays beside the .untold output.
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { staging in
+                        _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: staging, fileManager: fm)
+                    } completion: { folder in
+                        queueRuntimeExport(
+                            sourceURL: folder.appendingPathComponent(sourceURL.lastPathComponent),
+                            category: category,
+                            destinationFolder: folder
+                        )
+                    }
+                }
+
+            case "StreamModels":
+                let sourceExtension = sourceURL.pathExtension.lowercased()
+                if sourceAssetExtensions.contains(sourceExtension) {
+                    let baseName = sourceURL.deletingPathExtension().lastPathComponent
+                    let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
+                    // Same as Models: keep the source in the project and tile the copy.
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { staging in
+                        _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: staging, fileManager: fm)
+                    } completion: { folder in
+                        queueTilesExport(
+                            sourceURL: folder.appendingPathComponent(sourceURL.lastPathComponent),
+                            destinationFolder: folder
+                        )
+                    }
+                } else if sourceURL.hasDirectoryPath {
+                    guard primaryTiledSceneManifest(in: sourceURL, fileManager: fm) != nil else {
+                        showStatus("No tiled scene manifest found in selected folder", isError: true)
+                        continue
+                    }
+
+                    let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
+                    enqueueImport(destination: destURL, isFolder: true, batch: batch) { staging in
+                        try fm.copyItem(at: sourceURL, to: staging)
+                    }
+                } else if isTiledSceneManifest(sourceURL) {
+                    let baseName = sourceURL.deletingPathExtension().lastPathComponent
+                    let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { staging in
+                        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+                        try importStreamModelManifest(sourceURL: sourceURL, destinationFolder: staging, fileManager: fm)
+                    }
+                } else {
+                    showStatus("Selected JSON is not a tiled scene manifest", isError: true)
+                }
+
+            default:
+                break
+            }
+        }
+
+        let count = openPanel.urls.count
+        showStatus("Importing \(count) item(s) (see Tasks)...")
+
+        batch.notify(queue: .main) {
             loadAssets()
             if runtimeExportQueue.isEmpty, pendingRuntimeExport == nil,
                tilesExportQueue.isEmpty, pendingTilesExport == nil
             {
-                showStatus("Queued import of \(openPanel.urls.count) item(s) (see Console)")
+                showStatus("Imported \(count) item(s)")
             }
 
             // Imported `.ply` sources are cooked to `.untoldgs` right away: one options
@@ -1157,6 +1184,45 @@ struct AssetBrowserView: View {
                 pendingGaussianCookURLs = sourcesToCook
                 showGaussianCookSheet = true
             }
+        }
+    }
+
+    /// Copies one imported item as a Tasks-panel job (see `importAssetTracked`). The
+    /// item is hidden until the copy is complete; if the copy is still running after
+    /// `assetImportPlaceholderDelay` the content panel shows a placeholder row for it.
+    /// `completion` runs on the main queue with the final URL only when the copy worked.
+    private func enqueueImport(
+        destination: URL,
+        isFolder: Bool,
+        batch: DispatchGroup,
+        work: @escaping (URL) throws -> Void,
+        completion: @escaping (URL) -> Void = { _ in }
+    ) {
+        let pending = PendingAssetImport(destinationURL: destination, isFolder: isFolder)
+        pendingImports.append(pending)
+        batch.enter()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + assetImportPlaceholderDelay) {
+            guard let index = pendingImports.firstIndex(where: { $0.id == pending.id }) else { return }
+            pendingImports[index].showsPlaceholder = true
+        }
+
+        let detail = assetBasePath.map { base in
+            destination.deletingLastPathComponent().path
+                .replacingOccurrences(of: base.path, with: "")
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        } ?? ""
+        importAssetTracked(destination: destination, detail: detail.isEmpty ? "" : "→ \(detail)/", work: work) { result in
+            pendingImports.removeAll { $0.id == pending.id }
+            switch result {
+            case let .success(url):
+                loadAssets()
+                completion(url)
+            case let .failure(error):
+                showStatus("Import failed for \(destination.lastPathComponent): \(error.localizedDescription)", isError: true)
+                Logger.log(message: "❌ Import failed for \(destination.lastPathComponent): \(error)")
+            }
+            batch.leave()
         }
     }
 
@@ -1199,7 +1265,7 @@ struct AssetBrowserView: View {
                 .font(.title2)
                 .bold()
 
-            Text("This USD or .blend file needs to be converted to Untold Engine's .untold runtime format before it can be added to your project.")
+            Text("This USD or .blend file has been copied into your project. Convert it to Untold Engine's .untold runtime format to use it in scenes; the source stays next to the output and can be converted again later.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1483,7 +1549,7 @@ struct AssetBrowserView: View {
                 .font(.title2)
                 .bold()
 
-            Text("This USD or .blend file will be partitioned into tile payloads and a manifest JSON using export-untold-tiles.")
+            Text("This USD or .blend file has been copied into your project. It will be partitioned into tile payloads and a manifest JSON using export-untold-tiles; the source stays next to the output.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1970,6 +2036,33 @@ struct AssetBrowserView: View {
         .cornerRadius(6)
     }
 
+    /// Row for an import whose copy is still running: the icon and file name it will
+    /// have, dimmed, with a spinner. It is not selectable and has no gestures.
+    private func importPlaceholderRow(_ pending: PendingAssetImport) -> some View {
+        HStack {
+            Image(systemName: pending.isFolder ? "folder" : "doc")
+                .foregroundColor(.editorTextTertiary)
+            Text(pending.name)
+                .font(.system(size: 14, weight: .regular, design: .monospaced))
+                .foregroundColor(.editorTextTertiary)
+            Spacer()
+            ProgressView()
+                .controlSize(.small)
+            Text("Importing…")
+                .font(.caption)
+                .foregroundColor(.editorTextTertiary)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .help("Copying into the project — see the Tasks panel.")
+    }
+
+    private func importPlaceholderRows(in folder: URL) -> some View {
+        ForEach(placeholderImports(pendingImports, in: folder)) { pending in
+            importPlaceholderRow(pending)
+        }
+    }
+
     /// Shared row list used by both the flat-category listing and
     /// folderContentsView. Only the folder-tap navigation differs per call site.
     private func assetRowList(_ assets: [Asset], spacing: CGFloat, onFolderTap: @escaping (Asset) -> Void) -> some View {
@@ -1985,6 +2078,32 @@ struct AssetBrowserView: View {
                                 showGaussianCookSheet = true
                             } label: {
                                 Label("Cook to .untoldgs…", systemImage: "sparkles")
+                            }
+                        }
+                        if sourceAssetExtensions.contains(asset.path.pathExtension.lowercased()) {
+                            // A source kept in the project after import: convert it again
+                            // (same folder as the original import) with fresh options.
+                            if asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue,
+                               let category = AssetCategory(rawValue: asset.category)
+                            {
+                                Button {
+                                    queueRuntimeExport(
+                                        sourceURL: asset.path,
+                                        category: category,
+                                        destinationFolder: asset.path.deletingLastPathComponent()
+                                    )
+                                } label: {
+                                    Label("Convert to .untold…", systemImage: "sparkles")
+                                }
+                            } else if asset.category == AssetCategory.streamModels.rawValue {
+                                Button {
+                                    queueTilesExport(
+                                        sourceURL: asset.path,
+                                        destinationFolder: asset.path.deletingLastPathComponent()
+                                    )
+                                } label: {
+                                    Label("Convert to tiled stream model…", systemImage: "sparkles")
+                                }
                             }
                         }
                         Button(role: .destructive) {
@@ -2018,7 +2137,9 @@ struct AssetBrowserView: View {
                     if isDir.boolValue {
                         return Asset(name: item.lastPathComponent, category: itemCategory, path: item, isFolder: true)
                     } else {
-                        let allowedExtensions: Set<String> = [runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "exr", "cube", "tif", "tiff", "ply", "untoldgs", "json", "uscript", "remotestream"]
+                        // Imported sources (USD, .blend) are listed too: they stay in the
+                        // project beside their cooked output and can be re-converted.
+                        let allowedExtensions: Set<String> = Set([runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "exr", "cube", "tif", "tiff", "ply", "untoldgs", "json", "uscript", "remotestream"]).union(sourceAssetExtensions)
                         guard allowedExtensions.contains(item.pathExtension.lowercased()) else { return nil }
 
                         return Asset(name: item.lastPathComponent,
@@ -2029,13 +2150,16 @@ struct AssetBrowserView: View {
                 return nil
             }
 
-            assetRowList(items.filter { matchesSearch($0) }, spacing: 8) { asset in
-                if selectedDirURL != nil {
-                    // Generic navigation (root-level / custom folders)
-                    selectedDirURL = asset.path
-                } else if selectedCategory != AssetCategory.scripts.rawValue {
-                    folderPathStack.append(asset.path)
+            VStack(alignment: .leading, spacing: 8) {
+                assetRowList(items.filter { matchesSearch($0) }, spacing: 8) { asset in
+                    if selectedDirURL != nil {
+                        // Generic navigation (root-level / custom folders)
+                        selectedDirURL = asset.path
+                    } else if selectedCategory != AssetCategory.scripts.rawValue {
+                        folderPathStack.append(asset.path)
+                    }
                 }
+                importPlaceholderRows(in: folder)
             }
         } else {
             Text("Folder is empty or inaccessible.")

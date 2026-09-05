@@ -775,6 +775,61 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
+    // MARK: - importSourceAsset (import = copy the source, then convert the copy)
+
+    func test_importSourceAsset_copiesSourceAndSiblingTexturesIntoProject() throws {
+        try withTempDirectory { base in
+            let downloads = base.appendingPathComponent("Downloads", isDirectory: true)
+            let textures = downloads.appendingPathComponent("Textures", isDirectory: true)
+            try FileManager.default.createDirectory(at: textures, withIntermediateDirectories: true)
+            let source = downloads.appendingPathComponent("robot.usdz")
+            FileManager.default.createFile(atPath: source.path, contents: Data("usd".utf8))
+            FileManager.default.createFile(atPath: textures.appendingPathComponent("albedo.png").path, contents: Data("png".utf8))
+
+            // The destination folder does not exist yet, like a fresh <Base>/Models/robot.
+            let destination = base.appendingPathComponent("Models/robot", isDirectory: true)
+
+            let projectCopy = try importSourceAsset(sourceURL: source, destinationFolder: destination)
+
+            XCTAssertEqual(projectCopy, destination.appendingPathComponent("robot.usdz"))
+            XCTAssertEqual(try Data(contentsOf: projectCopy), Data("usd".utf8))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appendingPathComponent("Textures/albedo.png").path))
+            // The original is untouched: importing copies, it never moves.
+            XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        }
+    }
+
+    func test_importSourceAsset_replacesAnExistingProjectCopy() throws {
+        try withTempDirectory { base in
+            let source = base.appendingPathComponent("robot.blend")
+            FileManager.default.createFile(atPath: source.path, contents: Data("new".utf8))
+            let destination = base.appendingPathComponent("Models/robot", isDirectory: true)
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            let stale = destination.appendingPathComponent("robot.blend")
+            FileManager.default.createFile(atPath: stale.path, contents: Data("old".utf8))
+
+            let projectCopy = try importSourceAsset(sourceURL: source, destinationFolder: destination)
+
+            XCTAssertEqual(projectCopy, stale)
+            XCTAssertEqual(try Data(contentsOf: projectCopy), Data("new".utf8))
+        }
+    }
+
+    func test_importSourceAsset_leavesASourceAlreadyInTheProjectAlone() throws {
+        try withTempDirectory { base in
+            // Re-converting from the context menu passes the project copy itself.
+            let destination = base.appendingPathComponent("Models/robot", isDirectory: true)
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            let source = destination.appendingPathComponent("robot.usdz")
+            FileManager.default.createFile(atPath: source.path, contents: Data("usd".utf8))
+
+            let projectCopy = try importSourceAsset(sourceURL: source, destinationFolder: destination)
+
+            XCTAssertEqual(projectCopy, source)
+            XCTAssertEqual(try Data(contentsOf: source), Data("usd".utf8))
+        }
+    }
+
     func test_importAssetForCategory_modelsFiltersOnlyUntold() throws {
         try withTempDirectory { base in
             // Create Models directory
