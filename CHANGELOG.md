@@ -1,4 +1,13 @@
 # Changelog
+## v0.18.1 - 2026-09-05
+### 🐞 Fixes
+- [Patch] Added import tooltip (040429b…)
+- [Patch] fixed light direction - Gizmo tool (77419dc…)
+- [Patch] Added Tonemap selection in Effects View (51cff57…)
+- [Patch] Added LUT selection (7a14edc…)
+- [Patch] serialized fx and lut data (dd22201…)
+- [Patch] Fix gizmo system (34f9385…)
+- [Patch] Enable sky rendering (3b117f6…)
 ## v0.18.0 - 2026-08-30
 ### 🐞 Fixes
 - [Patch]Restore scene-authored loading in Environment panel (bac0530…)

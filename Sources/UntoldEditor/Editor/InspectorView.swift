@@ -1604,7 +1604,7 @@ struct DirLightEditorView: View {
                             refreshView()
                         }
                     ), fractionDigits: 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     TextInputNumberView(label: "Azimuth", value: Binding(
                         get: { getSunElevationAzimuth(entityId: entityId).azimuth },
@@ -1619,7 +1619,7 @@ struct DirLightEditorView: View {
                             refreshView()
                         }
                     ), fractionDigits: 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.vertical, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)

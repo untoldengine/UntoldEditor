@@ -201,7 +201,7 @@ final class GizmoSystemTests: XCTestCase {
                        "Gizmo should be placed at active entity’s position.")
     }
 
-    func test_createGizmo_appliesScreenSpaceScaleImmediatelyForFarEntity() {
+    func test_createGizmo_appliesScreenSpaceScaleImmediatelyForFarEntity() throws {
         renderInfo.viewPort = simd_float2(1280.0, 720.0)
         let camera = makeCamera(eye: simd_float3(0.0, 0.0, 0.0))
         let active = makeEntity(name: "FarCube", pos: SIMD3<Float>(0.0, 0.0, -60.0))
@@ -215,7 +215,7 @@ final class GizmoSystemTests: XCTestCase {
             viewport: renderInfo.viewPort
         )
         XCTAssertNotNil(expectedScale)
-        XCTAssertEqual(getScale(entityId: parentEntityIdGizmo).x, expectedScale!, accuracy: 0.0001)
+        XCTAssertEqual(getScale(entityId: parentEntityIdGizmo).x, try XCTUnwrap(expectedScale), accuracy: 0.0001)
         XCTAssertGreaterThan(getScale(entityId: parentEntityIdGizmo).x, 1.0)
     }
 

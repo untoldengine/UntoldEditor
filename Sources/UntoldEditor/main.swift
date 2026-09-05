@@ -29,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var rightPanelItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_: Notification) {
-        Logger.log(message: "Launching Untold Engine Editor v0.18.0")
+        Logger.log(message: "Launching Untold Engine Editor v0.18.1")
 
         setupMainMenu()
 
@@ -41,7 +41,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             defer: false
         )
 
-        window.title = "Untold Engine Editor v0.18.0"
+        window.title = "Untold Engine Editor v0.18.1"
         // Force dark appearance so AppKit-drawn chrome (title bar, native tab
         // strips, segmented controls) matches the dark editor theme.
         window.appearance = NSAppearance(named: .darkAqua)
