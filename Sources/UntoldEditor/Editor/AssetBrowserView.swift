@@ -59,7 +59,13 @@ func copyRuntimeAssetSidecars(for sourceURL: URL, to destinationFolder: URL, fil
 /// original even if only the cooked file is ever used, and it can be re-converted later
 /// without the file it came from. Returns the project copy, which is what converters
 /// should run on. A source that already lives in `destinationFolder` is left alone.
-func importSourceAsset(sourceURL: URL, destinationFolder: URL, fileManager fm: FileManager = .default) throws -> URL {
+func importSourceAsset(
+    sourceURL: URL,
+    destinationFolder: URL,
+    fileManager fm: FileManager = .default,
+    copy: ((URL, URL) throws -> Void)? = nil
+) throws -> URL {
+    let copyFile = copy ?? { try fm.copyItem(at: $0, to: $1) }
     try fm.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
 
     let destinationURL = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
@@ -69,7 +75,7 @@ func importSourceAsset(sourceURL: URL, destinationFolder: URL, fileManager fm: F
     if fm.fileExists(atPath: destinationURL.path) {
         try fm.removeItem(at: destinationURL)
     }
-    try fm.copyItem(at: sourceURL, to: destinationURL)
+    try copyFile(sourceURL, destinationURL)
     try copyRuntimeAssetSidecars(for: sourceURL, to: destinationFolder, fileManager: fm)
     return destinationURL
 }
@@ -1065,41 +1071,38 @@ struct AssetBrowserView: View {
         // Every copy is its own Tasks-panel job on the import queue; the batch group
         // fires once they have all landed (or failed).
         let batch = DispatchGroup()
-        // Gaussian files copied in this batch; the `.ply` ones get cooked afterwards.
-        var importedGaussianURLs: [URL] = []
 
         for sourceURL in openPanel.urls {
             switch categoryString {
             case "HDR", "LUT", "Scenes", "Scripts":
                 // Plain copy into the folder
                 let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
-                enqueueImport(destination: destURL, isFolder: false, batch: batch) { staging in
-                    try fm.copyItem(at: sourceURL, to: staging)
+                enqueueImport(destination: destURL, isFolder: false, batch: batch) { ctx in
+                    try ctx.copy(sourceURL, to: ctx.stagingURL, fileManager: fm)
                 }
 
             case "Gaussians":
-                // Copy the .ply / .untoldgs; a .ply is cooked once the whole batch is in.
+                // Copy the .ply / .untoldgs. Importing only copies: a .ply is cooked when the
+                // user asks for it, from the row's "Cook to .untoldgs…" context action.
                 let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
-                enqueueImport(destination: destURL, isFolder: false, batch: batch) { staging in
-                    try fm.copyItem(at: sourceURL, to: staging)
-                } completion: { url in
-                    importedGaussianURLs.append(url)
+                enqueueImport(destination: destURL, isFolder: false, batch: batch) { ctx in
+                    try ctx.copy(sourceURL, to: ctx.stagingURL, fileManager: fm)
                 }
 
             case "Materials":
                 if sourceURL.hasDirectoryPath {
                     // Copy entire material folder (recommended)
                     let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
-                    enqueueImport(destination: destURL, isFolder: true, batch: batch) { staging in
-                        try fm.copyItem(at: sourceURL, to: staging)
+                    enqueueImport(destination: destURL, isFolder: true, batch: batch) { ctx in
+                        try ctx.copy(sourceURL, to: ctx.stagingURL, fileManager: fm)
                     }
                 } else {
                     // Single texture fallback → folder named after the file (without ext)
                     let baseName = sourceURL.deletingPathExtension().lastPathComponent
                     let materialFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                    enqueueImport(destination: materialFolder, isFolder: true, batch: batch) { staging in
-                        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
-                        try fm.copyItem(at: sourceURL, to: staging.appendingPathComponent(sourceURL.lastPathComponent))
+                    enqueueImport(destination: materialFolder, isFolder: true, batch: batch) { ctx in
+                        try fm.createDirectory(at: ctx.stagingURL, withIntermediateDirectories: true)
+                        try ctx.copy(sourceURL, to: ctx.stagingURL.appendingPathComponent(sourceURL.lastPathComponent), fileManager: fm)
                     }
                 }
 
@@ -1109,14 +1112,18 @@ struct AssetBrowserView: View {
                 let sourceExtension = sourceURL.pathExtension.lowercased()
 
                 if sourceExtension == runtimeAssetExtension {
-                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { staging in
-                        try importRuntimeAsset(sourceURL: sourceURL, destinationFolder: staging, fileManager: fm)
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                        try importRuntimeAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                            try ctx.copy($0, to: $1, fileManager: fm)
+                        }
                     }
                 } else if sourceAssetExtensions.contains(sourceExtension) {
                     // Import = copy the source into the project, then convert the
                     // project copy. The original stays beside the .untold output.
-                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { staging in
-                        _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: staging, fileManager: fm)
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                        _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                            try ctx.copy($0, to: $1, fileManager: fm)
+                        }
                     } completion: { folder in
                         queueRuntimeExport(
                             sourceURL: folder.appendingPathComponent(sourceURL.lastPathComponent),
@@ -1132,8 +1139,10 @@ struct AssetBrowserView: View {
                     let baseName = sourceURL.deletingPathExtension().lastPathComponent
                     let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
                     // Same as Models: keep the source in the project and tile the copy.
-                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { staging in
-                        _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: staging, fileManager: fm)
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                        _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                            try ctx.copy($0, to: $1, fileManager: fm)
+                        }
                     } completion: { folder in
                         queueTilesExport(
                             sourceURL: folder.appendingPathComponent(sourceURL.lastPathComponent),
@@ -1147,15 +1156,15 @@ struct AssetBrowserView: View {
                     }
 
                     let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
-                    enqueueImport(destination: destURL, isFolder: true, batch: batch) { staging in
-                        try fm.copyItem(at: sourceURL, to: staging)
+                    enqueueImport(destination: destURL, isFolder: true, batch: batch) { ctx in
+                        try ctx.copy(sourceURL, to: ctx.stagingURL, fileManager: fm)
                     }
                 } else if isTiledSceneManifest(sourceURL) {
                     let baseName = sourceURL.deletingPathExtension().lastPathComponent
                     let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { staging in
-                        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
-                        try importStreamModelManifest(sourceURL: sourceURL, destinationFolder: staging, fileManager: fm)
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                        try fm.createDirectory(at: ctx.stagingURL, withIntermediateDirectories: true)
+                        try importStreamModelManifest(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm)
                     }
                 } else {
                     showStatus("Selected JSON is not a tiled scene manifest", isError: true)
@@ -1176,26 +1185,19 @@ struct AssetBrowserView: View {
             {
                 showStatus("Imported \(count) item(s)")
             }
-
-            // Imported `.ply` sources are cooked to `.untoldgs` right away: one options
-            // sheet for the whole batch, then one Tasks-panel job per file.
-            let sourcesToCook = gaussianSourcesToCook(in: importedGaussianURLs)
-            if !sourcesToCook.isEmpty {
-                pendingGaussianCookURLs = sourcesToCook
-                showGaussianCookSheet = true
-            }
         }
     }
 
     /// Copies one imported item as a Tasks-panel job (see `importAssetTracked`). The
     /// item is hidden until the copy is complete; if the copy is still running after
-    /// `assetImportPlaceholderDelay` the content panel shows a placeholder row for it.
-    /// `completion` runs on the main queue with the final URL only when the copy worked.
+    /// `assetImportPlaceholderDelay` the content panel shows a placeholder row for it
+    /// with the copy progress. `completion` runs on the main queue with the final URL
+    /// only when the copy worked.
     private func enqueueImport(
         destination: URL,
         isFolder: Bool,
         batch: DispatchGroup,
-        work: @escaping (URL) throws -> Void,
+        work: @escaping (AssetImportContext) throws -> Void,
         completion: @escaping (URL) -> Void = { _ in }
     ) {
         let pending = PendingAssetImport(destinationURL: destination, isFolder: isFolder)
@@ -1212,12 +1214,22 @@ struct AssetBrowserView: View {
                 .replacingOccurrences(of: base.path, with: "")
                 .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         } ?? ""
-        importAssetTracked(destination: destination, detail: detail.isEmpty ? "" : "→ \(detail)/", work: work) { result in
+        importAssetTracked(
+            destination: destination,
+            detail: detail.isEmpty ? "" : "→ \(detail)/",
+            onProgress: { progress in
+                guard let index = pendingImports.firstIndex(where: { $0.id == pending.id }) else { return }
+                pendingImports[index].progress = progress
+            },
+            work: work
+        ) { result in
             pendingImports.removeAll { $0.id == pending.id }
             switch result {
             case let .success(url):
                 loadAssets()
                 completion(url)
+            case .failure(is CancellationError):
+                showStatus("Import cancelled: \(destination.lastPathComponent)")
             case let .failure(error):
                 showStatus("Import failed for \(destination.lastPathComponent): \(error.localizedDescription)", isError: true)
                 Logger.log(message: "❌ Import failed for \(destination.lastPathComponent): \(error)")
@@ -1226,14 +1238,20 @@ struct AssetBrowserView: View {
         }
     }
 
-    private func importRuntimeAsset(sourceURL: URL, destinationFolder: URL, fileManager fm: FileManager) throws {
+    private func importRuntimeAsset(
+        sourceURL: URL,
+        destinationFolder: URL,
+        fileManager fm: FileManager,
+        copy: ((URL, URL) throws -> Void)? = nil
+    ) throws {
+        let copyFile = copy ?? { try fm.copyItem(at: $0, to: $1) }
         try fm.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
 
         let destinationAsset = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
         if fm.fileExists(atPath: destinationAsset.path) {
             try fm.removeItem(at: destinationAsset)
         }
-        try fm.copyItem(at: sourceURL, to: destinationAsset)
+        try copyFile(sourceURL, destinationAsset)
         try copyRuntimeAssetSidecars(for: sourceURL, to: destinationFolder, fileManager: fm)
     }
 
@@ -2037,7 +2055,8 @@ struct AssetBrowserView: View {
     }
 
     /// Row for an import whose copy is still running: the icon and file name it will
-    /// have, dimmed, with a spinner. It is not selectable and has no gestures.
+    /// have, dimmed, with the copy progress (bytes so far of the total) or a spinner
+    /// until the first bytes are reported. It is not selectable and has no gestures.
     private func importPlaceholderRow(_ pending: PendingAssetImport) -> some View {
         HStack {
             Image(systemName: pending.isFolder ? "folder" : "doc")
@@ -2046,11 +2065,20 @@ struct AssetBrowserView: View {
                 .font(.system(size: 14, weight: .regular, design: .monospaced))
                 .foregroundColor(.editorTextTertiary)
             Spacer()
-            ProgressView()
-                .controlSize(.small)
-            Text("Importing…")
-                .font(.caption)
-                .foregroundColor(.editorTextTertiary)
+            if let progress = pending.progress, let fraction = progress.fraction {
+                Text(assetCopyProgressDetail(progress))
+                    .font(.caption)
+                    .foregroundColor(.editorTextTertiary)
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+                    .frame(width: 120)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Importing…")
+                    .font(.caption)
+                    .foregroundColor(.editorTextTertiary)
+            }
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 10)
