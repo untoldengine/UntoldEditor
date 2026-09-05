@@ -16,7 +16,8 @@ public enum CameraNavigationStyle: String, CaseIterable {
     /// Drag orbits. Zoom comes from the scroll wheel / pinch only; modifier
     /// keys do not change what a drag does.
     case classic
-    /// Blender-like: drag orbits, ⇧-drag pans, ⌘-drag zooms (dolly).
+    /// Blender-like: scrolling (wheel or two-finger swipe) orbits, ⇧-scroll pans,
+    /// ⌘-scroll zooms, drag orbits, ⇧-drag pans, ⌘-drag zooms (dolly).
     case blender
 
     public var title: String {
@@ -29,7 +30,7 @@ public enum CameraNavigationStyle: String, CaseIterable {
     public var summary: String {
         switch self {
         case .classic: return "Drag orbits · Scroll zooms"
-        case .blender: return "Drag orbits · ⇧ Drag pans · ⌘ Drag zooms"
+        case .blender: return "Scroll orbits · ⇧ Scroll pans · ⌘ Scroll zooms · ⇧ Drag pans · ⌘ Drag zooms"
         }
     }
 }
@@ -42,6 +43,13 @@ public enum CameraDragAction: Equatable {
     /// The drag is reserved for something else (entity manipulation), so the
     /// camera must stay put.
     case none
+}
+
+/// What a scroll wheel or two-finger swipe over the viewport does to the camera.
+public enum CameraScrollAction: Equatable {
+    case zoom
+    case orbit
+    case pan
 }
 
 /// Camera navigation preferences shared between the AppKit menu bar, SwiftUI
@@ -104,5 +112,27 @@ public final class EditorNavigationSettings: ObservableObject {
     /// Convenience over `dragAction(style:...)` using the current style.
     public func dragAction(shiftPressed: Bool, commandPressed: Bool, hasSelection: Bool) -> CameraDragAction {
         Self.dragAction(style: style, shiftPressed: shiftPressed, commandPressed: commandPressed, hasSelection: hasSelection)
+    }
+
+    /// Resolves what scrolling does. The classic style zooms, as it always has.
+    /// The Blender style navigates without any button held, so clicks stay free
+    /// for selecting: a plain wheel or two-finger swipe orbits with both axes,
+    /// ⇧-scroll pans along the view plane and ⌘-scroll zooms. ⇧ wins over ⌘,
+    /// as it does for drags.
+    public static func scrollAction(style: CameraNavigationStyle, shiftPressed: Bool, commandPressed: Bool) -> CameraScrollAction {
+        switch style {
+        case .classic:
+            return .zoom
+        case .blender:
+            if shiftPressed {
+                return .pan
+            }
+            return commandPressed ? .zoom : .orbit
+        }
+    }
+
+    /// Convenience over `scrollAction(style:...)` using the current style.
+    public func scrollAction(shiftPressed: Bool, commandPressed: Bool) -> CameraScrollAction {
+        Self.scrollAction(style: style, shiftPressed: shiftPressed, commandPressed: commandPressed)
     }
 }

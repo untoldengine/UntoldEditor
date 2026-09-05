@@ -143,6 +143,64 @@ final class CameraNavigationDragTests: XCTestCase {
         XCTAssertEqual(simd_length(target), 0, accuracy: 1e-3)
     }
 
+    func test_scrollOrbitKeepsTargetAndDistance() {
+        let eyeBefore = eye
+        let distanceBefore = simd_length(eye - target)
+
+        InputSystem.shared.orbitSceneCamera(byScroll: simd_float2(-3, 0), precise: false)
+
+        XCTAssertGreaterThan(simd_length(eye - eyeBefore), 0.01, "a wheel notch should orbit")
+        XCTAssertEqual(simd_length(target), 0, accuracy: 1e-3, "orbit keeps the target")
+        XCTAssertEqual(simd_length(eye - target), distanceBefore, accuracy: 1e-3, "orbit keeps the distance")
+        XCTAssertEqual(eye.y, eyeBefore.y, accuracy: 1e-3, "a horizontal scroll yaws around the world up axis")
+    }
+
+    func test_scrollOrbitAfterPanOrbitsAroundTheNewTarget() {
+        EditorNavigationSettings.shared.style = .blender
+        InputSystem.shared.keyState.shiftPressed = true
+        drag(translation: NSPoint(x: 100, y: 0))
+        InputSystem.shared.keyState.shiftPressed = false
+        let pannedTarget = target
+        XCTAssertGreaterThan(simd_length(pannedTarget), 0.01)
+
+        InputSystem.shared.orbitSceneCamera(byScroll: simd_float2(0, 40), precise: true)
+
+        XCTAssertEqual(simd_length(target - pannedTarget), 0, accuracy: 1e-3, "orbit re-anchors on the panned target")
+    }
+
+    func test_scrollPanMovesEyeAndTargetTogether() {
+        let eyeBefore = eye, targetBefore = target
+
+        InputSystem.shared.panSceneCamera(byScroll: simd_float2(20, -10), precise: true)
+
+        let eyeOffset = eye - eyeBefore
+        let targetOffset = target - targetBefore
+        XCTAssertGreaterThan(simd_length(eyeOffset), 0.01, "a swipe should pan")
+        XCTAssertEqual(simd_length(eyeOffset - targetOffset), 0, accuracy: 1e-4, "pan moves eye and target by the same offset")
+        XCTAssertEqual(simd_length(eye - target), simd_length(eyeBefore - targetBefore), accuracy: 1e-3)
+        // The scene follows the scroll (right, and up for a negative document Y),
+        // so the camera itself moves the opposite way.
+        XCTAssertLessThan(eyeOffset.x, 0)
+        XCTAssertLessThan(eyeOffset.y, 0)
+    }
+
+    func test_wheelPanIsScaledUpFromTrackpadPan() {
+        let eyeBefore = eye
+        InputSystem.shared.panSceneCamera(byScroll: simd_float2(2, 0), precise: true)
+        let preciseOffset = simd_length(eye - eyeBefore)
+
+        InputSystem.shared.panSceneCamera(byScroll: simd_float2(2, 0), precise: false)
+        let wheelOffset = simd_length(eye - eyeBefore) - preciseOffset
+
+        XCTAssertEqual(wheelOffset / preciseOffset, InputSystem.scrollWheelPanMultiplier, accuracy: 0.05)
+    }
+
+    func test_zeroScrollLeavesCameraAlone() {
+        let eyeBefore = eye
+        InputSystem.shared.orbitSceneCamera(byScroll: .zero, precise: true)
+        XCTAssertEqual(simd_length(eye - eyeBefore), 0, accuracy: 1e-6)
+    }
+
     func test_shiftDragWithSelectionLeavesCameraAlone() {
         // A selection only counts while an enabled editor controller exists, as in the app.
         let savedController = editorController
