@@ -534,6 +534,32 @@ private struct RemoteStreamImportSheet: View {
     }
 }
 
+/// Click handling for a content browser row. A file row selects on the very
+/// first click: its double-click is a simultaneous gesture, so SwiftUI does not
+/// hold the single click back until the double-click interval has passed (the
+/// sequential `onTapGesture(count: 2)` then `onTapGesture(count: 1)` pair does,
+/// which reads as a laggy selection). On a double-click the row is selected
+/// twice, harmlessly, and then placed. A folder row keeps the sequential pair:
+/// its single click navigates into the folder, which would otherwise fire
+/// before the double-click that places the folder's primary asset.
+struct AssetRowClickGestures: ViewModifier {
+    let isFolder: Bool
+    let onClick: () -> Void
+    let onDoubleClick: () -> Void
+
+    func body(content: Content) -> some View {
+        if isFolder {
+            content
+                .onTapGesture(count: 2, perform: onDoubleClick)
+                .onTapGesture(count: 1, perform: onClick)
+        } else {
+            content
+                .onTapGesture(perform: onClick)
+                .simultaneousGesture(TapGesture(count: 2).onEnded(onDoubleClick))
+        }
+    }
+}
+
 struct AssetBrowserView: View {
     @Binding var assets: [String: [Asset]]
     @Binding var selectedAsset: Asset?
@@ -2241,16 +2267,19 @@ struct AssetBrowserView: View {
                             Label("Delete", systemImage: "trash")
                         }
                     }
-                    .onTapGesture(count: 2) {
-                        handle_add_model_double_click(asset: asset)
-                    }
-                    .onTapGesture(count: 1) {
-                        if asset.isFolder {
-                            onFolderTap(asset)
-                        } else {
-                            selectAsset(asset)
+                    .modifier(AssetRowClickGestures(
+                        isFolder: asset.isFolder,
+                        onClick: {
+                            if asset.isFolder {
+                                onFolderTap(asset)
+                            } else {
+                                selectAsset(asset)
+                            }
+                        },
+                        onDoubleClick: {
+                            handle_add_model_double_click(asset: asset)
                         }
-                    }
+                    ))
             }
         }
     }
