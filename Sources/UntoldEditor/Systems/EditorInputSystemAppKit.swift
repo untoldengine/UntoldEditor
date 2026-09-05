@@ -91,12 +91,12 @@
             }
 
             NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-                guard let self, self.isEventInsideEditorInputView(event) else {
+                guard let self, isEventInsideEditorInputView(event) else {
                     editorInputTargetViewRef.isTrackingLeftMouseDrag = false
                     return event
                 }
                 editorInputTargetViewRef.isTrackingLeftMouseDrag = true
-                self.leftMouseDown(event)
+                leftMouseDown(event)
                 return event
             }
 
