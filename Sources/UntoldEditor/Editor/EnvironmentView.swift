@@ -43,6 +43,7 @@ func addIBL(asset: Asset?) {
 struct EnvironmentView: View {
     @State private var enableApplyIBL: Bool = false
     @State private var enableRenderEnvironment: Bool = false
+    @State private var enableSkyBackground: Bool = true
     @State private var enableColorLUT: Bool = false
     @State private var intensity: Float = 1.0
     @Binding var selectedAsset: Asset?
@@ -185,6 +186,21 @@ struct EnvironmentView: View {
                 .onChange(of: enableRenderEnvironment) { _, newValue in
                     renderEnvironment = newValue
                 }
+
+                HStack {
+                    Label(enableSkyBackground ? "Sky Background" : "Grid Background", systemImage: enableSkyBackground ? "sun.max.fill" : "square.grid.3x3")
+                        .font(.system(size: 12))
+                    Spacer()
+                    Toggle("", isOn: $enableSkyBackground)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .tint(Color.editorAccent)
+                }
+                .help("Switch the non-IBL background between the procedural sky and the debug/editor grid")
+                .onChange(of: enableSkyBackground) { _, newValue in
+                    renderSkyBackground = newValue
+                }
             }
 
             Divider()
@@ -230,6 +246,7 @@ struct EnvironmentView: View {
         .onAppear {
             enableApplyIBL = applyIBL
             enableRenderEnvironment = renderEnvironment
+            enableSkyBackground = renderSkyBackground
             enableColorLUT = ColorLUTParams.shared.enabled
             intensity = ambientIntensity
         }
