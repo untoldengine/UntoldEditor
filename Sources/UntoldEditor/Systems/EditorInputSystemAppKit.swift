@@ -208,7 +208,9 @@
                 commandPressed: keyState.commandPressed
             ) {
             case .orbit:
-                orbitSceneCamera(byScroll: simd_float2(deltaX, deltaY), precise: precise)
+                // Scroll Y is document-style (positive moves content down), the
+                // opposite of the drag's view Y, so flip it to orbit the same way.
+                orbitSceneCamera(byScroll: simd_float2(deltaX, -deltaY), precise: precise)
             case .pan:
                 // A pan follows both axes at once; no lock or dead zone.
                 panSceneCamera(byScroll: rawDelta, precise: precise)
