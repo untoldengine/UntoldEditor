@@ -24,6 +24,11 @@
         /// once when the drag begins so a modifier released mid-drag does not
         /// flip a pan into an orbit halfway through.
         var activeDragAction: CameraDragAction = .none
+        /// When the last scroll event navigated the camera. A gap longer than
+        /// `InputSystem.scrollSessionGap` starts a new session, which re-anchors
+        /// the pivot; inside a session the pivot stays put so an orbit in
+        /// progress does not wander.
+        var lastScrollNavigationTime: TimeInterval = 0
     }
 
     private let editorInputTargetViewRef = EditorInputTargetViewRef()
@@ -170,6 +175,12 @@
             }
             let precise = event.hasPreciseScrollingDeltas
 
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - editorInputTargetViewRef.lastScrollNavigationTime > InputSystem.scrollSessionGap {
+                reanchorSceneCameraTarget()
+            }
+            editorInputTargetViewRef.lastScrollNavigationTime = now
+
             // Orbit and zoom lock to the dominant axis, with X inverted and a
             // one-unit dead zone, as they always have.
             var deltaX = rawDelta.x
@@ -219,6 +230,61 @@
         func panSceneCamera(byScroll delta: simd_float2, precise: Bool) {
             let viewDelta = simd_float2(delta.x, -delta.y) * (precise ? 1 : InputSystem.scrollWheelPanMultiplier)
             panSceneCamera(by: viewDelta)
+        }
+
+        /// Idle time between scroll events that starts a new navigation session.
+        static let scrollSessionGap: TimeInterval = 0.35
+        /// Nearest and farthest the pivot may sit ahead of the camera. Beyond the
+        /// far limit a wheel notch sweeps a long arc; the default is used instead.
+        static let minimumOrbitPivotDistance: Float = 0.25
+        static let maximumOrbitPivotDistance: Float = 100
+        /// Pivot distance when the view sees neither the ground nor its previous target.
+        static let defaultOrbitPivotDistance: Float = 10
+
+        /// Where the camera should orbit, zoom and pan around, always on the view
+        /// ray so adopting it never turns the camera: the point the ray meets the
+        /// ground plane; failing that (sky, or ground too far) the previous target's
+        /// depth if it still lies ahead within range; failing that a default depth.
+        static func orbitPivot(eye: simd_float3, forward: simd_float3, currentTarget: simd_float3) -> simd_float3 {
+            let forwardLength = simd_length(forward)
+            guard forwardLength > 0.0001, forwardLength.isFinite else {
+                return currentTarget
+            }
+            let direction = forward / forwardLength
+
+            if let hit = pickGroundPosition(rayOrigin: eye, rayDirection: direction),
+               hit.distance >= minimumOrbitPivotDistance, hit.distance <= maximumOrbitPivotDistance
+            {
+                return hit.worldPosition
+            }
+
+            let depth = simd_dot(currentTarget - eye, direction)
+            if depth >= minimumOrbitPivotDistance, depth <= maximumOrbitPivotDistance {
+                return eye + direction * depth
+            }
+
+            return eye + direction * defaultOrbitPivotDistance
+        }
+
+        /// Re-anchors the scene camera's target on `orbitPivot` before a navigation
+        /// session. The target is only ever set by a look-at, so flying with WASD,
+        /// loading a scene or zooming leaves it where it was, sometimes far away or
+        /// behind the camera, and every orbit, zoom and pan step is measured from it.
+        func reanchorSceneCameraTarget() {
+            let camera = findSceneCamera()
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
+                return
+            }
+            let eye = cameraComponent.localPosition
+            // The camera looks down its negative Z axis, as the spawn code assumes.
+            let pivot = InputSystem.orbitPivot(
+                eye: eye,
+                forward: -forwardDirectionVector(from: cameraComponent.rotation),
+                currentTarget: getCameraTarget(entityId: camera)
+            )
+            let currentUp = getCameraUp(entityId: camera)
+            let up = simd_length(currentUp) > 0.001 ? currentUp : cameraUpDefault
+            cameraLookAt(entityId: camera, eye: eye, target: pivot, up: up)
         }
 
         /// Orbit per point of trackpad scroll, matching the drag orbit's feel.
@@ -551,6 +617,7 @@
                 // Store initial state
                 initialPanLocation = currentPanLocation
                 currentPanGestureState = .began
+                reanchorSceneCameraTarget()
                 let orbitDistance = simd_length(cameraComponent.localPosition - getCameraTarget(entityId: findSceneCamera()))
                 setOrbitOffset(
                     entityId: findSceneCamera(),

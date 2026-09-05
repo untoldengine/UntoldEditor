@@ -195,6 +195,55 @@ final class CameraNavigationDragTests: XCTestCase {
         XCTAssertEqual(wheelOffset / preciseOffset, InputSystem.scrollWheelPanMultiplier, accuracy: 0.05)
     }
 
+    // MARK: - Orbit pivot
+
+    func test_orbitPivotIsTheGroundHitOnTheViewRay() {
+        let pivot = InputSystem.orbitPivot(
+            eye: simd_float3(0, 5, 10),
+            forward: simd_float3(0, -5, -10),
+            currentTarget: simd_float3(50, 0, 50)
+        )
+        XCTAssertEqual(simd_length(pivot), 0, accuracy: 1e-4)
+    }
+
+    func test_orbitPivotKeepsThePreviousDepthWhenLookingAtTheSky() {
+        // Looking up: no ground hit. The old target sits 8 ahead but off to the
+        // side; only its depth is kept so adopting the pivot does not turn the view.
+        let eye = simd_float3(0, 5, 0)
+        let forward = simd_float3(0, 1, -1)
+        let pivot = InputSystem.orbitPivot(eye: eye, forward: forward, currentTarget: eye + simd_normalize(forward) * 8 + simd_float3(2, 0, 0))
+        XCTAssertEqual(simd_distance(pivot, eye + simd_normalize(forward) * 8), 0, accuracy: 1e-4)
+    }
+
+    func test_orbitPivotFallsBackToTheDefaultDepth() {
+        // Sky ahead and the old target behind the camera.
+        let eye = simd_float3(0, 5, 0)
+        let forward = simd_float3(0, 1, -1)
+        let pivot = InputSystem.orbitPivot(eye: eye, forward: forward, currentTarget: simd_float3(0, 5, 20))
+        XCTAssertEqual(simd_distance(pivot, eye), InputSystem.defaultOrbitPivotDistance, accuracy: 1e-4)
+
+        // Ground so far away that a notch would sweep a huge arc.
+        let grazing = InputSystem.orbitPivot(eye: eye, forward: simd_float3(0, -0.01, -1), currentTarget: simd_float3(0, 5, 20))
+        XCTAssertEqual(simd_distance(grazing, eye), InputSystem.defaultOrbitPivotDistance, accuracy: 1e-4)
+    }
+
+    func test_reanchorAfterFlyingMovesTheTargetNotTheCamera() throws {
+        // Fly sideways with the target left behind at the origin, as WASD does.
+        let camera = findSceneCamera()
+        translateTo(entityId: camera, position: simd_float3(6, 5, 10))
+        let cameraComponent = try XCTUnwrap(scene.get(component: CameraComponent.self, for: camera))
+        let viewBefore = cameraComponent.viewSpace
+        XCTAssertEqual(simd_length(target), 0, accuracy: 1e-4, "target is stale after flying")
+
+        InputSystem.shared.reanchorSceneCameraTarget()
+
+        XCTAssertEqual(simd_distance(eye, simd_float3(6, 5, 10)), 0, accuracy: 1e-4, "re-anchoring never moves the camera")
+        XCTAssertEqual(simd_distance(target, simd_float3(6, 0, 0)), 0, accuracy: 1e-3, "target lands where the view ray meets the ground")
+        for column in 0 ..< 4 {
+            XCTAssertEqual(simd_length(cameraComponent.viewSpace[column] - viewBefore[column]), 0, accuracy: 1e-4, "re-anchoring never turns the camera")
+        }
+    }
+
     func test_zeroScrollLeavesCameraAlone() {
         let eyeBefore = eye
         InputSystem.shared.orbitSceneCamera(byScroll: .zero, precise: true)
