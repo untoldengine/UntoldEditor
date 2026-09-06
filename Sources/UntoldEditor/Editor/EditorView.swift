@@ -299,15 +299,18 @@ public struct EditorView: View {
             editor_entities = getAllGameEntities()
             sceneGraphModel.refreshHierarchy()
         }
-        // Pause the render loop while the user drags to resize the window so the
-        // viewport doesn't stutter against the live resize; resume when done. The
-        // frozen frame is trimmed to the new size rather than stretched
-        // (EditorViewportResizePolicy), so the scene keeps its proportions.
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willStartLiveResizeNotification)) { _ in
-            renderer?.metalView.isPaused = true
+        // Freeze the viewport while the user drags to resize the window so it
+        // doesn't stutter against the live resize; resume when done. The frozen
+        // frame is rendered at screen size and trimmed to the window rather than
+        // stretched (EditorViewportResizePolicy), so the scene keeps its
+        // proportions and growing the window reveals more of it.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willStartLiveResizeNotification)) { note in
+            guard let view = renderer?.metalView, let window = view.window, note.object as? NSWindow === window else { return }
+            EditorViewportResizePolicy.beginResizeHold(of: view)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndLiveResizeNotification)) { _ in
-            renderer?.metalView.isPaused = false
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndLiveResizeNotification)) { note in
+            guard let view = renderer?.metalView, let window = view.window, note.object as? NSWindow === window else { return }
+            EditorViewportResizePolicy.endResizeHold(of: view)
         }
         .onReceive(NotificationCenter.default.publisher(for: .editorMenuNew)) { _ in
             showCreateProject = true
@@ -660,15 +663,16 @@ public struct EditorView: View {
     /// animation so the viewport doesn't compete with the layout change (which
     /// caused stutter). Called from onChange, so it covers every trigger: edge
     /// tabs, the View menu (⌘1/2/3) and Focus Viewport (⌘F). The viewport freezes
-    /// on its last frame (trimmed to the changing size, see
+    /// on a screen-sized frame trimmed to the changing size (see
     /// EditorViewportResizePolicy), then resumes.
     private func pauseRenderForPanelAnimation() {
-        renderer?.metalView.isPaused = true
+        guard let view = renderer?.metalView else { return }
+        EditorViewportResizePolicy.beginResizeHold(of: view)
         renderPauseGeneration += 1
         let generation = renderPauseGeneration
         DispatchQueue.main.asyncAfter(deadline: .now() + panelAnimationDuration + 0.05) {
             if generation == renderPauseGeneration {
-                renderer?.metalView.isPaused = false
+                EditorViewportResizePolicy.endResizeHold(of: view)
             }
         }
     }

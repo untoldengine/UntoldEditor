@@ -12,6 +12,7 @@
 import MetalKit
 import QuartzCore
 import simd
+import UntoldEngine
 
 /// Controls how the viewport shows its last rendered frame while its size
 /// changes without a new frame being drawn.
@@ -33,6 +34,12 @@ import simd
 /// layer's `contentsScale`, so the two must agree for the frame to fill the
 /// view. MTKView and AppKit do not keep them in step (see
 /// `syncContentsScale(of:)`), so the scale is re-synced before every frame.
+///
+/// Growing the viewport would still expose a band where nothing was rendered.
+/// A resize hold (`beginResizeHold(of:)`) avoids that by rendering the frozen
+/// frame at the screen's size first, with the field of view widened so the
+/// visible crop is unchanged, and keeping the Metal view at that size inside
+/// its clipping host until the resize ends.
 enum EditorViewportResizePolicy {
     /// Colour shown where the viewport extends past the last frame, linear RGB.
     /// Mirrors the engine's main-pass clear colour (`mtkBackgroundColor`), which
@@ -77,6 +84,76 @@ enum EditorViewportResizePolicy {
             layer.contentsScale = scale
         }
         return scale
+    }
+
+    // MARK: - Resize hold
+
+    /// Field of view, in degrees, that makes the central `visibleHeight` points
+    /// of a render `overscanHeight` points tall match a render of the visible
+    /// size at `fov`. The engine ties its vertical field of view to the
+    /// drawable height, so widening it by the height ratio keeps the crop the
+    /// same.
+    static func overscanFieldOfView(fov: Float, visibleHeight: CGFloat, overscanHeight: CGFloat) -> Float {
+        guard visibleHeight > 0, overscanHeight > visibleHeight else { return fov }
+        let halfTangent = tan(fov * .pi / 360) * Float(overscanHeight / visibleHeight)
+        return atan(halfTangent) * 360 / .pi
+    }
+
+    /// The size to render the frozen frame at: the visible size grown to the
+    /// screen the window is on, so no resize within that screen outgrows it.
+    static func overscanSize(visible: CGSize, screen: CGSize?) -> CGSize {
+        guard let screen else { return visible }
+        return CGSize(width: max(visible.width, screen.width), height: max(visible.height, screen.height))
+    }
+
+    private nonisolated(unsafe) static var heldFieldOfView: Float?
+
+    /// Freezes the viewport for a resize and pauses the render loop.
+    ///
+    /// When the Metal view sits in an `EditorViewportHostView`, one frame is
+    /// first rendered at the screen's size with the field of view widened to
+    /// keep the visible crop unchanged, and the view is held at that size,
+    /// centred, until `endResizeHold(of:)`. Growing the viewport then reveals
+    /// scene that was already rendered.
+    static func beginResizeHold(of view: MTKView) {
+        defer { view.isPaused = true }
+        guard let host = view.superview as? EditorViewportHostView, host.heldMetalViewSize == nil else { return }
+        let visible = host.bounds.size
+        let overscan = overscanSize(visible: visible, screen: view.window?.screen?.frame.size)
+        guard visible.height > 0, overscan != visible else { return }
+
+        let original = fov
+        heldFieldOfView = original
+        // Set before the resize: the engine rebuilds its projection from `fov`
+        // when the drawable size changes.
+        fov = overscanFieldOfView(fov: original, visibleHeight: visible.height, overscanHeight: overscan.height)
+        host.heldMetalViewSize = overscan
+
+        // Present the overscan frame in the same transaction as the size
+        // change, so the band never shows, and let the GPU finish it before
+        // that transaction commits.
+        (view.layer as? CAMetalLayer)?.presentsWithTransaction = true
+        view.draw()
+        let queue: MTLCommandQueue? = renderInfo.commandQueue
+        if let sync = queue?.makeCommandBuffer() {
+            sync.commit()
+            sync.waitUntilCompleted()
+        }
+    }
+
+    /// Ends a hold started by `beginResizeHold(of:)`: restores the field of
+    /// view, lets the Metal view fill its host again (the engine rebuilds the
+    /// projection for the final size) and resumes the render loop.
+    static func endResizeHold(of view: MTKView) {
+        if let host = view.superview as? EditorViewportHostView, host.heldMetalViewSize != nil {
+            if let original = heldFieldOfView {
+                fov = original
+                heldFieldOfView = nil
+            }
+            (view.layer as? CAMetalLayer)?.presentsWithTransaction = false
+            host.heldMetalViewSize = nil
+        }
+        view.isPaused = false
     }
 
     /// The exposed background as a `CGColor` in the linear sRGB space, matching

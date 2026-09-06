@@ -21,16 +21,15 @@ struct EditorSceneView: View, UntoldRendererDelegate {
     }
 
     var body: some View {
-        SceneView(renderer: renderer)
-            .onInit {
-                let sceneCamera = createEntity()
-                createSceneCamera(entityId: sceneCamera)
+        EditorViewportHost(renderer: renderer) {
+            let sceneCamera = createEntity()
+            createSceneCamera(entityId: sceneCamera)
 
-                CameraSystem.shared.activeCamera = sceneCamera
+            CameraSystem.shared.activeCamera = sceneCamera
 
-                // Load Debug meshes and other editor / debug resources
-                loadLightDebugMeshes()
-            }
+            // Load Debug meshes and other editor / debug resources
+            loadLightDebugMeshes()
+        }
     }
 
     /// UntoldRenderer delegate functions
