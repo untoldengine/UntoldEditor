@@ -1101,6 +1101,7 @@ struct AssetBrowserView: View {
         .sheet(isPresented: $showGaussianCookSheet) {
             GaussianCookSheet(
                 sourceName: gaussianCookSheetSourceName(for: pendingGaussianCookURLs),
+                sourceURLs: pendingGaussianCookURLs,
                 settings: $gaussianCookSettings,
                 onCook: {
                     showGaussianCookSheet = false

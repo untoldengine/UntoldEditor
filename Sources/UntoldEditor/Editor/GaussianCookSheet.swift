@@ -32,6 +32,11 @@ struct GaussianCookSettings: Equatable {
 
     var scale: Float = 1
     var minimumOpacity: Float = 0.005
+    /// How many splats the cook may keep; the least important go first. Defaults to the Mac's
+    /// runtime cap, the machine the editor runs on. A file meant for Vision Pro needs its cap.
+    var splatBudget: GaussianSplatBudget = .mac
+    /// Splat count for `GaussianSplatBudget.custom`.
+    var customSplatBudget: Int = GaussianSplatBudget.visionPro.maxSplatCount ?? 0
     /// Bake a translation so the capture sits at the origin instead of wherever the
     /// training run left it. The cook reads the source bounds first to compute it.
     var recenter: Bool = false
@@ -50,6 +55,7 @@ struct GaussianCookSettings: Equatable {
         options.log2ChunkSplats = UInt8(max(1, chunkSplats.trailingZeroBitCount))
         options.shDegree = shDegree.map { UInt8($0) }
         options.minimumOpacity = minimumOpacity
+        options.maxSplatCount = splatBudget == .custom ? max(1, customSplatBudget) : splatBudget.maxSplatCount
         var transform = UntoldGSCookOptions.transform(upAxis: upAxis, scale: scale)
         if recenter, let bounds {
             let translation = gaussianRecenterTranslation(
@@ -84,6 +90,62 @@ enum GaussianRecenterMode: String, CaseIterable, Identifiable {
         case .centreAtOrigin: "Centre at the origin"
         }
     }
+}
+
+/// Splat budget presets: the per-entity caps the engine runtime enforces per platform
+/// (`GaussianRuntimeLimits`), or no cap at all.
+enum GaussianSplatBudget: String, CaseIterable, Identifiable {
+    /// 5,242,880 splats: Apple Vision Pro, iPhone, iPad and Apple TV.
+    case visionPro
+    /// 16,777,216 splats: Mac only.
+    case mac
+    case custom
+    case unlimited
+
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .visionPro: "Vision Pro, iPhone, iPad (\(GaussianSplatBudget.formatted(UntoldGSCookOptions.splatBudgetMobile)))"
+        case .mac: "Mac (\(GaussianSplatBudget.formatted(UntoldGSCookOptions.splatBudgetMac)))"
+        case .custom: "Custom"
+        case .unlimited: "Unlimited (may not load)"
+        }
+    }
+
+    /// The cook option for the preset; `nil` for unlimited and for custom (read the field).
+    var maxSplatCount: Int? {
+        switch self {
+        case .visionPro: UntoldGSCookOptions.splatBudgetMobile
+        case .mac: UntoldGSCookOptions.splatBudgetMac
+        case .custom, .unlimited: nil
+        }
+    }
+
+    /// Fixed English grouping, so captions and task rows read the same on every machine.
+    static func formatted(_ count: Int) -> String {
+        count.formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US")))
+    }
+}
+
+/// What a budget does to a source of `sourceCount` splats (after the other pruning steps,
+/// which usually drop few), for the sheet's caption.
+func gaussianBudgetCaption(sourceCount: Int?, maxSplatCount: Int?) -> String {
+    guard let sourceCount else {
+        return maxSplatCount.map { "Keeps at most \(GaussianSplatBudget.formatted($0)) splats per file." } ?? "No splat budget."
+    }
+    let source = GaussianSplatBudget.formatted(sourceCount)
+    guard let maxSplatCount else {
+        return sourceCount > UntoldGSCookOptions.splatBudgetMobile
+            ? "\(source) splats in the source; unlimited files above \(GaussianSplatBudget.formatted(UntoldGSCookOptions.splatBudgetMobile)) do not load on Vision Pro, iPhone or iPad."
+            : "\(source) splats in the source, all kept."
+    }
+    if sourceCount <= maxSplatCount {
+        return "\(source) splats in the source, within the budget."
+    }
+    return "\(source) splats in the source; the budget keeps the \(GaussianSplatBudget.formatted(maxSplatCount)) most important."
 }
 
 /// Translation that moves a capture's bounding box, after `transform` has been applied to
@@ -262,12 +324,23 @@ func gaussianCookTaskDetail(settings: GaussianCookSettings) -> String {
     if settings.recenter {
         detail += ", recentred"
     }
+    // The Mac cap is the default on the machine the editor runs on; only name a budget that
+    // departs from it, so ordinary cooks keep their short row.
+    if settings.splatBudget != .mac, let budget = settings.cookOptions.maxSplatCount {
+        detail += ", budget \(GaussianSplatBudget.formatted(budget))"
+    } else if settings.splatBudget == .unlimited {
+        detail += ", no budget"
+    }
     return detail
 }
 
 /// Tasks panel detail once a cook succeeded.
 func gaussianCookSummary(_ report: UntoldGSCookReport) -> String {
-    "Kept \(report.keptSplatCount) of \(report.inputSplatCount) splats"
+    var summary = "Kept \(report.keptSplatCount) of \(report.inputSplatCount) splats"
+    if report.prunedByBudget > 0 {
+        summary += " (\(report.prunedByBudget) over the budget dropped)"
+    }
+    return summary
 }
 
 /// Tasks panel detail for a failed cook. The engine's own errors carry a readable
@@ -630,9 +703,13 @@ func updateEditorGaussianStreamingSettings(entityId: EntityID, settings: EditorG
 
 struct GaussianCookSheet: View {
     let sourceName: String
+    /// The `.ply` files about to be cooked; a single file's header gives the splat count shown
+    /// under the budget row.
+    var sourceURLs: [URL] = []
     @Binding var settings: GaussianCookSettings
     var onCook: () -> Void
     var onCancel: () -> Void
+    @State private var sourceSplatCount: Int?
 
     private let shDegreeChoices: [(label: String, value: Int?)] = [
         ("Source", nil), ("0 (none)", 0), ("1", 1), ("2", 2), ("3", 3),
@@ -687,6 +764,27 @@ struct GaussianCookSheet: View {
                         .frame(width: 80)
                 }
                 GridRow {
+                    Text("Splat budget")
+                    HStack(spacing: 10) {
+                        Picker("", selection: $settings.splatBudget) {
+                            ForEach(GaussianSplatBudget.allCases) { budget in
+                                Text(budget.label).tag(budget)
+                            }
+                        }
+                        .labelsHidden()
+                        if settings.splatBudget == .custom {
+                            TextField("splats", value: $settings.customSplatBudget, format: .number)
+                                .frame(width: 100)
+                        }
+                    }
+                }
+                GridRow {
+                    Text("")
+                    Text(gaussianBudgetCaption(sourceCount: sourceSplatCount, maxSplatCount: settings.cookOptions.maxSplatCount))
+                        .font(.caption)
+                        .foregroundColor(.editorTextSecondary)
+                }
+                GridRow {
                     Text("Recenter")
                     HStack(spacing: 10) {
                         Toggle("Move to the origin", isOn: $settings.recenter)
@@ -717,5 +815,13 @@ struct GaussianCookSheet: View {
         }
         .padding(20)
         .frame(width: 440)
+        .task(id: sourceURLs) {
+            // Header-only read, so it is cheap however large the capture; batches show no count.
+            guard sourceURLs.count == 1, let url = sourceURLs.first else {
+                sourceSplatCount = nil
+                return
+            }
+            sourceSplatCount = try? PLYReader.readGaussianSplatCount(from: url)
+        }
     }
 }
