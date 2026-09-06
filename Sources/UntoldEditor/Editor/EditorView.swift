@@ -129,6 +129,10 @@ public struct EditorView: View {
 
             InputSystem.shared.setupGestureRecognizers(view: v)
             InputSystem.shared.setupEventMonitors()
+
+            // The render loop pauses while the viewport is resized (live window
+            // resize, panel animations); show the frozen frame trimmed, not stretched.
+            EditorViewportResizePolicy.apply(to: v)
         }
 
         gameMode = isPlaying
@@ -281,8 +285,6 @@ public struct EditorView: View {
         .onChange(of: playbackSettings.useSceneCameraDuringPlay) { _, _ in
             updateActiveCameraForPlayMode()
         }
-        // Pause the render loop while the user drags to resize the window so the
-        // viewport doesn't stutter against the live resize; resume when done.
         // Refresh the hierarchy when entities appear/disappear asynchronously
         // (streaming/tiled assets create their nodes over several frames). The
         // render loop (EditorSceneView.didDraw) detects the change and posts this.
@@ -290,6 +292,10 @@ public struct EditorView: View {
             editor_entities = getAllGameEntities()
             sceneGraphModel.refreshHierarchy()
         }
+        // Pause the render loop while the user drags to resize the window so the
+        // viewport doesn't stutter against the live resize; resume when done. The
+        // frozen frame is trimmed to the new size rather than stretched
+        // (EditorViewportResizePolicy), so the scene keeps its proportions.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willStartLiveResizeNotification)) { _ in
             renderer?.metalView.isPaused = true
         }
@@ -619,7 +625,8 @@ public struct EditorView: View {
     /// animation so the viewport doesn't compete with the layout change (which
     /// caused stutter). Called from onChange, so it covers every trigger: edge
     /// tabs, the View menu (⌘1/2/3) and Focus Viewport (⌘F). The viewport freezes
-    /// on its last frame, then resumes.
+    /// on its last frame (trimmed to the changing size, see
+    /// EditorViewportResizePolicy), then resumes.
     private func pauseRenderForPanelAnimation() {
         renderer?.metalView.isPaused = true
         renderPauseGeneration += 1
