@@ -116,7 +116,10 @@ enum EditorViewportResizePolicy {
     /// centred, until `endResizeHold(of:)`. Growing the viewport then reveals
     /// scene that was already rendered.
     static func beginResizeHold(of view: MTKView) {
-        defer { view.isPaused = true }
+        // Pause first: MTKView only draws synchronously from `draw()` while it
+        // is paused (explicit drawing mode); while the display link drives it
+        // the call is ignored.
+        view.isPaused = true
         guard let host = view.superview as? EditorViewportHostView, host.heldMetalViewSize == nil else { return }
         let visible = host.bounds.size
         let overscan = overscanSize(visible: visible, screen: view.window?.screen?.frame.size)

@@ -166,6 +166,39 @@ final class EditorViewportResizePolicyTests: XCTestCase {
         XCTAssertEqual((metal.layer as? CAMetalLayer)?.presentsWithTransaction, false)
     }
 
+    private final class DrawCounter: NSObject, MTKViewDelegate {
+        var draws = 0
+        func mtkView(_: MTKView, drawableSizeWillChange _: CGSize) {}
+        func draw(in _: MTKView) {
+            draws += 1
+        }
+    }
+
+    /// MTKView only honours `draw()` synchronously while paused; the hold must
+    /// pause before drawing or the screen-sized frame is never rendered.
+    func testResizeHoldRendersTheOverscanFrameSynchronously() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 400),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        let metal = makeView()
+        metal.device = MTLCreateSystemDefaultDevice()
+        let counter = DrawCounter()
+        metal.delegate = counter
+        let host = EditorViewportHostView(metalView: metal)
+        window.contentView = host
+        _ = try XCTUnwrap(window.screen)
+        let original = fov
+        defer { fov = original }
+
+        EditorViewportResizePolicy.beginResizeHold(of: metal)
+
+        XCTAssertEqual(counter.draws, 1)
+        XCTAssertTrue(metal.isPaused)
+
+        EditorViewportResizePolicy.endResizeHold(of: metal)
+    }
+
     func testResizeHoldWithoutAHostOnlyPauses() {
         let metal = makeView()
         let original = fov
