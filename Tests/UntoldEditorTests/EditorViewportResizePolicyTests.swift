@@ -52,6 +52,51 @@ final class EditorViewportResizePolicyTests: XCTestCase {
         XCTAssertEqual(c.w, 1.0)
     }
 
+    /// A window on a 1x external display beside a 2x main screen: MTKView sizes
+    /// the drawable at 1x while the layer still carries the creation-time 2x.
+    func testSyncContentsScaleFollowsA1xDrawableUnderAStale2xLayer() {
+        let view = makeView()
+        view.autoResizeDrawable = false
+        view.drawableSize = CGSize(width: 320, height: 200)
+        view.layer?.contentsScale = 2.0
+
+        let scale = EditorViewportResizePolicy.syncContentsScale(of: view)
+
+        XCTAssertEqual(scale, 1.0)
+        XCTAssertEqual(view.layer?.contentsScale, 1.0)
+    }
+
+    func testSyncContentsScaleKeepsARetinaDrawableAt2x() {
+        let view = makeView()
+        view.autoResizeDrawable = false
+        view.drawableSize = CGSize(width: 640, height: 400)
+        view.layer?.contentsScale = 1.0
+
+        let scale = EditorViewportResizePolicy.syncContentsScale(of: view)
+
+        XCTAssertEqual(scale, 2.0)
+        XCTAssertEqual(view.layer?.contentsScale, 2.0)
+    }
+
+    func testSyncContentsScaleLeavesAnUnsizedViewAlone() {
+        let view = MTKView(frame: .zero)
+        view.layer?.contentsScale = 2.0
+
+        XCTAssertNil(EditorViewportResizePolicy.syncContentsScale(of: view))
+        XCTAssertEqual(view.layer?.contentsScale, 2.0)
+    }
+
+    func testApplySyncsTheScaleToo() {
+        let view = makeView()
+        view.autoResizeDrawable = false
+        view.drawableSize = CGSize(width: 320, height: 200)
+        view.layer?.contentsScale = 2.0
+
+        EditorViewportResizePolicy.apply(to: view)
+
+        XCTAssertEqual(view.layer?.contentsScale, 1.0)
+    }
+
     func testApplyIsIdempotent() {
         let view = makeView()
 

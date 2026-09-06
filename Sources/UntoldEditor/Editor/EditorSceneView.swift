@@ -34,7 +34,12 @@ struct EditorSceneView: View, UntoldRendererDelegate {
     }
 
     /// UntoldRenderer delegate functions
-    func willDraw(in _: MTKView) {
+    func willDraw(in view: MTKView) {
+        // The layer's scale drifts from the drawable's when the window sits on a
+        // display whose backing scale differs from the main screen's; keep them
+        // in step so the frozen frame is shown at the view's size while paused.
+        EditorViewportResizePolicy.syncContentsScale(of: view)
+
         if hotReload {
             // updateRayKernelPipeline()
             updateShadersAndPipeline()

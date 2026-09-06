@@ -28,9 +28,10 @@ import simd
 /// centre, so that is where the content lands once a frame is rendered at the
 /// new size, and the scene does not jump when rendering resumes.
 ///
-/// MTKView keeps `drawableSize == bounds * contentsScale` once the view is in a
-/// window, so the anchored frame is displayed at exactly the size it was
-/// rendered at and the setting can stay on for the life of the view.
+/// Core Animation sizes the anchored frame as drawable pixels divided by the
+/// layer's `contentsScale`, so the two must agree for the frame to fill the
+/// view. MTKView and AppKit do not keep them in step (see
+/// `syncContentsScale(of:)`), so the scale is re-synced before every frame.
 enum EditorViewportResizePolicy {
     /// Colour shown where the viewport extends past the last frame, linear RGB.
     /// Mirrors the engine's main-pass clear colour (`mtkBackgroundColor`), which
@@ -39,10 +40,36 @@ enum EditorViewportResizePolicy {
 
     /// Applies the policy to the layer backing `view`. Idempotent; the settings
     /// persist, so calling it once after the renderer is created is enough.
+    /// Pair it with `syncContentsScale(of:)` before each frame.
     static func apply(to view: MTKView) {
         guard let layer = view.layer else { return }
         layer.contentsGravity = .center
         layer.backgroundColor = exposedBackgroundCGColor()
+        syncContentsScale(of: view)
+    }
+
+    /// Makes the layer's `contentsScale` equal to the drawable's pixels per
+    /// point, so a centre-anchored frame is shown at exactly the view's size.
+    /// Returns the scale applied, or nil when the view has no size yet.
+    ///
+    /// MTKView sizes its drawable from the window's backing scale, but the
+    /// layer keeps the scale it was given when the view was created, which is
+    /// the main screen's. A window on a 1x external display beside a 2x
+    /// built-in one therefore ends up with a 1x drawable under a 2x layer.
+    /// `.resize` gravity hides that; `.center` would show the frame at half
+    /// size. Call this before every frame so the two never drift apart, for
+    /// example after the window moves to another display.
+    @discardableResult
+    static func syncContentsScale(of view: MTKView) -> CGFloat? {
+        guard let layer = view.layer,
+              view.bounds.width > 0,
+              view.drawableSize.width > 0
+        else { return nil }
+        let scale = view.drawableSize.width / view.bounds.width
+        if abs(layer.contentsScale - scale) > 0.001 {
+            layer.contentsScale = scale
+        }
+        return scale
     }
 
     /// The exposed background as a `CGColor` in the linear sRGB space, matching
