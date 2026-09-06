@@ -45,6 +45,34 @@ final class GaussianCookSheetTests: XCTestCase {
         XCTAssertEqual(GaussianCookSettings().upAxis, .y)
     }
 
+    func test_splatBudgetMapsToTheEngineCap() {
+        var settings = GaussianCookSettings()
+        XCTAssertEqual(settings.splatBudget, .mac, "the editor runs on a Mac, so the Mac cap is the default")
+        XCTAssertEqual(settings.cookOptions.maxSplatCount, UntoldGSCookOptions.splatBudgetMac)
+        settings.splatBudget = .visionPro
+        XCTAssertEqual(settings.cookOptions.maxSplatCount, UntoldGSCookOptions.splatBudgetMobile)
+        settings.splatBudget = .unlimited
+        XCTAssertNil(settings.cookOptions.maxSplatCount)
+        settings.splatBudget = .custom
+        settings.customSplatBudget = 123_456
+        XCTAssertEqual(settings.cookOptions.maxSplatCount, 123_456)
+        XCTAssertTrue(gaussianCookTaskDetail(settings: settings).contains("budget 123,456"))
+
+        XCTAssertEqual(
+            gaussianBudgetCaption(sourceCount: 8_085_051, maxSplatCount: UntoldGSCookOptions.splatBudgetMobile),
+            "8,085,051 splats in the source; the budget keeps the 5,242,880 most important."
+        )
+        XCTAssertEqual(gaussianBudgetCaption(sourceCount: 1000, maxSplatCount: 5000), "1,000 splats in the source, within the budget.")
+        XCTAssertTrue(gaussianBudgetCaption(sourceCount: 8_085_051, maxSplatCount: nil).contains("do not load on Vision Pro"))
+        XCTAssertEqual(gaussianBudgetCaption(sourceCount: nil, maxSplatCount: nil), "No splat budget.")
+
+        var report = UntoldGSCookReport.passthrough(splatCount: 10, shDegree: 0)
+        XCTAssertEqual(gaussianCookSummary(report), "Kept 10 of 10 splats")
+        report.prunedByBudget = 4
+        report.keptSplatCount = 6
+        XCTAssertEqual(gaussianCookSummary(report), "Kept 6 of 10 splats (4 over the budget dropped)")
+    }
+
     func test_upAxisRotatesTheCaptureToYUp() {
         var settings = GaussianCookSettings()
         settings.upAxis = .z
