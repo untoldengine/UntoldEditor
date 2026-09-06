@@ -13,7 +13,7 @@
 #  Optional Flags:
 #    --with-v   : Print version with 'v' prefix (e.g. v0.12.7)
 #    --cliff    : Run git-cliff to prepend a changelog section,
-#                 then update editorVersion in main.swift
+#                 then update editorVersion in UntoldEditorApp.swift
 #    --docs     : Run Docusaurus docs:version command to
 #                 snapshot documentation for the new release
 #
@@ -72,9 +72,9 @@ if [[ "${DO_CLIFF}" == "true" ]]; then
   fi
   git cliff "${RANGE}" --tag "${TAG}" --prepend CHANGELOG.md
 
-  # Update the editor version constant in main.swift. The launch log line and
+  # Update the editor version constant in UntoldEditorApp.swift. The launch log line and
   # the window title both read from it, so this is the only string to bump.
-  MAIN_SWIFT="Sources/UntoldEditor/main.swift"
+  MAIN_SWIFT="Sources/UntoldEditor/UntoldEditorApp.swift"
   VERSION_PATTERN='static let editorVersion = "[^"]*"'
   grep -qE "${VERSION_PATTERN}" "${MAIN_SWIFT}" || {
     echo "Could not find 'static let editorVersion = \"x.y.z\"' in ${MAIN_SWIFT}." >&2
