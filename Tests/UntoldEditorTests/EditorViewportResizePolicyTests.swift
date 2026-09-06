@@ -52,6 +52,16 @@ final class EditorViewportResizePolicyTests: XCTestCase {
         XCTAssertEqual(c.w, 1.0)
     }
 
+    func testApplyClipsTheFrozenFrameToTheView() {
+        let view = makeView()
+        XCTAssertFalse(view.clipsToBounds, "AppKit no longer clips by default; the policy must opt in")
+
+        EditorViewportResizePolicy.apply(to: view)
+
+        XCTAssertTrue(view.clipsToBounds)
+        XCTAssertEqual(view.layer?.masksToBounds, true)
+    }
+
     /// A window on a 1x external display beside a 2x main screen: MTKView sizes
     /// the drawable at 1x while the layer still carries the creation-time 2x.
     func testSyncContentsScaleFollowsA1xDrawableUnderAStale2xLayer() {

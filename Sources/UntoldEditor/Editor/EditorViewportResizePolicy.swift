@@ -24,7 +24,8 @@ import simd
 ///
 /// Anchoring the frame to the centre keeps it at its rendered scale instead:
 /// growing the viewport exposes a band of background colour at the edges and
-/// shrinking it trims the edges. The camera projection is symmetric about the
+/// shrinking it trims the edges, with the view clipping the part of the frame
+/// that no longer fits. The camera projection is symmetric about the
 /// centre, so that is where the content lands once a frame is rendered at the
 /// new size, and the scene does not jump when rendering resumes.
 ///
@@ -45,6 +46,12 @@ enum EditorViewportResizePolicy {
         guard let layer = view.layer else { return }
         layer.contentsGravity = .center
         layer.backgroundColor = exposedBackgroundCGColor()
+        // When the viewport shrinks, the anchored frame is larger than the
+        // layer. AppKit stopped clipping a view's layer to its bounds by
+        // default in macOS 14, so without this the excess draws over the
+        // neighbouring panels.
+        view.clipsToBounds = true
+        layer.masksToBounds = true
         syncContentsScale(of: view)
     }
 
