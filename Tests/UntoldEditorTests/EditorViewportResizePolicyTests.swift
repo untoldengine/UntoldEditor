@@ -10,6 +10,7 @@
 
 import MetalKit
 @testable import UntoldEditor
+@testable import UntoldEngine
 import XCTest
 
 @MainActor
@@ -105,6 +106,77 @@ final class EditorViewportResizePolicyTests: XCTestCase {
         EditorViewportResizePolicy.apply(to: view)
 
         XCTAssertEqual(view.layer?.contentsScale, 1.0)
+    }
+
+    // MARK: - Resize hold
+
+    func testOverscanFieldOfViewKeepsTheVisibleCropUnchanged() {
+        let widened = EditorViewportResizePolicy.overscanFieldOfView(fov: 45, visibleHeight: 500, overscanHeight: 1000)
+
+        // The central 500 of 1000 points must span the same half-height as the 45° render.
+        XCTAssertEqual(tan(widened * .pi / 360) * 0.5, tan(Float(45) * .pi / 360), accuracy: 1e-5)
+        XCTAssertEqual(widened, 79.28, accuracy: 0.01)
+    }
+
+    func testOverscanFieldOfViewIsUnchangedWhenThereIsNothingToGrow() {
+        XCTAssertEqual(EditorViewportResizePolicy.overscanFieldOfView(fov: 45, visibleHeight: 500, overscanHeight: 500), 45)
+        XCTAssertEqual(EditorViewportResizePolicy.overscanFieldOfView(fov: 45, visibleHeight: 500, overscanHeight: 400), 45)
+        XCTAssertEqual(EditorViewportResizePolicy.overscanFieldOfView(fov: 45, visibleHeight: 0, overscanHeight: 500), 45)
+    }
+
+    func testOverscanSizeGrowsTheVisibleAreaToTheScreen() {
+        let visible = CGSize(width: 800, height: 500)
+        XCTAssertEqual(
+            EditorViewportResizePolicy.overscanSize(visible: visible, screen: CGSize(width: 1728, height: 1117)),
+            CGSize(width: 1728, height: 1117)
+        )
+        XCTAssertEqual(EditorViewportResizePolicy.overscanSize(visible: visible, screen: nil), visible)
+        XCTAssertEqual(
+            EditorViewportResizePolicy.overscanSize(visible: CGSize(width: 2000, height: 300), screen: CGSize(width: 1728, height: 1117)),
+            CGSize(width: 2000, height: 1117)
+        )
+    }
+
+    func testResizeHoldRendersAtScreenSizeThenRestores() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 400),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        let metal = makeView()
+        let host = EditorViewportHostView(metalView: metal)
+        window.contentView = host
+        let screen = try XCTUnwrap(window.screen?.frame.size)
+        let original = fov
+        defer { fov = original }
+
+        EditorViewportResizePolicy.beginResizeHold(of: metal)
+
+        XCTAssertTrue(metal.isPaused)
+        let expected = EditorViewportResizePolicy.overscanSize(visible: host.bounds.size, screen: screen)
+        XCTAssertEqual(host.heldMetalViewSize, expected)
+        XCTAssertEqual(metal.frame.size, expected)
+        XCTAssertGreaterThan(fov, original)
+
+        EditorViewportResizePolicy.endResizeHold(of: metal)
+
+        XCTAssertFalse(metal.isPaused)
+        XCTAssertNil(host.heldMetalViewSize)
+        XCTAssertEqual(metal.frame, host.bounds)
+        XCTAssertEqual(fov, original)
+        XCTAssertEqual((metal.layer as? CAMetalLayer)?.presentsWithTransaction, false)
+    }
+
+    func testResizeHoldWithoutAHostOnlyPauses() {
+        let metal = makeView()
+        let original = fov
+        defer { fov = original }
+
+        EditorViewportResizePolicy.beginResizeHold(of: metal)
+        XCTAssertTrue(metal.isPaused)
+        XCTAssertEqual(fov, original)
+
+        EditorViewportResizePolicy.endResizeHold(of: metal)
+        XCTAssertFalse(metal.isPaused)
     }
 
     func testApplyIsIdempotent() {
