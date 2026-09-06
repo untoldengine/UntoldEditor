@@ -43,6 +43,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var bottomPanelItem: NSMenuItem?
     private var rightPanelItem: NSMenuItem?
     private var navigationStyleItems: [CameraNavigationStyle: NSMenuItem] = [:]
+    private var splatDebugItems: [SplatDebugOption: NSMenuItem] = [:]
 
     func applicationDidFinishLaunching(_: Notification) {
         Logger.log(message: "Launching \(appName) v\(Self.editorVersion)")
@@ -165,6 +166,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         navigationItem.submenu = navigationMenu
         viewMenu.addItem(navigationItem)
 
+        // Gaussian splat debug switches (engine GaussianDebugOptions): each turns off one
+        // stage of the splat pipeline so a rendering artefact can be bisected live.
+        let splatDebugItem = NSMenuItem(title: "Splat Debug", action: nil, keyEquivalent: "")
+        let splatDebugMenu = NSMenu(title: "Splat Debug")
+        splatDebugMenu.autoenablesItems = false
+        for option in SplatDebugOption.allCases {
+            let item = addItem(to: splatDebugMenu, title: option.title, action: #selector(menuToggleSplatDebug(_:)), key: "")
+            item.representedObject = option.rawValue
+            item.toolTip = option.summary
+            splatDebugItems[option] = item
+        }
+        splatDebugItem.submenu = splatDebugMenu
+        viewMenu.addItem(splatDebugItem)
+
         NSApp.mainMenu = mainMenu
     }
 
@@ -178,6 +193,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Keep the View-menu checkmarks in sync with the current overlay / camera state.
     func menuNeedsUpdate(_: NSMenu) {
+        for (option, item) in splatDebugItems {
+            item.state = option.isEnabled ? .on : .off
+        }
         let store = EditorEngineStatsStore.shared
         showFPSItem?.state = store.overlayMode != .off ? .on : .off
         showFPSAdvancedItem?.state = store.overlayMode == .advanced ? .on : .off
@@ -259,6 +277,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         EditorNavigationSettings.shared.style = style
     }
 
+    @objc private func menuToggleSplatDebug(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let option = SplatDebugOption(rawValue: raw) else {
+            return
+        }
+        option.isEnabled.toggle()
+        sender.state = option.isEnabled ? .on : .off
+    }
+
     /// Animation + render-pause are driven by EditorView (which observes these
     /// values), so the menu just flips the state.
     @objc private func menuToggleLeftPanel() {
@@ -289,5 +315,45 @@ enum UntoldEditorApp {
         let delegate = AppDelegate()
         app.delegate = delegate
         app.run()
+    }
+}
+
+/// The engine's Gaussian splat debug switches, as View > Splat Debug menu items.
+enum SplatDebugOption: String, CaseIterable {
+    case hzbOcclusionCull
+    case opaqueDepthTest
+    case blendCap
+
+    var title: String {
+        switch self {
+        case .hzbOcclusionCull: "Disable Splat HZB Occlusion Cull"
+        case .opaqueDepthTest: "Disable Splat Opaque Depth Test"
+        case .blendCap: "Disable Splat Per-Pixel Blend Cap"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .hzbOcclusionCull: "Splats are no longer culled against the previous frame's depth pyramid."
+        case .opaqueDepthTest: "Splat fragments are no longer hidden behind meshes, gizmos or the grid."
+        case .blendCap: "Every sorted splat that reaches a pixel is blended, not just the first 64."
+        }
+    }
+
+    var isEnabled: Bool {
+        get {
+            switch self {
+            case .hzbOcclusionCull: GaussianDebugOptions.shared.disableHZBOcclusionCull
+            case .opaqueDepthTest: GaussianDebugOptions.shared.disableOpaqueDepthTest
+            case .blendCap: GaussianDebugOptions.shared.disableBlendCap
+            }
+        }
+        nonmutating set {
+            switch self {
+            case .hzbOcclusionCull: GaussianDebugOptions.shared.disableHZBOcclusionCull = newValue
+            case .opaqueDepthTest: GaussianDebugOptions.shared.disableOpaqueDepthTest = newValue
+            case .blendCap: GaussianDebugOptions.shared.disableBlendCap = newValue
+            }
+        }
     }
 }
