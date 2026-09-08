@@ -120,6 +120,76 @@ final class AssetNodeEditingPolicyTests: XCTestCase {
         XCTAssertTrue(canShowComponentInInspector(componentType: RenderComponent.self, for: chairId))
     }
 
+    func testSceneCompositionCanAddAnimationComponentToSkinnedRenderEntity() {
+        let entityId = createTransformEntity(name: "Player")
+        registerComponent(entityId: entityId, componentType: RenderComponent.self)
+        registerComponent(entityId: entityId, componentType: SkeletonComponent.self)
+
+        XCTAssertTrue(canAuthorAnimationComponent(entityId: entityId))
+        XCTAssertTrue(canShowComponentInInspector(componentType: AnimationComponent.self, for: entityId))
+        XCTAssertTrue(canAddComponentFromInspector(componentType: AnimationComponent.self, to: entityId))
+    }
+
+    func testSceneCompositionCanAddAnimationComponentToDerivedMeshNode() {
+        let rootId = createTransformEntity(name: "Room")
+        markAssetRoot(rootId)
+
+        let chairId = createTransformEntity(name: "Chair")
+        setParent(childId: chairId, parentId: rootId)
+        markDerived(chairId, rootId: rootId, nodePath: "Room/Chair")
+        registerComponent(entityId: chairId, componentType: RenderComponent.self)
+        registerComponent(entityId: chairId, componentType: SkeletonComponent.self)
+
+        XCTAssertTrue(canAuthorAnimationComponent(entityId: chairId))
+        XCTAssertTrue(canShowComponentInInspector(componentType: AnimationComponent.self, for: chairId))
+        XCTAssertTrue(canAddComponentFromInspector(componentType: AnimationComponent.self, to: chairId))
+    }
+
+    func testSceneCompositionCanAddAnimationComponentFromAssetRootWithSkinnedDescendant() {
+        let rootId = createTransformEntity(name: "Room")
+        markAssetRoot(rootId)
+
+        let modelId = createTransformEntity(name: "model")
+        setParent(childId: modelId, parentId: rootId)
+        markDerived(modelId, rootId: rootId, nodePath: "Room/model")
+        registerComponent(entityId: modelId, componentType: RenderComponent.self)
+        registerComponent(entityId: modelId, componentType: SkeletonComponent.self)
+
+        XCTAssertEqual(editorAnimationBindingTargetEntities(for: rootId), [modelId])
+        XCTAssertTrue(canAuthorAnimationComponent(entityId: rootId))
+        XCTAssertTrue(canShowComponentInInspector(componentType: AnimationComponent.self, for: rootId))
+        XCTAssertTrue(canAddComponentFromInspector(componentType: AnimationComponent.self, to: rootId))
+    }
+
+    func testSceneCompositionCanAddAnimationComponentFromArmatureParentWithSkinnedDescendant() {
+        let rootId = createTransformEntity(name: "Room")
+        markAssetRoot(rootId)
+
+        let armatureId = createTransformEntity(name: "Armature")
+        setParent(childId: armatureId, parentId: rootId)
+        markDerived(armatureId, rootId: rootId, nodePath: "Room/Armature")
+
+        let modelId = createTransformEntity(name: "model")
+        setParent(childId: modelId, parentId: armatureId)
+        markDerived(modelId, rootId: rootId, nodePath: "Room/Armature/model")
+        registerComponent(entityId: modelId, componentType: RenderComponent.self)
+        registerComponent(entityId: modelId, componentType: SkeletonComponent.self)
+
+        XCTAssertEqual(editorAnimationBindingTargetEntities(for: armatureId), [modelId])
+        XCTAssertTrue(canAuthorAnimationComponent(entityId: armatureId))
+        XCTAssertTrue(canShowComponentInInspector(componentType: AnimationComponent.self, for: armatureId))
+        XCTAssertTrue(canAddComponentFromInspector(componentType: AnimationComponent.self, to: armatureId))
+    }
+
+    func testSceneCompositionDoesNotAddAnimationComponentWithoutSkinnedTarget() {
+        let rootId = createTransformEntity(name: "Room")
+        markAssetRoot(rootId)
+
+        XCTAssertFalse(canAuthorAnimationComponent(entityId: rootId))
+        XCTAssertFalse(canShowComponentInInspector(componentType: AnimationComponent.self, for: rootId))
+        XCTAssertFalse(canAddComponentFromInspector(componentType: AnimationComponent.self, to: rootId))
+    }
+
     func testSerializeSceneStoresNestedDerivedTransformOverride() {
         let rootId = createTransformEntity(name: "Room")
         markAssetRoot(rootId)
