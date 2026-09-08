@@ -44,22 +44,45 @@ func isBindableAssetMeshNode(_ entityId: EntityID) -> Bool {
         && hasComponent(entityId: entityId, componentType: RenderComponent.self)
 }
 
+func isAnimationBindingTargetEntity(_ entityId: EntityID) -> Bool {
+    hasComponent(entityId: entityId, componentType: SkeletonComponent.self)
+        && hasComponent(entityId: entityId, componentType: RenderComponent.self)
+}
+
+private func collectAnimationBindingTargets(entityId: EntityID, visited: inout Set<EntityID>) -> [EntityID] {
+    guard visited.insert(entityId).inserted else {
+        return []
+    }
+
+    var targets: [EntityID] = []
+    if isAnimationBindingTargetEntity(entityId) {
+        targets.append(entityId)
+    }
+
+    for childId in getEntityChildren(parentId: entityId) {
+        targets.append(contentsOf: collectAnimationBindingTargets(entityId: childId, visited: &visited))
+    }
+
+    return targets
+}
+
+func editorAnimationBindingTargetEntities(for entityId: EntityID) -> [EntityID] {
+    var visited: Set<EntityID> = []
+    return collectAnimationBindingTargets(entityId: entityId, visited: &visited)
+}
+
 func canAuthorAnimationComponent(entityId: EntityID) -> Bool {
-    if EditorAuthoringMode.sceneCompositionOnly {
-        return false
-    }
-
-    if isDerivedAssetNode(entityId) {
-        return isBindableAssetMeshNode(entityId)
-    }
-
-    return isAssetInstanceRoot(entityId) == false
+    editorAnimationBindingTargetEntities(for: entityId).isEmpty == false
 }
 
 func canShowComponentInInspector(componentType: Any.Type, for entityId: EntityID) -> Bool {
     let key = ObjectIdentifier(componentType)
 
     if EditorAuthoringMode.sceneCompositionOnly {
+        if key == ObjectIdentifier(AnimationComponent.self) {
+            return canAuthorAnimationComponent(entityId: entityId)
+        }
+
         if isDerivedAssetNode(entityId) {
             return key == ObjectIdentifier(RenderComponent.self)
                 || key == ObjectIdentifier(LocalTransformComponent.self)
@@ -75,8 +98,8 @@ func canShowComponentInInspector(componentType: Any.Type, for entityId: EntityID
     }
 
     if isDerivedAssetNode(entityId) {
-        return isBindableAssetMeshNode(entityId)
-            && key == ObjectIdentifier(AnimationComponent.self)
+        return key == ObjectIdentifier(AnimationComponent.self)
+            && canAuthorAnimationComponent(entityId: entityId)
     }
 
     if isAssetInstanceRoot(entityId), key == ObjectIdentifier(AnimationComponent.self) {
@@ -89,6 +112,10 @@ func canShowComponentInInspector(componentType: Any.Type, for entityId: EntityID
 func canAddComponentFromInspector(componentType: Any.Type, to entityId: EntityID) -> Bool {
     if EditorAuthoringMode.sceneCompositionOnly {
         let key = ObjectIdentifier(componentType)
+        if key == ObjectIdentifier(AnimationComponent.self) {
+            return canAuthorAnimationComponent(entityId: entityId)
+        }
+
         return isDerivedAssetNode(entityId) == false
             && (
                 key == ObjectIdentifier(CameraComponent.self)

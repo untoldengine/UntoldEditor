@@ -2690,11 +2690,6 @@ struct AssetBrowserView: View {
         else if asset.category == AssetCategory.animations.rawValue,
                 runtimeAnimationAssetExtensions.contains(withExtension.lowercased())
         {
-            guard EditorAuthoringMode.sceneCompositionOnly == false else {
-                showStatus("Animations are linked in code for scene-composition projects", isError: true)
-                return
-            }
-
             // Animations require a selected entity to work with
             guard let entityId = selectionManager.selectedEntity,
                   entityId != .invalid
@@ -2710,16 +2705,15 @@ struct AssetBrowserView: View {
                 return
             }
 
-            // Add AnimationComponent if not already present
-            if !hasComponent(entityId: entityId, componentType: AnimationComponent.self) {
-                registerComponent(entityId: entityId, componentType: AnimationComponent.self)
-            }
-
             // Add the animation to the entity
             setEntityAnimations(entityId: entityId, filename: runtimeFilename, withExtension: withExtension, name: filename)
 
             // Store the animation file URL in the component
-            if let animationComponent = scene.get(component: AnimationComponent.self, for: entityId) {
+            for targetEntityId in editorAnimationBindingTargetEntities(for: entityId) {
+                guard let animationComponent = scene.get(component: AnimationComponent.self, for: targetEntityId) else {
+                    continue
+                }
+
                 if animationComponent.animationsFilenames.contains(asset.path) == false {
                     animationComponent.animationsFilenames.append(asset.path)
                 }

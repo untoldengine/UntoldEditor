@@ -117,22 +117,20 @@ private func onAddAnimation_Editor(entityId: EntityID, url: URL) {
     }
 
     let filename = url.deletingPathExtension().lastPathComponent
+    let runtimeFilename = runtimeAssetFilenameForLoading(url)
     let withExtension = url.pathExtension
 
-    if !hasComponent(entityId: entityId, componentType: AnimationComponent.self) {
-        registerComponent(entityId: entityId, componentType: AnimationComponent.self)
-    }
-
-    setEntityAnimations(entityId: entityId, filename: filename, withExtension: withExtension, name: filename)
+    setEntityAnimations(entityId: entityId, filename: runtimeFilename, withExtension: withExtension, name: filename)
     // changeAnimation(entityId: entityId, name: filename)
 
-    guard let animationComponent = scene.get(component: AnimationComponent.self, for: entityId) else {
-        handleError(.noAnimationComponent, entityId)
-        return
-    }
+    for targetEntityId in editorAnimationBindingTargetEntities(for: entityId) {
+        guard let animationComponent = scene.get(component: AnimationComponent.self, for: targetEntityId) else {
+            continue
+        }
 
-    if animationComponent.animationsFilenames.contains(url) == false {
-        animationComponent.animationsFilenames.append(url)
+        if animationComponent.animationsFilenames.contains(url) == false {
+            animationComponent.animationsFilenames.append(url)
+        }
     }
 }
 
