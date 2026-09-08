@@ -99,6 +99,13 @@ final class AssetPlacementTests: XCTestCase {
         XCTAssertEqual(placeableAsset(for: asset), .model(url))
     }
 
+    func test_modelPackIsPlaceable() {
+        let url = URL(fileURLWithPath: "/tmp/Project/Models/props.untoldpack")
+        let asset = Asset(name: "props.untoldpack", category: AssetCategory.models.rawValue, path: url)
+
+        XCTAssertEqual(placeableAsset(for: asset), .model(url))
+    }
+
     func test_modelFolderResolvesToItsPrimaryRuntimeAsset() throws {
         let directory = try makeTemporaryDirectory()
         let folder = directory.appendingPathComponent("Chair", isDirectory: true)
@@ -186,7 +193,7 @@ final class AssetPlacementTests: XCTestCase {
             XCTAssertNil(placeableAsset(for: asset), "\(category)/\(filename) should not be placeable")
             XCTAssertEqual(
                 unsupportedAssetDropMessage(for: asset),
-                "Only models (.untold) and Gaussian splats (.ply, .untoldgs) can be dropped into the scene"
+                "Only models (.untold, .untoldpack) and Gaussian splats (.ply, .untoldgs) can be dropped into the scene"
             )
         }
 
