@@ -643,6 +643,47 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
+    func test_primaryRuntimeAsset_prefersUntoldpackForModelFolders() throws {
+        try withTempDirectory { base in
+            let assetFolder = base.appendingPathComponent("Robot", isDirectory: true)
+            try FileManager.default.createDirectory(at: assetFolder, withIntermediateDirectories: true)
+
+            let legacyAsset = assetFolder.appendingPathComponent("Robot.untold")
+            let packAsset = assetFolder.appendingPathComponent("Robot.untoldpack")
+            FileManager.default.createFile(atPath: legacyAsset.path, contents: Data())
+            FileManager.default.createFile(atPath: packAsset.path, contents: Data())
+
+            XCTAssertEqual(
+                primaryRuntimeAsset(in: assetFolder, allowedExtensions: runtimeAssetExtensions(for: .models))?.standardizedFileURL,
+                packAsset.standardizedFileURL
+            )
+        }
+    }
+
+    func test_primaryRuntimeAsset_acceptsUntoldanimForAnimationFolders() throws {
+        try withTempDirectory { base in
+            let assetFolder = base.appendingPathComponent("Walk", isDirectory: true)
+            try FileManager.default.createDirectory(at: assetFolder, withIntermediateDirectories: true)
+
+            let animationAsset = assetFolder.appendingPathComponent("Walk.untoldanim")
+            FileManager.default.createFile(atPath: animationAsset.path, contents: Data())
+
+            XCTAssertEqual(
+                primaryRuntimeAsset(in: assetFolder, allowedExtensions: runtimeAssetExtensions(for: .animations))?.standardizedFileURL,
+                animationAsset.standardizedFileURL
+            )
+        }
+    }
+
+    func test_runtimeAssetFilenameForLoading_preservesNestedAssetPath() {
+        let assetURL = URL(fileURLWithPath: "/tmp/GameData/Models/model/Bed/Bed.untold")
+
+        XCTAssertEqual(
+            runtimeAssetFilenameForLoading(assetURL),
+            "/tmp/GameData/Models/model/Bed/Bed"
+        )
+    }
+
     func test_tiledSceneManifestDetection_prefersFolderNamedManifest() throws {
         try withTempDirectory { base in
             let streamModel = base.appendingPathComponent("Dungeon", isDirectory: true)
@@ -772,6 +813,42 @@ final class AssetBrowserViewTests: XCTestCase {
                 .appendingPathComponent("textures", isDirectory: true)
                 .appendingPathComponent("normal.png")
             XCTAssertTrue(FileManager.default.fileExists(atPath: copiedTexture.path))
+        }
+    }
+
+    func test_copyUntoldPackResources_copiesReferencedModelFolders() throws {
+        try withTempDirectory { base in
+            let sourceFolder = base.appendingPathComponent("Source", isDirectory: true)
+            let modelFolder = sourceFolder.appendingPathComponent("RobotBody", isDirectory: true)
+            let destinationFolder = base.appendingPathComponent("Destination", isDirectory: true)
+            try FileManager.default.createDirectory(at: modelFolder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
+
+            let pack = sourceFolder.appendingPathComponent("Robot.untoldpack")
+            let model = modelFolder.appendingPathComponent("RobotBody.untold")
+            let texture = modelFolder.appendingPathComponent("body_albedo.utex")
+            try Data("model".utf8).write(to: model)
+            try Data("texture".utf8).write(to: texture)
+            try """
+            {
+              "formatVersion": 1,
+              "sourceAsset": "Robot.blend",
+              "models": [
+                { "displayName": "RobotBody", "path": "RobotBody/RobotBody.untold" }
+              ]
+            }
+            """.data(using: .utf8)!.write(to: pack)
+
+            try copyUntoldPackResources(for: pack, to: destinationFolder)
+
+            XCTAssertEqual(
+                try Data(contentsOf: destinationFolder.appendingPathComponent("RobotBody/RobotBody.untold")),
+                Data("model".utf8)
+            )
+            XCTAssertEqual(
+                try Data(contentsOf: destinationFolder.appendingPathComponent("RobotBody/body_albedo.utex")),
+                Data("texture".utf8)
+            )
         }
     }
 

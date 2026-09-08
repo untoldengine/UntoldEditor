@@ -56,7 +56,7 @@ struct EnvironmentView: View {
 
         if let runtimeAsset = resolvedRuntimeAsset(for: selectedAsset),
            runtimeAsset.category == AssetCategory.models.rawValue,
-           runtimeAsset.path.pathExtension.lowercased() == "untold"
+           runtimeAssetExtensions(for: .models).contains(runtimeAsset.path.pathExtension.lowercased())
         {
             return runtimeAsset
         }
@@ -257,7 +257,9 @@ struct EnvironmentView: View {
         guard asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue else {
             return nil
         }
-        guard let runtimeAssetURL = primaryRuntimeAsset(in: asset.path) else {
+        guard let category = AssetCategory(rawValue: asset.category),
+              let runtimeAssetURL = primaryRuntimeAsset(in: asset.path, allowedExtensions: runtimeAssetExtensions(for: category))
+        else {
             return nil
         }
 
