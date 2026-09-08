@@ -13,6 +13,9 @@ import UniformTypeIdentifiers
 import UntoldEngine
 
 private let runtimeAssetExtension = "untold"
+private let runtimeModelAssetExtensions: Set<String> = [runtimeAssetExtension, "untoldpack"]
+private let runtimeAnimationAssetExtensions: Set<String> = [runtimeAssetExtension, "untoldanim"]
+private let allRuntimeAssetExtensions = runtimeModelAssetExtensions.union(runtimeAnimationAssetExtensions)
 private let runtimeTextureFolderNames = ["Textures", "textures"]
 private let sourceAssetExtensions: Set<String> = ["usd", "usda", "usdc", "usdz", "blend"]
 private let streamModelResourceFolderNames = ["tile_exports", "tile_export", "Textures", "textures"]
@@ -52,6 +55,52 @@ func copyRuntimeAssetSidecars(for sourceURL: URL, to destinationFolder: URL, fil
     }
 }
 
+func copyUntoldPackResources(for sourceURL: URL, to destinationFolder: URL, fileManager fm: FileManager = .default) throws {
+    guard sourceURL.pathExtension.lowercased() == "untoldpack",
+          let pack = loadUntoldPack(url: sourceURL)
+    else {
+        return
+    }
+
+    let sourceFolder = sourceURL.deletingLastPathComponent()
+    var copiedRelativeParents: Set<String> = []
+
+    for model in pack.models {
+        let relativePath = model.path
+        guard relativePath.isEmpty == false,
+              relativePath.split(separator: "/").contains("..") == false,
+              relativePath.hasPrefix("/") == false
+        else {
+            continue
+        }
+
+        let relativeParent = (relativePath as NSString).deletingLastPathComponent
+        let normalizedParent = relativeParent == "." ? "" : relativeParent
+
+        if normalizedParent.isEmpty == false {
+            guard copiedRelativeParents.insert(normalizedParent).inserted else {
+                continue
+            }
+
+            let sourceResourceFolder = sourceFolder.appendingPathComponent(normalizedParent, isDirectory: true)
+            let destinationResourceFolder = destinationFolder.appendingPathComponent(normalizedParent, isDirectory: true)
+            if fm.fileExists(atPath: destinationResourceFolder.path) {
+                try fm.removeItem(at: destinationResourceFolder)
+            }
+            try fm.createDirectory(at: destinationResourceFolder.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.copyItem(at: sourceResourceFolder, to: destinationResourceFolder)
+        } else {
+            let sourceResource = sourceFolder.appendingPathComponent(relativePath)
+            let destinationResource = destinationFolder.appendingPathComponent(relativePath)
+            if fm.fileExists(atPath: destinationResource.path) {
+                try fm.removeItem(at: destinationResource)
+            }
+            try fm.createDirectory(at: destinationResource.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.copyItem(at: sourceResource, to: destinationResource)
+        }
+    }
+}
+
 /// Importing a source asset (USD, .blend, …) means two things: the file is copied into
 /// the project, and then it is converted to the engine's runtime format. This does the
 /// first part. The source lands in `destinationFolder` (next to where the converter will
@@ -80,7 +129,37 @@ func importSourceAsset(
     return destinationURL
 }
 
-func primaryRuntimeAsset(in folder: URL, fileManager fm: FileManager = .default) -> URL? {
+func runtimeAssetExtensions(for category: AssetCategory) -> Set<String> {
+    switch category {
+    case .models:
+        return runtimeModelAssetExtensions
+    case .animations:
+        return runtimeAnimationAssetExtensions
+    default:
+        return []
+    }
+}
+
+func runtimeAssetFilenameForLoading(_ url: URL) -> String {
+    url.deletingPathExtension().path
+}
+
+private func runtimeAssetExtensionPriority(_ ext: String) -> Int {
+    switch ext.lowercased() {
+    case "untoldpack", "untoldanim":
+        return 0
+    case runtimeAssetExtension:
+        return 1
+    default:
+        return 2
+    }
+}
+
+func primaryRuntimeAsset(
+    in folder: URL,
+    allowedExtensions: Set<String> = runtimeModelAssetExtensions,
+    fileManager fm: FileManager = .default
+) -> URL? {
     guard let contents = try? fm.contentsOfDirectory(
         at: folder,
         includingPropertiesForKeys: [.isDirectoryKey],
@@ -90,8 +169,15 @@ func primaryRuntimeAsset(in folder: URL, fileManager fm: FileManager = .default)
     }
 
     let runtimeAssets = contents
-        .filter { $0.pathExtension.lowercased() == runtimeAssetExtension }
-        .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+        .filter { allowedExtensions.contains($0.pathExtension.lowercased()) }
+        .sorted {
+            let lhsPriority = runtimeAssetExtensionPriority($0.pathExtension)
+            let rhsPriority = runtimeAssetExtensionPriority($1.pathExtension)
+            if lhsPriority != rhsPriority {
+                return lhsPriority < rhsPriority
+            }
+            return $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending
+        }
 
     let folderName = folder.lastPathComponent
     return runtimeAssets.first { $0.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(folderName) == .orderedSame }
@@ -511,11 +597,16 @@ struct AssetBrowserView: View {
     @State private var pendingRuntimeExport: RuntimeExportRequest?
     @State private var runtimeExportQueue: [RuntimeExportRequest] = []
     @State private var isExportingRuntimeAsset = false
+    /// Requests confirmed via "Cook" while another export was already running;
+    /// drained one at a time by finishRuntimeExport().
+    @State private var runtimeExportWorkQueue: [RuntimeExportRequest] = []
     @State private var exportConvertOrientation = true
     @State private var exportSourceOrientation = "blender-native"
     @State private var pendingTilesExport: TilesExportRequest?
     @State private var tilesExportQueue: [TilesExportRequest] = []
     @State private var isExportingTilesAsset = false
+    /// Same as runtimeExportWorkQueue, for tiled stream-model exports.
+    @State private var tilesExportWorkQueue: [TilesExportRequest] = []
     @State private var exportTileSizeX: String = "25"
     @State private var exportTileSizeY: String = "10000"
     @State private var exportTileSizeZ: String = "25"
@@ -1031,8 +1122,12 @@ struct AssetBrowserView: View {
 
         // Set allowed file types based on category
         switch category {
-        case .models, .animations:
-            openPanel.allowedContentTypes = ([runtimeAssetExtension] + sourceAssetExtensions.sorted()).compactMap {
+        case .models:
+            openPanel.allowedContentTypes = (runtimeModelAssetExtensions.sorted() + sourceAssetExtensions.sorted()).compactMap {
+                UTType(filenameExtension: $0)
+            }
+        case .animations:
+            openPanel.allowedContentTypes = (runtimeAnimationAssetExtensions.sorted() + sourceAssetExtensions.sorted()).compactMap {
                 UTType(filenameExtension: $0)
             }
         case .streamModels:
@@ -1111,25 +1206,20 @@ struct AssetBrowserView: View {
                 let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
                 let sourceExtension = sourceURL.pathExtension.lowercased()
 
-                if sourceExtension == runtimeAssetExtension {
+                if runtimeAssetExtensions(for: category).contains(sourceExtension) {
                     enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
                         try importRuntimeAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
                         }
                     }
                 } else if sourceAssetExtensions.contains(sourceExtension) {
-                    // Import = copy the source into the project, then convert the
-                    // project copy. The original stays beside the .untold output.
+                    // Import = copy the source into the project. Cooking to .untold /
+                    // .untoldpack happens when the user asks for it, from the row's
+                    // "Cook to .untold…" context action (same pattern as Gaussians).
                     enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
                         }
-                    } completion: { folder in
-                        queueRuntimeExport(
-                            sourceURL: folder.appendingPathComponent(sourceURL.lastPathComponent),
-                            category: category,
-                            destinationFolder: folder
-                        )
                     }
                 }
 
@@ -1138,16 +1228,13 @@ struct AssetBrowserView: View {
                 if sourceAssetExtensions.contains(sourceExtension) {
                     let baseName = sourceURL.deletingPathExtension().lastPathComponent
                     let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                    // Same as Models: keep the source in the project and tile the copy.
+                    // Same as Models: keep the source in the project. Tiling happens
+                    // when the user asks for it, from the row's "Cook to tiled
+                    // stream model…" context action.
                     enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
                         }
-                    } completion: { folder in
-                        queueTilesExport(
-                            sourceURL: folder.appendingPathComponent(sourceURL.lastPathComponent),
-                            destinationFolder: folder
-                        )
                     }
                 } else if sourceURL.hasDirectoryPath {
                     guard primaryTiledSceneManifest(in: sourceURL, fileManager: fm) != nil else {
@@ -1253,12 +1340,14 @@ struct AssetBrowserView: View {
         }
         try copyFile(sourceURL, destinationAsset)
         try copyRuntimeAssetSidecars(for: sourceURL, to: destinationFolder, fileManager: fm)
+        try copyUntoldPackResources(for: sourceURL, to: destinationFolder, fileManager: fm)
     }
 
     private func queueRuntimeExport(sourceURL: URL, category: AssetCategory, destinationFolder: URL) {
+        let outputExtension = category == .animations ? "untoldanim" : runtimeAssetExtension
         let outputURL = destinationFolder
             .appendingPathComponent(sourceURL.deletingPathExtension().lastPathComponent)
-            .appendingPathExtension(runtimeAssetExtension)
+            .appendingPathExtension(outputExtension)
         let request = RuntimeExportRequest(
             sourceURL: sourceURL,
             category: category,
@@ -1279,11 +1368,11 @@ struct AssetBrowserView: View {
 
     private func runtimeExportSheet(for request: RuntimeExportRequest) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Convert to Untold Asset")
+            Text("Cook to Untold Asset")
                 .font(.title2)
                 .bold()
 
-            Text("This USD or .blend file has been copied into your project. Convert it to Untold Engine's .untold runtime format to use it in scenes; the source stays next to the output and can be converted again later.")
+            Text("Cook this USD or .blend source into Untold Engine's runtime format to use it in scenes: a single model becomes a .untold file, while a scene with multiple models becomes a .untoldpack bundle (one .untold per model). The source stays next to the output and can be cooked again later.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1301,6 +1390,9 @@ struct AssetBrowserView: View {
                 Text(request.outputURL.path)
                     .font(.system(size: 12, design: .monospaced))
                     .lineLimit(2)
+                Text("If the source contains multiple models, a .untoldpack manifest is written here instead.")
+                    .font(.caption2)
+                    .foregroundColor(.editorTextSecondary)
             }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -1360,41 +1452,39 @@ struct AssetBrowserView: View {
                 }
             }
 
-            if isExportingRuntimeAsset {
-                HStack(spacing: 10) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Exporting...")
-                        .foregroundColor(.editorTextSecondary)
-                }
-            }
-
             HStack {
                 Spacer()
                 Button("Cancel") {
                     pendingRuntimeExport = nil
                     presentNextRuntimeExportIfNeeded()
                 }
-                .disabled(isExportingRuntimeAsset)
 
-                Button("Export") {
+                Button("Cook") {
+                    pendingRuntimeExport = nil
+                    presentNextRuntimeExportIfNeeded()
                     exportRuntimeAsset(request)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(isExportingRuntimeAsset)
             }
         }
         .padding(20)
         .frame(width: 560)
     }
 
+    /// Runs one export at a time; a request that arrives while another is in
+    /// flight is queued and drained once the current one finishes, since
+    /// spawning concurrent Blender export processes isn't safe. The sheet
+    /// dismisses as soon as the user confirms (see the "Cook" button above) —
+    /// progress from here on shows up in the Tasks panel, same as Gaussian
+    /// cook jobs.
     private func exportRuntimeAsset(_ request: RuntimeExportRequest) {
-        guard !isExportingRuntimeAsset else { return }
+        guard !isExportingRuntimeAsset else {
+            runtimeExportWorkQueue.append(request)
+            return
+        }
         guard let exporterScript = findExportUntoldScript() else {
             showStatus("export-untold script not found", isError: true)
             Logger.log(message: "❌ export-untold script not found. Expected at .build/checkouts/UntoldEngine/scripts/export-untold")
-            pendingRuntimeExport = nil
-            presentNextRuntimeExportIfNeeded()
             return
         }
 
@@ -1519,8 +1609,6 @@ struct AssetBrowserView: View {
                 }
 
                 DispatchQueue.main.async {
-                    isExportingRuntimeAsset = false
-                    pendingRuntimeExport = nil
                     if wasCancelled {
                         Logger.log(message: "Export cancelled for \(request.sourceURL.lastPathComponent)")
                         showStatus("Export cancelled")
@@ -1530,18 +1618,25 @@ struct AssetBrowserView: View {
                     } else {
                         showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
                     }
-                    presentNextRuntimeExportIfNeeded()
+                    finishRuntimeExport()
                 }
             } catch {
                 task.fail(error.localizedDescription)
                 DispatchQueue.main.async {
-                    isExportingRuntimeAsset = false
-                    pendingRuntimeExport = nil
                     Logger.log(message: "❌ Export failed: \(error)")
                     showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
-                    presentNextRuntimeExportIfNeeded()
+                    finishRuntimeExport()
                 }
             }
+        }
+    }
+
+    /// Marks the current export slot free and, if a request queued up behind
+    /// it while it ran, immediately starts that one.
+    private func finishRuntimeExport() {
+        isExportingRuntimeAsset = false
+        if !runtimeExportWorkQueue.isEmpty {
+            exportRuntimeAsset(runtimeExportWorkQueue.removeFirst())
         }
     }
 
@@ -1563,11 +1658,11 @@ struct AssetBrowserView: View {
 
     private func tilesExportSheet(for request: TilesExportRequest) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Convert to Tiled Stream Model")
+            Text("Cook Tiled Stream Model")
                 .font(.title2)
                 .bold()
 
-            Text("This USD or .blend file has been copied into your project. It will be partitioned into tile payloads and a manifest JSON using export-untold-tiles; the source stays next to the output.")
+            Text("Cook this USD or .blend source into tile payloads and a manifest JSON using export-untold-tiles; the source stays next to the output.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1667,41 +1762,35 @@ struct AssetBrowserView: View {
                 Toggle("Dry run", isOn: $exportDryRun)
             }
 
-            if isExportingTilesAsset {
-                HStack(spacing: 10) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Exporting tiles...")
-                        .foregroundColor(.editorTextSecondary)
-                }
-            }
-
             HStack {
                 Spacer()
                 Button("Cancel") {
                     pendingTilesExport = nil
                     presentNextTilesExportIfNeeded()
                 }
-                .disabled(isExportingTilesAsset)
 
-                Button("Export") {
+                Button("Cook") {
+                    pendingTilesExport = nil
+                    presentNextTilesExportIfNeeded()
                     exportTilesAsset(request)
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(isExportingTilesAsset)
             }
         }
         .padding(20)
         .frame(width: 560)
     }
 
+    /// Same pattern as exportRuntimeAsset: dismiss immediately, queue behind
+    /// an in-flight export rather than dropping the request.
     private func exportTilesAsset(_ request: TilesExportRequest) {
-        guard !isExportingTilesAsset else { return }
+        guard !isExportingTilesAsset else {
+            tilesExportWorkQueue.append(request)
+            return
+        }
         guard let exporterScript = findExportUntoldTilesScript() else {
             showStatus("export-untold-tiles script not found", isError: true)
             Logger.log(message: "❌ export-untold-tiles script not found. Expected at .build/checkouts/UntoldEngine/scripts/export-untold-tiles")
-            pendingTilesExport = nil
-            presentNextTilesExportIfNeeded()
             return
         }
 
@@ -1844,8 +1933,6 @@ struct AssetBrowserView: View {
                 }
 
                 DispatchQueue.main.async {
-                    isExportingTilesAsset = false
-                    pendingTilesExport = nil
                     if wasCancelled {
                         Logger.log(message: "Tiles export cancelled for \(request.sourceURL.lastPathComponent)")
                         showStatus("Tiles export cancelled")
@@ -1855,18 +1942,24 @@ struct AssetBrowserView: View {
                     } else {
                         showStatus("Tiles export failed for \(request.sourceURL.lastPathComponent)", isError: true)
                     }
-                    presentNextTilesExportIfNeeded()
+                    finishTilesExport()
                 }
             } catch {
                 task.fail(error.localizedDescription)
                 DispatchQueue.main.async {
-                    isExportingTilesAsset = false
-                    pendingTilesExport = nil
                     Logger.log(message: "❌ Tiles export failed: \(error)")
                     showStatus("Tiles export failed for \(request.sourceURL.lastPathComponent)", isError: true)
-                    presentNextTilesExportIfNeeded()
+                    finishTilesExport()
                 }
             }
+        }
+    }
+
+    /// Same pattern as finishRuntimeExport, for tiled stream-model exports.
+    private func finishTilesExport() {
+        isExportingTilesAsset = false
+        if !tilesExportWorkQueue.isEmpty {
+            exportTilesAsset(tilesExportWorkQueue.removeFirst())
         }
     }
 
@@ -1941,6 +2034,13 @@ struct AssetBrowserView: View {
                                                         category: category.rawValue,
                                                         path: item,
                                                         isFolder: false))
+                        } else if category == .models || category == .animations {
+                            if runtimeAssetExtensions(for: category).contains(item.pathExtension.lowercased()) || sourceAssetExtensions.contains(item.pathExtension.lowercased()) {
+                                categoryAssets.append(Asset(name: item.lastPathComponent,
+                                                            category: category.rawValue,
+                                                            path: item,
+                                                            isFolder: false))
+                            }
                         } else if category == .scripts {
                             // Not used anymore due to flat listing, but keep for safety (won’t execute due to continue above)
                         } else if category == .streamModels {
@@ -2121,7 +2221,7 @@ struct AssetBrowserView: View {
                                         destinationFolder: asset.path.deletingLastPathComponent()
                                     )
                                 } label: {
-                                    Label("Convert to .untold…", systemImage: "sparkles")
+                                    Label("Cook to .untold…", systemImage: "sparkles")
                                 }
                             } else if asset.category == AssetCategory.streamModels.rawValue {
                                 Button {
@@ -2130,7 +2230,7 @@ struct AssetBrowserView: View {
                                         destinationFolder: asset.path.deletingLastPathComponent()
                                     )
                                 } label: {
-                                    Label("Convert to tiled stream model…", systemImage: "sparkles")
+                                    Label("Cook to tiled stream model…", systemImage: "sparkles")
                                 }
                             }
                         }
@@ -2167,8 +2267,13 @@ struct AssetBrowserView: View {
                     } else {
                         // Imported sources (USD, .blend) are listed too: they stay in the
                         // project beside their cooked output and can be re-converted.
-                        let allowedExtensions: Set<String> = Set([runtimeAssetExtension, "utex", "png", "jpg", "jpeg", "hdr", "exr", "cube", "tif", "tiff", "ply", "untoldgs", "json", "uscript", "remotestream"]).union(sourceAssetExtensions)
-                        guard allowedExtensions.contains(item.pathExtension.lowercased()) else { return nil }
+                        let itemExtension = item.pathExtension.lowercased()
+                        let categoryRuntimeExtensions = AssetCategory(rawValue: itemCategory)
+                            .map { runtimeAssetExtensions(for: $0) } ?? allRuntimeAssetExtensions
+                        let allowedExtensions: Set<String> = Set(["utex", "png", "jpg", "jpeg", "hdr", "exr", "cube", "tif", "tiff", "ply", "untoldgs", "json", "uscript", "remotestream"])
+                            .union(categoryRuntimeExtensions)
+                            .union(sourceAssetExtensions)
+                        guard allowedExtensions.contains(itemExtension) else { return nil }
 
                         return Asset(name: item.lastPathComponent,
                                      category: itemCategory,
@@ -2211,7 +2316,7 @@ struct AssetBrowserView: View {
 
         if let runtimeAsset = resolvedRuntimeAsset(for: selectedAsset),
            runtimeAsset.category == AssetCategory.models.rawValue,
-           runtimeAsset.path.pathExtension.lowercased() == runtimeAssetExtension
+           runtimeModelAssetExtensions.contains(runtimeAsset.path.pathExtension.lowercased())
         {
             return runtimeAsset
         }
@@ -2324,7 +2429,9 @@ struct AssetBrowserView: View {
         guard asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue else {
             return nil
         }
-        guard let runtimeAssetURL = primaryRuntimeAsset(in: asset.path) else {
+        guard let category = AssetCategory(rawValue: asset.category),
+              let runtimeAssetURL = primaryRuntimeAsset(in: asset.path, allowedExtensions: runtimeAssetExtensions(for: category))
+        else {
             return nil
         }
 
@@ -2509,17 +2616,18 @@ struct AssetBrowserView: View {
             if asset.isFolder,
                asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue
             {
-                showStatus("No primary .untold found in \(asset.name)", isError: true)
+                showStatus("No primary runtime asset found in \(asset.name)", isError: true)
             }
             return
         }
 
         let filename = asset.path.deletingPathExtension().lastPathComponent
+        let runtimeFilename = runtimeAssetFilenameForLoading(asset.path)
         let withExtension = asset.path.pathExtension
 
         // Handle model files (.untold runtime assets)
         if asset.category == AssetCategory.models.rawValue,
-           withExtension.lowercased() == runtimeAssetExtension
+           runtimeModelAssetExtensions.contains(withExtension.lowercased())
         {
             // Create entity
             let entityId = createEntity()
@@ -2529,7 +2637,7 @@ struct AssetBrowserView: View {
             setEntityName(entityId: entityId, name: uniqueName)
 
             // Add mesh to entity asynchronously
-            setEntityMeshAsync(entityId: entityId, filename: filename, withExtension: withExtension) { success in
+            setEntityMeshAsync(entityId: entityId, filename: runtimeFilename, withExtension: withExtension) { success in
                 if success {
                     print("✅ Model imported: \(uniqueName)")
                 } else {
@@ -2580,7 +2688,7 @@ struct AssetBrowserView: View {
         }
         // Handle Animation files (.untold runtime assets in Animations category)
         else if asset.category == AssetCategory.animations.rawValue,
-                withExtension.lowercased() == runtimeAssetExtension
+                runtimeAnimationAssetExtensions.contains(withExtension.lowercased())
         {
             guard EditorAuthoringMode.sceneCompositionOnly == false else {
                 showStatus("Animations are linked in code for scene-composition projects", isError: true)
@@ -2608,7 +2716,7 @@ struct AssetBrowserView: View {
             }
 
             // Add the animation to the entity
-            setEntityAnimations(entityId: entityId, filename: filename, withExtension: withExtension, name: filename)
+            setEntityAnimations(entityId: entityId, filename: runtimeFilename, withExtension: withExtension, name: filename)
 
             // Store the animation file URL in the component
             if let animationComponent = scene.get(component: AnimationComponent.self, for: entityId) {
