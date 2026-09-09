@@ -98,7 +98,8 @@ func importGaussianAsset(
 
     let sources: [URL]
     if sourceURL.pathExtension.lowercased() == "untoldgs",
-       let tiers = progressiveGaussianTiers(for: sourceURL) {
+       let tiers = progressiveGaussianTiers(for: sourceURL)
+    {
         sources = (0 ..< tiers.levelCount).map {
             tiers.baseURL.deletingLastPathComponent()
                 .appendingPathComponent("\(tiers.baseURL.lastPathComponent)_lod\($0).untoldgs")
