@@ -83,6 +83,10 @@ func canShowComponentInInspector(componentType: Any.Type, for entityId: EntityID
             return canAuthorAnimationComponent(entityId: entityId)
         }
 
+        if key == ObjectIdentifier(GaussianComponent.self) {
+            return hasComponent(entityId: entityId, componentType: GaussianComponent.self)
+        }
+
         if isDerivedAssetNode(entityId) {
             return key == ObjectIdentifier(RenderComponent.self)
                 || key == ObjectIdentifier(LocalTransformComponent.self)

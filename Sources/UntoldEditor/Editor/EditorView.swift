@@ -1149,6 +1149,7 @@ public struct EditorView: View {
             destroyAllEntities()
             removeGizmo()
             EditorComponentsState.shared.clear()
+            EditorGaussianAssetState.shared.clear()
             EditorUndoManager.shared.clear()
             sceneAuthoredGameCamera = nil
             deserializeScene(sceneData: sceneData)
@@ -1175,6 +1176,7 @@ public struct EditorView: View {
         destroyAllEntities()
         removeGizmo()
         EditorComponentsState.shared.clear()
+        EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
         sceneAuthoredGameCamera = nil
 
@@ -1225,6 +1227,7 @@ public struct EditorView: View {
         destroyAllEntities()
         removeGizmo()
         EditorComponentsState.shared.clear()
+        EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
         sceneAuthoredGameCamera = nil
 
@@ -2047,12 +2050,17 @@ public struct EditorView: View {
             clearSceneBatches()
             GeometryStreamingSystem.shared.enabled = false
 
-            // Load Gaussian PLY using absolute path
-            setEntityGaussian(entityId: entityId, filename: absolutePath, withExtension: fileExtension)
+            loadEditorGaussianAuto(entityId: entityId, url: fileURL) { success in
+                if success {
+                    print("✅ Quick Preview Gaussian loaded: \(fileName).\(fileExtension)")
+                } else {
+                    print("⚠️ Failed to load Quick Preview Gaussian: \(fileName).\(fileExtension)")
+                }
+                sceneGraphModel.refreshHierarchy()
+            }
             if fromExploreMode == false {
                 revealCameraControlHintsIfNeeded()
             }
-            print("✅ Quick Preview Gaussian loaded: \(fileName).\(fileExtension)")
         } else if fileExtension == "json" {
             clearSceneBatches()
             GeometryStreamingSystem.shared.enabled = true
@@ -2471,8 +2479,14 @@ public struct EditorView: View {
             clearSceneBatches()
             GeometryStreamingSystem.shared.enabled = false
 
-            setEntityGaussian(entityId: entityId, filename: absolutePath, withExtension: fileExtension)
-            print("✅ Quick Preview Gaussian loaded: \(loadURL.lastPathComponent)")
+            loadEditorGaussianAuto(entityId: entityId, url: loadURL) { success in
+                if success {
+                    print("✅ Quick Preview Gaussian loaded: \(loadURL.lastPathComponent)")
+                } else {
+                    print("⚠️ Failed to load Quick Preview Gaussian: \(loadURL.lastPathComponent)")
+                }
+                sceneGraphModel.refreshHierarchy()
+            }
         }
 
         guard let camera = CameraSystem.shared.activeCamera,
@@ -2530,6 +2544,7 @@ public struct EditorView: View {
             {
                 QuickPreviewRuntimeExportCache.removeCacheDirectory(at: URL(fileURLWithPath: quickPreviewComp.runtimePreviewDirectoryPath))
             }
+            EditorGaussianAssetState.shared.clear(entityId: entityId)
             destroyEntity(entityId: entityId)
         }
 
