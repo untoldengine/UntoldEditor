@@ -47,6 +47,37 @@ final class AssetBrowserViewTests: XCTestCase {
         )
     }
 
+    private func makeAssetPackItem(
+        id: String,
+        name: String,
+        description: String = "Test asset pack.",
+        version: String = "1.0.0",
+        downloadURL: String = "https://cdn.example.com/TestPack.zip",
+        size: String = "1 MB",
+        replacePaths: [String] = []
+    ) -> AssetPackCatalogItem {
+        AssetPackCatalogItem(
+            id: id,
+            name: name,
+            description: description,
+            version: version,
+            downloadURL: downloadURL,
+            size: size,
+            thumbnailName: nil,
+            replacePaths: replacePaths
+        )
+    }
+
+    private func makeZipArchive(from sourceFolder: URL, to archiveURL: URL, arguments: [String] = ["."]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        process.arguments = ["-qry", archiveURL.path] + arguments
+        process.currentDirectoryURL = sourceFolder
+        try process.run()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+    }
+
     func test_rendersCategoriesAndSelectsAssets() throws {
         // Given injected assets
         var assetsState: [String: [Asset]] = [
@@ -907,6 +938,219 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
+    func test_decodeAssetPackCatalog_decodesCLIManifestSchema() throws {
+        let data = """
+        {
+          "version": "1.0.0",
+          "assets": [
+            {
+              "id": "starter",
+              "name": "Starter Assets",
+              "description": "Soccer field, goals, ball, and a sample scene.",
+              "version": "1.0.0",
+              "downloadURL": "https://cdn.example.com/StarterPack.zip",
+              "size": "108 MB"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let catalog = try decodeAssetPackCatalog(from: data)
+        let item = try XCTUnwrap(catalog.assets.first)
+
+        XCTAssertEqual(catalog.version, "1.0.0")
+        XCTAssertEqual(item.id, "starter")
+        XCTAssertEqual(item.name, "Starter Assets")
+        XCTAssertEqual(item.downloadURL, "https://cdn.example.com/StarterPack.zip")
+        XCTAssertEqual(item.size, "108 MB")
+        XCTAssertNil(item.thumbnailName)
+        XCTAssertTrue(item.replacePaths.isEmpty)
+    }
+
+    func test_defaultAssetPackCatalog_onlyShowsStarterPackWithThumbnail() {
+        let catalog = defaultAssetPackCatalog()
+        XCTAssertEqual(catalog.assets.map(\.id), ["starter"])
+        XCTAssertEqual(catalog.assets.first?.name, "StarterPack")
+        XCTAssertEqual(catalog.assets.first?.thumbnailName, "starterpack")
+        XCTAssertEqual(catalog.assets.first?.replacePaths, ["Models/starterpack"])
+    }
+
+    func test_assetPackCategoryNames_sortsUniqueCategories() {
+        let items = [
+            makeAssetPackItem(id: "starter", name: "Starter Assets"),
+            makeAssetPackItem(id: "starter-archviz", name: "ArchViz Starter Assets"),
+            makeAssetPackItem(id: "starter-streamed-city", name: "Streamed City Starter Assets"),
+            makeAssetPackItem(id: "starter-digital-twin", name: "Digital Twin Starter Assets"),
+        ]
+
+        XCTAssertEqual(assetPackCategoryNames(for: items), ["Architecture", "Digital Twin", "Starter", "Streaming"])
+    }
+
+    func test_filteredAssetPackItems_filtersByCategoryAndSearchQuery() {
+        let items = [
+            makeAssetPackItem(id: "starter", name: "Starter Assets", description: "Soccer field."),
+            makeAssetPackItem(id: "starter-archviz", name: "ArchViz Starter Assets", description: "Architectural props."),
+            makeAssetPackItem(id: "starter-streamed-city", name: "Streamed City Starter Assets", description: "Tile streaming city."),
+        ]
+
+        let architectureResults = filteredAssetPackItems(items, selectedCategory: "Architecture", searchQuery: "")
+        XCTAssertEqual(architectureResults.map(\.id), ["starter-archviz"])
+
+        let searchResults = filteredAssetPackItems(items, selectedCategory: nil, searchQuery: "tile")
+        XCTAssertEqual(searchResults.map(\.id), ["starter-streamed-city"])
+
+        let combinedResults = filteredAssetPackItems(items, selectedCategory: "Streaming", searchQuery: "arch")
+        XCTAssertTrue(combinedResults.isEmpty)
+    }
+
+    func test_findAssetPackRoot_usesSingleTopLevelFolder() throws {
+        try withTempDirectory { base in
+            let packRoot = base.appendingPathComponent("StarterPack", isDirectory: true)
+            try FileManager.default.createDirectory(at: packRoot, withIntermediateDirectories: true)
+
+            XCTAssertEqual(findAssetPackRoot(in: base).standardizedFileURL, packRoot.standardizedFileURL)
+        }
+    }
+
+    func test_mergeAssetPack_mergesKnownFoldersIntoGameDataAndOverwritesFiles() throws {
+        try withTempDirectory { base in
+            let packRoot = base.appendingPathComponent("Pack", isDirectory: true)
+            let projectFolder = base.appendingPathComponent("GameData", isDirectory: true)
+            let sourceModels = packRoot.appendingPathComponent("Models/Player", isDirectory: true)
+            let destinationModels = projectFolder.appendingPathComponent("Models/Player", isDirectory: true)
+            try FileManager.default.createDirectory(at: sourceModels, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: destinationModels, withIntermediateDirectories: true)
+            try Data("new".utf8).write(to: sourceModels.appendingPathComponent("Player.untold"))
+            try Data("old".utf8).write(to: destinationModels.appendingPathComponent("Player.untold"))
+            try Data("ignored".utf8).write(to: packRoot.appendingPathComponent("README.txt"))
+
+            let fileCount = try mergeAssetPack(from: packRoot, into: projectFolder)
+            let installedData = try Data(contentsOf: destinationModels.appendingPathComponent("Player.untold"))
+
+            XCTAssertEqual(fileCount, 1)
+            XCTAssertEqual(String(data: installedData, encoding: .utf8), "new")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: projectFolder.appendingPathComponent("README.txt").path))
+        }
+    }
+
+    func test_assetPackCacheKey_usesPackIdAndVersion() {
+        let item = makeAssetPackItem(id: "starter pack", name: "StarterPack", version: "1.0.0")
+        XCTAssertEqual(assetPackCacheKey(for: item), "starter-pack-1.0.0")
+    }
+
+    func test_cacheAssetPack_copiesPackRootForReuse() throws {
+        try withTempDirectory { base in
+            let packRoot = base.appendingPathComponent("Pack", isDirectory: true)
+            let modelFolder = packRoot.appendingPathComponent("Models/starterpack", isDirectory: true)
+            let cacheRoot = base.appendingPathComponent("Cache", isDirectory: true)
+            let item = makeAssetPackItem(id: "starter", name: "StarterPack")
+            try FileManager.default.createDirectory(at: modelFolder, withIntermediateDirectories: true)
+            try Data("runtime".utf8).write(to: modelFolder.appendingPathComponent("starterpack.untoldpack"))
+
+            let cachedRoot = try cacheAssetPack(packRoot, item: item, cacheRoot: cacheRoot)
+
+            XCTAssertEqual(cachedRoot.standardizedFileURL, cachedAssetPackRoot(for: item, cacheRoot: cacheRoot).standardizedFileURL)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: cachedRoot.appendingPathComponent("Models/starterpack/starterpack.untoldpack").path))
+        }
+    }
+
+    func test_installCachedAssetPack_mergesCacheIntoGameData() throws {
+        try withTempDirectory { base in
+            let cacheRoot = base.appendingPathComponent("Cache", isDirectory: true)
+            let projectFolder = base.appendingPathComponent("GameData", isDirectory: true)
+            let item = makeAssetPackItem(id: "starter", name: "StarterPack")
+            let cachedPackRoot = cachedAssetPackRoot(for: item, cacheRoot: cacheRoot)
+            let cachedModelFolder = cachedPackRoot.appendingPathComponent("Models/starterpack", isDirectory: true)
+            try FileManager.default.createDirectory(at: cachedModelFolder, withIntermediateDirectories: true)
+            try Data("runtime".utf8).write(to: cachedModelFolder.appendingPathComponent("starterpack.untoldpack"))
+
+            let fileCount = try installCachedAssetPack(item, into: projectFolder, cacheRoot: cacheRoot)
+
+            XCTAssertEqual(fileCount, 1)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: projectFolder.appendingPathComponent("Models/starterpack/starterpack.untoldpack").path))
+        }
+    }
+
+    func test_installCachedAssetPack_removesConfiguredReplacePathsBeforeMerge() throws {
+        try withTempDirectory { base in
+            let cacheRoot = base.appendingPathComponent("Cache", isDirectory: true)
+            let projectFolder = base.appendingPathComponent("GameData", isDirectory: true)
+            let item = makeAssetPackItem(
+                id: "starter",
+                name: "StarterPack",
+                replacePaths: ["Models/starterpack"]
+            )
+            let cachedPackRoot = cachedAssetPackRoot(for: item, cacheRoot: cacheRoot)
+            let cachedModelFolder = cachedPackRoot.appendingPathComponent("Models/starterpack", isDirectory: true)
+            let existingModelFolder = projectFolder.appendingPathComponent("Models/starterpack", isDirectory: true)
+            try FileManager.default.createDirectory(at: cachedModelFolder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: existingModelFolder, withIntermediateDirectories: true)
+            try Data("new".utf8).write(to: cachedModelFolder.appendingPathComponent("starterpack.untoldpack"))
+            try Data("stale".utf8).write(to: existingModelFolder.appendingPathComponent("removed-from-pack.untold"))
+
+            let fileCount = try installCachedAssetPack(item, into: projectFolder, cacheRoot: cacheRoot)
+
+            XCTAssertEqual(fileCount, 1)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: existingModelFolder.appendingPathComponent("removed-from-pack.untold").path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: existingModelFolder.appendingPathComponent("starterpack.untoldpack").path))
+        }
+    }
+
+    func test_installAssetPack_updatesTaskWhenInstalledFromCache() async throws {
+        await MainActor.run { TaskCenter.shared.removeAllForTesting() }
+        let base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("AssetBrowserViewTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let cacheRoot = base.appendingPathComponent("Cache", isDirectory: true)
+        let projectFolder = base.appendingPathComponent("GameData", isDirectory: true)
+        let item = makeAssetPackItem(id: "starter", name: "StarterPack")
+        let cachedPackRoot = cachedAssetPackRoot(for: item, cacheRoot: cacheRoot)
+        let cachedModelFolder = cachedPackRoot.appendingPathComponent("Models/starterpack", isDirectory: true)
+        try FileManager.default.createDirectory(at: cachedModelFolder, withIntermediateDirectories: true)
+        try Data("runtime".utf8).write(to: cachedModelFolder.appendingPathComponent("starterpack.untoldpack"))
+
+        let task = TaskCenter.begin("Installing StarterPack", detail: "Checking local cache...")
+        let result = try await installAssetPack(item, into: projectFolder, cacheRoot: cacheRoot, task: task)
+        task.succeed("Installed \(result.fileCount) file from cache")
+        await settleTaskCenter()
+
+        let tracked = await trackedTask(task.id)
+        XCTAssertEqual(result, AssetPackInstallResult(fileCount: 1, source: .cache))
+        XCTAssertEqual(tracked?.state, .succeeded)
+        XCTAssertEqual(tracked?.detail, "Installed 1 file from cache")
+    }
+
+    func test_installCachedAssetPack_returnsNilWhenCacheIsMissing() throws {
+        try withTempDirectory { base in
+            let item = makeAssetPackItem(id: "starter", name: "StarterPack")
+            let fileCount = try installCachedAssetPack(
+                item,
+                into: base.appendingPathComponent("GameData", isDirectory: true),
+                cacheRoot: base.appendingPathComponent("Cache", isDirectory: true)
+            )
+
+            XCTAssertNil(fileCount)
+        }
+    }
+
+    func test_validateAssetPackArchiveEntries_rejectsPathTraversal() throws {
+        try withTempDirectory { base in
+            let sourceFolder = base.appendingPathComponent("Source", isDirectory: true)
+            let archive = base.appendingPathComponent("unsafe.zip")
+            try FileManager.default.createDirectory(at: sourceFolder, withIntermediateDirectories: true)
+            try Data("unsafe".utf8).write(to: base.appendingPathComponent("evil.txt"))
+
+            try makeZipArchive(from: sourceFolder, to: archive, arguments: ["../evil.txt"])
+
+            XCTAssertThrowsError(try validateAssetPackArchiveEntries(archive)) { error in
+                guard case AssetPackInstallError.unsafeArchiveEntry = error else {
+                    return XCTFail("Expected unsafeArchiveEntry, got \(error)")
+                }
+            }
+        }
+    }
+
     func test_importAssetForCategory_modelsFiltersOnlyUntold() throws {
         try withTempDirectory { base in
             // Create Models directory
@@ -1141,5 +1385,17 @@ final class AssetBrowserViewTests: XCTestCase {
             XCTAssertTrue(FileManager.default.fileExists(atPath: sceneFile.path), "Untold scene file should exist")
             XCTAssertTrue(FileManager.default.fileExists(atPath: untoldFile.path), "Untold file should exist")
         }
+    }
+
+    private func settleTaskCenter() async {
+        for _ in 0 ..< 5 {
+            await Task.yield()
+        }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+    }
+
+    @MainActor
+    private func trackedTask(_ id: UUID) -> EditorTask? {
+        TaskCenter.shared.tasks.first { $0.id == id }
     }
 }

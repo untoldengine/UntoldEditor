@@ -463,6 +463,7 @@ public struct EditorView: View {
 
     private enum BottomPanelTab: Hashable {
         case assets
+        case explore
         case console
         case tasks
     }
@@ -597,6 +598,7 @@ public struct EditorView: View {
     private var editorPanelTabs: some View {
         HStack(spacing: 2) {
             panelTabButton(.assets, title: "Assets", icon: "shippingbox")
+            panelTabButton(.explore, title: "Explore", icon: "square.grid.2x2")
             panelTabButton(.console, title: "Console", icon: "terminal")
             panelTabButton(.tasks, title: "Tasks", icon: "list.bullet.rectangle")
         }
@@ -644,6 +646,7 @@ public struct EditorView: View {
     private func panelTabHelp(_ tab: BottomPanelTab) -> String {
         switch tab {
         case .assets: return "Show Asset Browser. Right-click the asset area to import."
+        case .explore: return "Browse asset packs."
         case .console: return "Show Console"
         case .tasks: return "Show background tasks (exports, cooks, builds, loads)"
         }
@@ -652,6 +655,7 @@ public struct EditorView: View {
     private var bottomSearchPlaceholder: String {
         switch bottomPanelTab {
         case .assets: return "Filter assets"
+        case .explore: return "Filter packs"
         case .console: return "Filter console"
         case .tasks: return "Filter tasks"
         }
@@ -799,6 +803,10 @@ public struct EditorView: View {
                         editor_addEntityWithAsset: editor_addEntityWithAsset,
                         editor_loadSceneAuthoredFromAsset: editor_loadSceneAuthoredFromAsset
                     )
+                case .explore:
+                    AssetPackBrowserView(searchQuery: $bottomSearchQuery) {
+                        NotificationCenter.default.post(name: .assetBrowserReload, object: nil)
+                    }
                 case .console:
                     LogConsoleView(searchQuery: $bottomSearchQuery, autoScroll: $consoleAutoScroll)
                 case .tasks:
