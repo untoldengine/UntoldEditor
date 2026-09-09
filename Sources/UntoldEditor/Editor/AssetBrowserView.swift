@@ -2519,29 +2519,6 @@ struct AssetBrowserView: View {
         return asset
     }
 
-    private func resolvedGaussianAsset(for asset: Asset) -> Asset? {
-        guard asset.category == AssetCategory.gaussians.rawValue else {
-            return nil
-        }
-
-        if asset.isFolder {
-            guard let gaussianURL = primaryGaussianAsset(in: asset.path) else {
-                return nil
-            }
-            return Asset(
-                name: gaussianURL.lastPathComponent,
-                category: asset.category,
-                path: gaussianURL,
-                isFolder: false
-            )
-        }
-
-        guard ["ply", "untoldgs"].contains(asset.path.pathExtension.lowercased()) else {
-            return nil
-        }
-        return asset
-    }
-
     private func loadStreamModel(from asset: Asset) {
         guard let manifestAsset = resolvedTiledSceneManifest(for: asset) else {
             if asset.isFolder {
@@ -2686,32 +2663,16 @@ struct AssetBrowserView: View {
             return
         }
 
-        // Handle Gaussian files/folders (.ply source, baked .untoldgs, or progressive tier package)
-        if asset.category == AssetCategory.gaussians.rawValue {
-            guard let gaussianAsset = resolvedGaussianAsset(for: asset) else {
-                showStatus("No Gaussian asset found in \(asset.name)", isError: true)
-                return
-            }
-            // Create entity
-            let entityId = createEntity()
-
-            // Use a generated name to avoid duplicate names when importing repeatedly
-            let uniqueName = generateEntityName()
-            setEntityName(entityId: entityId, name: uniqueName)
-
-            let accepted = loadEditorGaussianAuto(entityId: entityId, url: gaussianAsset.path) { success in
-                if success {
-                    print("✅ Gaussian imported: \(uniqueName)")
-                } else {
-                    print("⚠️ Failed to load Gaussian: \(gaussianAsset.name)")
-                }
-                sceneGraphModel.refreshHierarchy()
-            }
-
-            // Select the newly created entity in the editor
-            selectionManager.selectedEntity = entityId
-
-            showStatus(accepted ? "Queued Gaussian import: \(uniqueName) (see Console)" : "Unsupported Gaussian asset: \(asset.name)", isError: !accepted)
+        // Models (.untold, .untoldpack, or a folder's primary) and Gaussian splats (.ply,
+        // baked .untoldgs, or an imported package folder) take the same path as a
+        // drag-and-drop onto the scene.
+        if let placeable = placeableAsset(for: asset) {
+            let placement = placeAsset(placeable, sceneGraphModel: sceneGraphModel, selectionManager: selectionManager)
+            showStatus(placement.statusMessage, isError: placement.isError)
+            return
+        }
+        if asset.isFolder, asset.category == AssetCategory.gaussians.rawValue {
+            showStatus(unsupportedAssetDropMessage(for: asset), isError: true)
             return
         }
 
@@ -2728,15 +2689,9 @@ struct AssetBrowserView: View {
         let runtimeFilename = runtimeAssetFilenameForLoading(asset.path)
         let withExtension = asset.path.pathExtension
 
-        // Models (.untold) and Gaussian splats (.ply, or baked .untoldgs single file /
-        // progressive tiers) take the same path as a drag-and-drop onto the scene.
-        if let placeable = placeableAsset(for: asset) {
-            let placement = placeAsset(placeable, sceneGraphModel: sceneGraphModel, selectionManager: selectionManager)
-            showStatus(placement.statusMessage)
-        }
         // Handle Animation files (.untold runtime assets in Animations category)
-        else if asset.category == AssetCategory.animations.rawValue,
-                runtimeAnimationAssetExtensions.contains(withExtension.lowercased())
+        if asset.category == AssetCategory.animations.rawValue,
+           runtimeAnimationAssetExtensions.contains(withExtension.lowercased())
         {
             // Animations require a selected entity to work with
             guard let entityId = selectionManager.selectedEntity,
