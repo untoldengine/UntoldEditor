@@ -567,7 +567,8 @@ struct InspectorView: View {
         } else if key == ObjectIdentifier(CameraComponent.self) {
             scene.remove(component: CameraComponent.self, from: entityId)
         } else if key == ObjectIdentifier(GaussianComponent.self) {
-            scene.remove(component: GaussianComponent.self, from: entityId)
+            removeEntityGaussian(entityId: entityId)
+            EditorGaussianAssetState.shared.clear(entityId: entityId)
         } else if key == ObjectIdentifier(ScriptComponent.self) {
             scene.remove(component: ScriptComponent.self, from: entityId)
         } else if key == ObjectIdentifier(LODComponent.self) {
@@ -1954,40 +1955,308 @@ struct GaussianEditorView: View {
     let refreshView: () -> Void
 
     var body: some View {
-        Text("Gaussian Splats")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Gaussian Splats")
 
-        HStack(spacing: 12) {
-            Text(getAssetURLString(entityId: entityId) ?? " ")
-            Button(action: {
-                let selectedCategory: AssetCategory = .gaussians
-                if let assetPath = asset?.path, selectedCategory.rawValue == asset?.category {
-                    let filename = assetPath.deletingPathExtension().lastPathComponent
-                    let withExtension = assetPath.pathExtension
-                    setEntityGaussian(entityId: entityId, filename: filename, withExtension: withExtension)
+            HStack(spacing: 12) {
+                Text(EditorGaussianAssetState.shared.metadata(for: entityId)?.sourceURL.deletingPathExtension().lastPathComponent ?? getAssetURLString(entityId: entityId) ?? " ")
+                    .lineLimit(1)
+                Button(action: {
+                    let selectedCategory: AssetCategory = .gaussians
+                    if let assetPath = asset?.path, selectedCategory.rawValue == asset?.category {
+                        loadEditorGaussianAuto(entityId: entityId, url: assetPath) { success in
+                            if success {
+                                print("✅ Gaussian assigned: \(assetPath.lastPathComponent)")
+                            } else {
+                                print("⚠️ Failed to assign Gaussian: \(assetPath.lastPathComponent)")
+                            }
+                            refreshView()
+                        }
+                    } else {
+                        refreshView()
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.editorTextPrimary)
+                        Text("Assign")
+                            .fontWeight(.regular)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(Color.editorSurface)
+                    .foregroundColor(.editorTextPrimary)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.editorDivider, lineWidth: 1)
+                    )
+                    .shadow(color: Color.editorShadow, radius: 4, x: 0, y: 2)
                 }
-                refreshView()
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.editorTextPrimary)
-                    Text("Assign")
-                        .fontWeight(.regular)
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(Color.editorSurface)
-                .foregroundColor(.editorTextPrimary)
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.editorDivider, lineWidth: 1)
-                )
-                .shadow(color: Color.editorShadow, radius: 4, x: 0, y: 2)
+                .buttonStyle(PlainButtonStyle())
             }
-            .buttonStyle(PlainButtonStyle())
+
+            if let metadata = EditorGaussianAssetState.shared.metadata(for: entityId),
+               let distances = metadata.progressiveMaxDistances
+            {
+                GaussianLoadingModeInspector(
+                    entityId: entityId,
+                    metadata: metadata,
+                    refreshView: refreshView
+                )
+                GaussianProgressiveLODInspector(
+                    entityId: entityId,
+                    distances: distances,
+                    refreshView: refreshView
+                )
+            } else if let metadata = EditorGaussianAssetState.shared.metadata(for: entityId) {
+                GaussianLoadingModeInspector(
+                    entityId: entityId,
+                    metadata: metadata,
+                    refreshView: refreshView
+                )
+            }
         }
         .padding(8)
         .background(Color.editorFillSubtle)
         .cornerRadius(8)
+    }
+}
+
+private struct GaussianLoadingModeInspector: View {
+    let entityId: EntityID
+    let metadata: EditorGaussianAssetMetadata
+    let refreshView: () -> Void
+
+    private var canStream: Bool {
+        GeometryStreamingSystem.shared.enabled && metadata.sourceURL.pathExtension.lowercased() == "untoldgs"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Loading")
+                .font(.caption)
+                .foregroundColor(.editorTextSecondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            Picker("", selection: modeBinding) {
+                ForEach(EditorGaussianLoadingMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .labelsHidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .disabled(!canStream && metadata.loadingMode != .streaming)
+
+            if metadata.loadingMode == .streaming {
+                GaussianStreamingSettingsInspector(
+                    entityId: entityId,
+                    settings: metadata.streamingSettings,
+                    refreshView: refreshView
+                )
+            }
+        }
+        .padding(8)
+        .background(Color.editorFill)
+        .cornerRadius(6)
+    }
+
+    private var modeBinding: Binding<EditorGaussianLoadingMode> {
+        Binding(
+            get: { metadata.loadingMode },
+            set: { newMode in
+                guard newMode != metadata.loadingMode else { return }
+                guard newMode == .resident || canStream else { return }
+                if updateEditorGaussianLoadingMode(entityId: entityId, loadingMode: newMode) {
+                    refreshView()
+                }
+            }
+        )
+    }
+}
+
+private struct GaussianStreamingSettingsInspector: View {
+    let entityId: EntityID
+    let settings: EditorGaussianStreamingSettings
+    let refreshView: () -> Void
+
+    @State private var streamingRadius = ""
+    @State private var unloadRadius = ""
+    @State private var priority = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            GaussianStreamingNumberRow(
+                label: "Load Radius",
+                value: $streamingRadius,
+                onCommit: commit
+            )
+            GaussianStreamingNumberRow(
+                label: "Unload Radius",
+                value: $unloadRadius,
+                onCommit: commit
+            )
+            GaussianStreamingNumberRow(
+                label: "Priority",
+                value: $priority,
+                onCommit: commit
+            )
+        }
+        .onAppear(perform: sync)
+        .onChange(of: settings) { _, _ in sync() }
+    }
+
+    private func sync() {
+        streamingRadius = String(format: "%.2f", settings.streamingRadius)
+        unloadRadius = String(format: "%.2f", settings.unloadRadius)
+        priority = "\(settings.priority)"
+    }
+
+    private func commit() {
+        guard let load = Float(streamingRadius),
+              let unload = Float(unloadRadius),
+              let priorityValue = Int(priority)
+        else {
+            sync()
+            return
+        }
+
+        let normalized = editorNormalizedGaussianStreamingSettings(
+            EditorGaussianStreamingSettings(
+                streamingRadius: load,
+                unloadRadius: unload,
+                priority: priorityValue
+            )
+        )
+        if updateEditorGaussianStreamingSettings(entityId: entityId, settings: normalized) {
+            refreshView()
+        }
+    }
+}
+
+private struct GaussianStreamingNumberRow: View {
+    let label: String
+    @Binding var value: String
+    let onCommit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+            Spacer()
+            TextField(label, text: $value)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(width: 72)
+                .onSubmit(onCommit)
+            Button(action: onCommit) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11))
+                    .foregroundColor(.editorTextSecondary)
+            }
+            .buttonStyle(BorderlessButtonStyle())
+        }
+    }
+}
+
+private struct GaussianProgressiveLODInspector: View {
+    let entityId: EntityID
+    let distances: [Float]
+    let refreshView: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Progressive LOD Distances")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.editorTextPrimary)
+                Spacer()
+                Button(action: {
+                    if resetEditorGaussianLODDistances(entityId: entityId) {
+                        refreshView()
+                    }
+                }) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 12))
+                        .foregroundColor(.editorTextSecondary)
+                }
+                .buttonStyle(BorderlessButtonStyle())
+                .help("Reset Gaussian LOD distances")
+            }
+
+            ForEach(Array(distances.enumerated()), id: \.offset) { index, distance in
+                if index == distances.count - 1 {
+                    HStack {
+                        Text("LOD\(index)")
+                            .font(.system(size: 11, weight: .medium))
+                        Spacer()
+                        Text("Infinity")
+                            .font(.system(size: 11))
+                            .foregroundColor(.editorTextSecondary)
+                    }
+                } else {
+                    GaussianLODDistanceRow(
+                        entityId: entityId,
+                        lodIndex: index,
+                        distance: distance,
+                        refreshView: refreshView
+                    )
+                }
+            }
+        }
+        .padding(8)
+        .background(Color.editorFill)
+        .cornerRadius(6)
+    }
+}
+
+private struct GaussianLODDistanceRow: View {
+    let entityId: EntityID
+    let lodIndex: Int
+    let distance: Float
+    let refreshView: () -> Void
+
+    @State private var value: String = ""
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("LOD\(lodIndex)")
+                .font(.system(size: 11, weight: .medium))
+            Spacer()
+            TextField("Distance", text: $value)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(width: 72)
+                .onAppear {
+                    value = formattedDistance(distance)
+                }
+                .onChange(of: distance) { _, newDistance in
+                    value = formattedDistance(newDistance)
+                }
+                .onSubmit {
+                    commit()
+                }
+            Button(action: commit) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11))
+                    .foregroundColor(.editorTextSecondary)
+            }
+            .buttonStyle(BorderlessButtonStyle())
+            .help("Apply Gaussian LOD distance")
+        }
+    }
+
+    private func commit() {
+        guard let newDistance = Float(value) else {
+            value = formattedDistance(distance)
+            return
+        }
+        if updateEditorGaussianLODDistance(entityId: entityId, lodIndex: lodIndex, maxDistance: newDistance) {
+            refreshView()
+        }
+    }
+
+    private func formattedDistance(_ distance: Float) -> String {
+        String(format: "%.2f", distance)
     }
 }

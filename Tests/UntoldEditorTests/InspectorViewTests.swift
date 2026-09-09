@@ -435,7 +435,7 @@ final class InspectorViewTests: XCTestCase {
                      "GaussianComponent should not have an inspector editor-state entry in scene composition mode.")
     }
 
-    func test_mergeComponents_excludesGaussianComponent_inSceneCompositionMode() {
+    func test_mergeComponents_includesLoadedGaussianComponentInSceneCompositionMode() {
         // Arrange
         let e = createEntityWithName("Gaussian Entity")
         addTransform(to: e)
@@ -447,9 +447,10 @@ final class InspectorViewTests: XCTestCase {
         // Act
         let merged = mergeEntityComponents(selectedEntity: e, editor_availableComponents: availableComponents_Editor)
 
-        // Assert: GaussianComponent should be hidden from inspector composition mode
+        // Assert: loaded Gaussian entities can be inspected even though adding Gaussian
+        // components manually remains disabled in scene composition mode.
         let key = ObjectIdentifier(GaussianComponent.self)
-        XCTAssertNil(merged[key], "GaussianComponent should be excluded from merged components.")
+        XCTAssertNotNil(merged[key], "GaussianComponent should be visible for loaded Gaussian entities.")
     }
 
     func test_visibleInspectorComponents_hidesTransformForDirectionalLight() {

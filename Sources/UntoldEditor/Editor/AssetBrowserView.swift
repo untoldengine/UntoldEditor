@@ -1172,7 +1172,7 @@ struct AssetBrowserView: View {
             openPanel.allowedContentTypes = [UTType(filenameExtension: "cube")!]
         }
 
-        openPanel.canChooseDirectories = (category == .materials || category == .streamModels)
+        openPanel.canChooseDirectories = (category == .materials || category == .streamModels || category == .gaussians)
         openPanel.allowsMultipleSelection = true
 
         guard let basePath = assetBasePath else { return }
@@ -1203,11 +1203,24 @@ struct AssetBrowserView: View {
                 }
 
             case "Gaussians":
-                // Copy the .ply / .untoldgs. Importing only copies: a .ply is cooked when the
-                // user asks for it, from the row's "Cook to .untoldgs…" context action.
-                let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
-                enqueueImport(destination: destURL, isFolder: false, batch: batch) { ctx in
-                    try ctx.copy(sourceURL, to: ctx.stagingURL, fileManager: fm)
+                if sourceURL.hasDirectoryPath {
+                    guard primaryGaussianAsset(in: sourceURL, fileManager: fm) != nil else {
+                        showStatus("No Gaussian asset found in selected folder", isError: true)
+                        continue
+                    }
+
+                    let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
+                    enqueueImport(destination: destURL, isFolder: true, batch: batch) { ctx in
+                        try ctx.copy(sourceURL, to: ctx.stagingURL, fileManager: fm)
+                    }
+                } else {
+                    // Gaussian files are imported as a folder package so progressive tiers stay grouped.
+                    let destFolder = gaussianPackageFolder(for: sourceURL, in: categoryRoot)
+                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                        _ = try importGaussianAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                            try ctx.copy($0, to: $1, fileManager: fm)
+                        }
+                    }
                 }
 
             case "Materials":
@@ -2112,12 +2125,18 @@ struct AssetBrowserView: View {
     /// refreshes as each one lands. A failed cook leaves the `.ply` untouched.
     private func cookGaussianSources(_ plyURLs: [URL]) {
         let settings = gaussianCookSettings
+        let gaussianRoot = assetBasePath?.appendingPathComponent(AssetCategory.gaussians.rawValue, isDirectory: true)
         showStatus(plyURLs.count == 1
             ? "Cooking \(plyURLs[0].lastPathComponent)..."
             : "Cooking \(plyURLs.count) Gaussian files (see Tasks)...")
         for plyURL in plyURLs {
             let name = plyURL.lastPathComponent
-            cookGaussianPLYTracked(plyURL: plyURL, settings: settings) { result in
+            let outputDirectory = gaussianRoot.flatMap { root -> URL? in
+                plyURL.deletingLastPathComponent().standardizedFileURL == root.standardizedFileURL
+                    ? gaussianPackageFolder(for: plyURL, in: root)
+                    : nil
+            }
+            cookGaussianPLYTracked(plyURL: plyURL, settings: settings, outputDirectory: outputDirectory) { result in
                 switch result {
                 case let .success(bake):
                     loadAssets()
@@ -2497,6 +2516,29 @@ struct AssetBrowserView: View {
         return asset
     }
 
+    private func resolvedGaussianAsset(for asset: Asset) -> Asset? {
+        guard asset.category == AssetCategory.gaussians.rawValue else {
+            return nil
+        }
+
+        if asset.isFolder {
+            guard let gaussianURL = primaryGaussianAsset(in: asset.path) else {
+                return nil
+            }
+            return Asset(
+                name: gaussianURL.lastPathComponent,
+                category: asset.category,
+                path: gaussianURL,
+                isFolder: false
+            )
+        }
+
+        guard ["ply", "untoldgs"].contains(asset.path.pathExtension.lowercased()) else {
+            return nil
+        }
+        return asset
+    }
+
     private func loadStreamModel(from asset: Asset) {
         guard let manifestAsset = resolvedTiledSceneManifest(for: asset) else {
             if asset.isFolder {
@@ -2641,6 +2683,35 @@ struct AssetBrowserView: View {
             return
         }
 
+        // Handle Gaussian files/folders (.ply source, baked .untoldgs, or progressive tier package)
+        if asset.category == AssetCategory.gaussians.rawValue {
+            guard let gaussianAsset = resolvedGaussianAsset(for: asset) else {
+                showStatus("No Gaussian asset found in \(asset.name)", isError: true)
+                return
+            }
+            // Create entity
+            let entityId = createEntity()
+
+            // Use a generated name to avoid duplicate names when importing repeatedly
+            let uniqueName = generateEntityName()
+            setEntityName(entityId: entityId, name: uniqueName)
+
+            let accepted = loadEditorGaussianAuto(entityId: entityId, url: gaussianAsset.path) { success in
+                if success {
+                    print("✅ Gaussian imported: \(uniqueName)")
+                } else {
+                    print("⚠️ Failed to load Gaussian: \(gaussianAsset.name)")
+                }
+                sceneGraphModel.refreshHierarchy()
+            }
+
+            // Select the newly created entity in the editor
+            selectionManager.selectedEntity = entityId
+
+            showStatus(accepted ? "Queued Gaussian import: \(uniqueName) (see Console)" : "Unsupported Gaussian asset: \(asset.name)", isError: !accepted)
+            return
+        }
+
         guard let asset = resolvedRuntimeAsset(for: asset) else {
             if asset.isFolder,
                asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue
@@ -2680,40 +2751,6 @@ struct AssetBrowserView: View {
             selectionManager.selectedEntity = entityId
 
             showStatus("Importing model: \(uniqueName)...")
-        }
-        // Handle Gaussian files (.ply source, or baked .untoldgs single file / progressive tiers)
-        else if asset.category == AssetCategory.gaussians.rawValue,
-                ["ply", "untoldgs"].contains(withExtension.lowercased())
-        {
-            // Create entity
-            let entityId = createEntity()
-
-            // Use a generated name to avoid duplicate names when importing repeatedly
-            let uniqueName = generateEntityName()
-            setEntityName(entityId: entityId, name: uniqueName)
-
-            // Add Gaussian component to entity. A `<name>_lodN.untoldgs` tier stands for the
-            // whole progressive set; the engine loads the coarsest tier first.
-            if withExtension.lowercased() == "untoldgs", let tiers = progressiveGaussianTiers(for: asset.path) {
-                setEntityGaussian(
-                    entityId: entityId,
-                    source: .progressive(
-                        baseFilename: tiers.baseURL.path,
-                        levelCount: tiers.levelCount,
-                        maxDistances: defaultGaussianLODDistances(levelCount: tiers.levelCount)
-                    )
-                )
-            } else {
-                setEntityGaussian(entityId: entityId, filename: filename, withExtension: withExtension)
-            }
-
-            // Refresh the scene hierarchy to show the new entity
-            sceneGraphModel.refreshHierarchy()
-
-            // Select the newly created entity in the editor
-            selectionManager.selectedEntity = entityId
-
-            showStatus("Queued Gaussian import: \(uniqueName) (see Console)")
         }
         // Handle Animation files (.untold runtime assets in Animations category)
         else if asset.category == AssetCategory.animations.rawValue,
@@ -2862,6 +2899,7 @@ struct AssetBrowserView: View {
         destroyAllEntities()
         removeGizmo()
         EditorComponentsState.shared.clear()
+        EditorGaussianAssetState.shared.clear()
 
         // Load new scene
         deserializeScene(sceneData: sceneData)

@@ -76,6 +76,24 @@ final class GaussianCookSheetTests: XCTestCase {
         XCTAssertNil(progressiveGaussianTiers(for: single.tiers[0].url))
     }
 
+    func test_cookCanWriteTiersIntoGaussianPackageFolder() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectory = directory
+
+        let plyURL = directory.appendingPathComponent("chair.ply")
+        let packageFolder = directory.appendingPathComponent("chair", isDirectory: true)
+        try makeTestPLY(splatCount: 200).write(to: plyURL)
+
+        var settings = GaussianCookSettings()
+        settings.levelCount = 2
+        let result = try cookGaussianPLY(plyURL: plyURL, settings: settings, outputDirectory: packageFolder)
+
+        XCTAssertEqual(result.tiers.map(\.url.lastPathComponent), ["chair_lod0.untoldgs", "chair_lod1.untoldgs"])
+        XCTAssertEqual(result.tiers.map { $0.url.deletingLastPathComponent() }, [packageFolder, packageFolder])
+    }
+
     func test_importBatchHelpers() {
         let ply = URL(fileURLWithPath: "/tmp/Gaussians/room.PLY")
         let baked = URL(fileURLWithPath: "/tmp/Gaussians/room.untoldgs")
@@ -94,6 +112,133 @@ final class GaussianCookSheetTests: XCTestCase {
         XCTAssertEqual(gaussianCookSummary(report), "Kept 7 of 10 splats")
         XCTAssertEqual(gaussianCookFailureDetail(UntoldGSCookError.noSplatsLeftAfterPruning(report)), UntoldGSCookError.noSplatsLeftAfterPruning(report).description)
         XCTAssertEqual(gaussianCookFailureDetail(CocoaError(.fileNoSuchFile)), CocoaError(.fileNoSuchFile).localizedDescription)
+    }
+
+    func test_gaussianPackageHelpers() throws {
+        let root = URL(fileURLWithPath: "/tmp/Gaussians", isDirectory: true)
+        let ply = root.appendingPathComponent("room.ply")
+        let lod0 = root.appendingPathComponent("chair_lod0.untoldgs")
+        XCTAssertEqual(gaussianPackageName(for: ply), "room")
+        XCTAssertEqual(gaussianPackageName(for: lod0), "chair")
+        XCTAssertEqual(gaussianPackageFolder(for: ply, in: root), root.appendingPathComponent("room", isDirectory: true))
+        XCTAssertEqual(gaussianPackageFolder(for: lod0, in: root), root.appendingPathComponent("chair", isDirectory: true))
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectory = directory
+
+        let chairFolder = directory.appendingPathComponent("chair", isDirectory: true)
+        try FileManager.default.createDirectory(at: chairFolder, withIntermediateDirectories: true)
+        let chairLOD0 = chairFolder.appendingPathComponent("chair_lod0.untoldgs")
+        let chairLOD1 = chairFolder.appendingPathComponent("chair_lod1.untoldgs")
+        FileManager.default.createFile(atPath: chairLOD0.path, contents: Data())
+        FileManager.default.createFile(atPath: chairLOD1.path, contents: Data())
+        XCTAssertEqual(primaryGaussianAsset(in: chairFolder)?.standardizedFileURL, chairLOD0.standardizedFileURL)
+
+        let tableFolder = directory.appendingPathComponent("table", isDirectory: true)
+        try FileManager.default.createDirectory(at: tableFolder, withIntermediateDirectories: true)
+        let table = tableFolder.appendingPathComponent("table.untoldgs")
+        FileManager.default.createFile(atPath: table.path, contents: Data())
+        XCTAssertEqual(primaryGaussianAsset(in: tableFolder)?.standardizedFileURL, table.standardizedFileURL)
+    }
+
+    func test_importGaussianAssetCopiesDetectedProgressiveTierSet() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        let sourceDirectory = directory.appendingPathComponent("source", isDirectory: true)
+        let destinationRoot = directory.appendingPathComponent("destination", isDirectory: true)
+        temporaryDirectory = directory
+
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: destinationRoot, withIntermediateDirectories: true)
+
+        let sourceLOD0 = sourceDirectory.appendingPathComponent("chair_lod0.untoldgs")
+        let sourceLOD1 = sourceDirectory.appendingPathComponent("chair_lod1.untoldgs")
+        try Data([0]).write(to: sourceLOD0)
+        try Data([1]).write(to: sourceLOD1)
+
+        let packageFolder = gaussianPackageFolder(for: sourceLOD0, in: destinationRoot)
+        let imported = try importGaussianAsset(sourceURL: sourceLOD0, destinationFolder: packageFolder)
+
+        XCTAssertEqual(imported.standardizedFileURL, packageFolder.appendingPathComponent("chair_lod0.untoldgs").standardizedFileURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: packageFolder.appendingPathComponent("chair_lod0.untoldgs").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: packageFolder.appendingPathComponent("chair_lod1.untoldgs").path))
+    }
+
+    func test_editorGaussianLoadPlanUsesSingleAsyncInputsForStandaloneFiles() {
+        let ply = URL(fileURLWithPath: "/tmp/Gaussians/room.PLY")
+        let baked = URL(fileURLWithPath: "/tmp/Gaussians/room.untoldgs")
+
+        XCTAssertEqual(
+            editorGaussianLoadPlan(for: ply),
+            .single(filename: "/tmp/Gaussians/room", withExtension: "ply")
+        )
+        XCTAssertEqual(
+            editorGaussianLoadPlan(for: baked),
+            .single(filename: "/tmp/Gaussians/room", withExtension: "untoldgs")
+        )
+        XCTAssertNil(editorGaussianLoadPlan(for: URL(fileURLWithPath: "/tmp/Gaussians/room.json")))
+    }
+
+    func test_editorGaussianLoadPlanUsesResidentProgressiveForTierSets() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectory = directory
+
+        let lod0 = directory.appendingPathComponent("chair_lod0.untoldgs")
+        let lod1 = directory.appendingPathComponent("chair_lod1.untoldgs")
+        FileManager.default.createFile(atPath: lod0.path, contents: Data())
+        FileManager.default.createFile(atPath: lod1.path, contents: Data())
+
+        XCTAssertEqual(
+            editorGaussianLoadPlan(for: lod1),
+            .progressive(
+                baseFilename: directory.appendingPathComponent("chair").path,
+                levelCount: 2,
+                maxDistances: [5, .greatestFiniteMagnitude]
+            )
+        )
+    }
+
+    func test_editorGaussianLoadPlanAcceptsCustomProgressiveDistances() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectory = directory
+
+        let lod0 = directory.appendingPathComponent("chair_lod0.untoldgs")
+        let lod1 = directory.appendingPathComponent("chair_lod1.untoldgs")
+        let lod2 = directory.appendingPathComponent("chair_lod2.untoldgs")
+        FileManager.default.createFile(atPath: lod0.path, contents: Data())
+        FileManager.default.createFile(atPath: lod1.path, contents: Data())
+        FileManager.default.createFile(atPath: lod2.path, contents: Data())
+
+        XCTAssertEqual(
+            editorGaussianLoadPlan(for: lod0, maxDistances: [8, 20, 99]),
+            .progressive(
+                baseFilename: directory.appendingPathComponent("chair").path,
+                levelCount: 3,
+                maxDistances: [8, 20, .greatestFiniteMagnitude]
+            )
+        )
+    }
+
+    func test_editorNormalizedGaussianLODDistancesKeepsFiniteDistancesIncreasingAndLastInfinite() {
+        XCTAssertEqual(editorNormalizedGaussianLODDistances([10, 5, 30], levelCount: 3), [10, 10.001, .greatestFiniteMagnitude])
+        XCTAssertEqual(editorNormalizedGaussianLODDistances([.infinity], levelCount: 2), [Float.leastNonzeroMagnitude, .greatestFiniteMagnitude])
+        XCTAssertEqual(editorNormalizedGaussianLODDistances([], levelCount: 0), [])
+    }
+
+    func test_editorNormalizedGaussianStreamingSettingsKeepsUnloadBeyondLoadRadius() {
+        let normalized = editorNormalizedGaussianStreamingSettings(
+            EditorGaussianStreamingSettings(streamingRadius: 40, unloadRadius: 20, priority: 3)
+        )
+
+        XCTAssertEqual(normalized.streamingRadius, 40)
+        XCTAssertEqual(normalized.unloadRadius, 40.001, accuracy: 0.0001)
+        XCTAssertEqual(normalized.priority, 3)
     }
 
     func test_trackedCookSucceedsAsATask() async throws {
