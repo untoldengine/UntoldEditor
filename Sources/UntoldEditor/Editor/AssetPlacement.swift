@@ -10,9 +10,11 @@
 //
 //  Placing an asset browser row in the scene, shared by the row double-click and
 //  by drag-and-drop onto the viewport or the hierarchy: which assets the engine
-//  can render directly (models and Gaussian splats), the drag payload that carries
-//  a row between panels, the entity creation itself, and the ground-plane hit that
-//  lands a viewport drop under the cursor.
+//  can render directly (models and Gaussian splats, or the folder packages that
+//  stand for them), the drag payload that carries a row between panels, the entity
+//  creation itself, and the ground-plane hit that lands a viewport drop under the
+//  cursor. Gaussians load through the editor's loader (`loadEditorGaussianAuto`),
+//  so a dropped splat gets the same Inspector metadata as a double-clicked one.
 //
 
 import simd
@@ -85,16 +87,16 @@ func loadAssetDragPayload(from providers: [NSItemProvider], completion: @escapin
 enum PlaceableAsset: Equatable {
     /// A `.untold` runtime asset (or a multi-model `.untoldpack`) from the Models category.
     case model(URL)
-    /// A Gaussian splat `.ply` source or a single baked `.untoldgs`.
+    /// A Gaussian splat `.ply` source or a baked `.untoldgs`; a `<base>_lodN.untoldgs`
+    /// tier stands for the whole progressive set, which the editor's loader detects.
     case gaussian(URL)
-    /// A `<base>_lodN.untoldgs` tier, standing for the whole progressive set.
-    case progressiveGaussian(baseURL: URL, levelCount: Int)
 }
 
 /// Resolves `asset` to something `placeAsset` can create, or `nil` for the kinds
 /// that attach to an existing entity or the environment instead (animations,
 /// scripts, materials, scenes, HDR). A Models folder stands for its primary
-/// `.untold` / `.untoldpack`, matching the row double-click.
+/// `.untold` / `.untoldpack`, and a Gaussian package folder (an import keeps a
+/// capture's tiers together in one) for its primary `.untoldgs` / `.ply`.
 func placeableAsset(for asset: Asset) -> PlaceableAsset? {
     switch asset.category {
     case AssetCategory.models.rawValue:
@@ -109,18 +111,15 @@ func placeableAsset(for asset: Asset) -> PlaceableAsset? {
         return .model(url)
 
     case AssetCategory.gaussians.rawValue:
-        guard asset.isFolder == false else { return nil }
-        switch asset.path.pathExtension.lowercased() {
-        case "ply":
-            return .gaussian(asset.path)
-        case "untoldgs":
-            if let tiers = progressiveGaussianTiers(for: asset.path) {
-                return .progressiveGaussian(baseURL: tiers.baseURL, levelCount: tiers.levelCount)
-            }
-            return .gaussian(asset.path)
-        default:
-            return nil
+        let url: URL
+        if asset.isFolder {
+            guard let primary = primaryGaussianAsset(in: asset.path) else { return nil }
+            url = primary
+        } else {
+            url = asset.path
         }
+        guard ["ply", "untoldgs"].contains(url.pathExtension.lowercased()) else { return nil }
+        return .gaussian(url)
 
     default:
         return nil
@@ -132,6 +131,9 @@ func unsupportedAssetDropMessage(for asset: Asset) -> String {
     if asset.isFolder, asset.category == AssetCategory.models.rawValue {
         return "No primary .untold found in \(asset.name)"
     }
+    if asset.isFolder, asset.category == AssetCategory.gaussians.rawValue {
+        return "No Gaussian asset found in \(asset.name)"
+    }
     return "Only models (.untold, .untoldpack) and Gaussian splats (.ply, .untoldgs) can be dropped into the scene"
 }
 
@@ -139,12 +141,14 @@ struct AssetPlacementResult {
     let entityId: EntityID
     let entityName: String
     let statusMessage: String
+    /// The status reports a load the editor declined rather than a queued import.
+    var isError = false
 }
 
 /// Creates a named entity for `placeable`, attaches the asset, selects the entity
 /// and refreshes the hierarchy. `position` is world space; `nil` leaves the entity at
-/// the origin. Models load asynchronously and the engine applies the asset's own
-/// root transform when they land, so their position is set from the completion.
+/// the origin. Models and Gaussians load asynchronously (the engine applies a model's
+/// own root transform when it lands), so the position is set from the completion.
 @discardableResult
 func placeAsset(
     _ placeable: PlaceableAsset,
@@ -159,6 +163,7 @@ func placeAsset(
     setEntityName(entityId: entityId, name: uniqueName)
 
     let statusMessage: String
+    var isError = false
     switch placeable {
     case let .model(url):
         // The engine resolves an absolute path as-is, which is what a `.untoldpack`
@@ -182,38 +187,29 @@ func placeAsset(
         statusMessage = "Importing model: \(uniqueName)..."
 
     case let .gaussian(url):
-        setEntityGaussian(
-            entityId: entityId,
-            filename: url.deletingPathExtension().lastPathComponent,
-            withExtension: url.pathExtension
-        )
-        if let position {
-            translateTo(entityId: entityId, position: position)
+        // The editor's loader tells a progressive tier set from a single file, records
+        // the asset for the Inspector, and reads a single file off the main thread.
+        let accepted = loadEditorGaussianAuto(entityId: entityId, url: url) { success in
+            if success {
+                print("✅ Gaussian imported: \(uniqueName)")
+            } else {
+                print("⚠️ Failed to load Gaussian: \(url.lastPathComponent)")
+            }
+            if let position {
+                translateTo(entityId: entityId, position: position)
+            }
+            sceneGraphModel.refreshHierarchy()
         }
-        sceneGraphModel.refreshHierarchy()
-        statusMessage = "Queued Gaussian import: \(uniqueName) (see Console)"
-
-    case let .progressiveGaussian(baseURL, levelCount):
-        // The engine loads the coarsest tier first and streams finer ones by distance.
-        setEntityGaussian(
-            entityId: entityId,
-            source: .progressive(
-                baseFilename: baseURL.path,
-                levelCount: levelCount,
-                maxDistances: defaultGaussianLODDistances(levelCount: levelCount)
-            )
-        )
-        if let position {
-            translateTo(entityId: entityId, position: position)
-        }
-        sceneGraphModel.refreshHierarchy()
-        statusMessage = "Queued Gaussian import: \(uniqueName) (see Console)"
+        statusMessage = accepted
+            ? "Queued Gaussian import: \(uniqueName) (see Console)"
+            : "Unsupported Gaussian asset: \(url.lastPathComponent)"
+        isError = !accepted
     }
 
     // Select the newly created entity in the editor
     selectionManager.selectedEntity = entityId
 
-    return AssetPlacementResult(entityId: entityId, entityName: uniqueName, statusMessage: statusMessage)
+    return AssetPlacementResult(entityId: entityId, entityName: uniqueName, statusMessage: statusMessage, isError: isError)
 }
 
 /// Farthest ground hit a viewport drop will use; a near-horizontal view would

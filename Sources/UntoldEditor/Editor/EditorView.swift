@@ -535,7 +535,7 @@ public struct EditorView: View {
             editor_parentEntity(childId: placement.entityId, parentId: parent)
         }
         editor_entities = getAllGameEntities()
-        showDropStatus(placement.statusMessage)
+        showDropStatus(placement.statusMessage, isError: placement.isError)
     }
 
     private func showDropStatus(_ message: String, isError: Bool = false) {
