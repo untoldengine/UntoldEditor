@@ -612,10 +612,10 @@ struct AssetBrowserView: View {
     @State private var showImportMenu = false
     @State private var showRemoteStreamSheet = false
     @State private var remoteStreamURLString = ""
-    @State private var showGaussianCookSheet = false
-    /// `.ply` files waiting for the cook sheet: one from the context menu, or every
-    /// source in an import batch (the sheet is shown once per batch).
-    @State private var pendingGaussianCookURLs: [URL] = []
+    /// The cook sheet's item: the `.ply` of the row whose "Cook to .untoldgs…" was chosen.
+    /// Presented with `.sheet(item:)`, so the sheet exists only while there is a request,
+    /// and a request always carries sources (`GaussianCookRequest.init?(sources:)`).
+    @State private var pendingGaussianCook: GaussianCookRequest?
     @State private var gaussianCookSettings = GaussianCookSettings()
     /// Import copies still running (see `AssetImportCopy.swift`). Past the placeholder
     /// delay each one is drawn as a placeholder row in the folder that will receive it.
@@ -1241,20 +1241,16 @@ struct AssetBrowserView: View {
         .sheet(item: $pendingTilesExport) { request in
             tilesExportSheet(for: request)
         }
-        .sheet(isPresented: $showGaussianCookSheet) {
+        .sheet(item: $pendingGaussianCook) { request in
             GaussianCookSheet(
-                sourceName: gaussianCookSheetSourceName(for: pendingGaussianCookURLs),
-                sourceURLs: pendingGaussianCookURLs,
+                sourceURLs: request.sourceURLs,
                 settings: $gaussianCookSettings,
                 onCook: {
-                    showGaussianCookSheet = false
-                    let sources = pendingGaussianCookURLs
-                    pendingGaussianCookURLs = []
-                    cookGaussianSources(sources)
+                    pendingGaussianCook = nil
+                    cookGaussianSources(request.sourceURLs)
                 },
                 onCancel: {
-                    showGaussianCookSheet = false
-                    pendingGaussianCookURLs = []
+                    pendingGaussianCook = nil
                 }
             )
         }
@@ -2263,6 +2259,16 @@ struct AssetBrowserView: View {
         return asset.name.localizedCaseInsensitiveContains(query)
     }
 
+    /// Opens the cook sheet for the `.ply` files among `urls`. With none there is nothing
+    /// to configure, so the status line says so instead of an empty sheet.
+    private func requestGaussianCook(of urls: [URL]) {
+        guard let request = GaussianCookRequest(sources: urls) else {
+            showStatus("Select .ply files to cook", isError: true)
+            return
+        }
+        pendingGaussianCook = request
+    }
+
     /// Cooks each `.ply` to `.untoldgs` with the sheet's current settings. Every file is
     /// its own job in the Tasks panel (the context-menu cook and an import batch share
     /// this path); the bakes run one after another on the cook queue and the browser
@@ -2394,8 +2400,7 @@ struct AssetBrowserView: View {
                            asset.path.pathExtension.lowercased() == "ply"
                         {
                             Button {
-                                pendingGaussianCookURLs = [asset.path]
-                                showGaussianCookSheet = true
+                                requestGaussianCook(of: [asset.path])
                             } label: {
                                 Label("Cook to .untoldgs…", systemImage: "sparkles")
                             }

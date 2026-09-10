@@ -3,8 +3,8 @@
 //  UntoldEditorTests
 //
 //  The "Cook to .untoldgs" path: settings → engine cook options, the bake beside the
-//  source .ply, the Tasks-panel wrapper the browser runs cooks through, and
-//  progressive tier detection for placement.
+//  source .ply, the Tasks-panel wrapper the browser runs cooks through, progressive
+//  tier detection for placement, and the sheet's empty state (nothing selected).
 //
 
 import simd
@@ -282,6 +282,36 @@ final class GaussianCookSheetTests: XCTestCase {
         XCTAssertEqual(normalized.streamingRadius, 40)
         XCTAssertEqual(normalized.unloadRadius, 40.001, accuracy: 0.0001)
         XCTAssertEqual(normalized.priority, 3)
+    }
+
+    func test_sheetWithoutSourcesCannotCook() {
+        let ply = URL(fileURLWithPath: "/tmp/Gaussians/room.PLY")
+        let baked = URL(fileURLWithPath: "/tmp/Gaussians/room.untoldgs")
+        let settings = GaussianCookSettings()
+
+        XCTAssertEqual(gaussianCookSheetTitle(for: []), "Select .ply files to cook")
+        XCTAssertEqual(gaussianCookSheetTitle(for: [ply]), "Cook room.PLY to .untoldgs")
+        XCTAssertEqual(gaussianCookSheetTitle(for: [ply, ply]), "Cook 2 .ply files to .untoldgs")
+
+        XCTAssertFalse(gaussianCookSheetCanCook(sourceURLs: [], settings: settings), "nothing to cook")
+        XCTAssertTrue(gaussianCookSheetCanCook(sourceURLs: [ply], settings: settings))
+        var collapsed = settings
+        collapsed.scale = 0
+        XCTAssertFalse(gaussianCookSheetCanCook(sourceURLs: [ply], settings: collapsed), "a zero scale still blocks the cook")
+
+        XCTAssertEqual(
+            gaussianCookSourceCaption(sourceURLs: [], sourceSplatCount: nil, maxSplatCount: settings.cookOptions.maxSplatCount),
+            "No .ply file selected; nothing to cook."
+        )
+        XCTAssertEqual(
+            gaussianCookSourceCaption(sourceURLs: [ply], sourceSplatCount: 1000, maxSplatCount: 5000),
+            gaussianBudgetCaption(sourceCount: 1000, maxSplatCount: 5000)
+        )
+
+        // The browser presents the sheet for a request, and a request needs a .ply.
+        XCTAssertNil(GaussianCookRequest(sources: []))
+        XCTAssertNil(GaussianCookRequest(sources: [baked]), "baked files are imported as they are")
+        XCTAssertEqual(GaussianCookRequest(sources: [baked, ply])?.sourceURLs, [ply])
     }
 
     func test_trackedCookSucceedsAsATask() async throws {

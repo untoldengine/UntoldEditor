@@ -312,9 +312,45 @@ func primaryGaussianAsset(in folder: URL, fileManager fm: FileManager = .default
         ?? (plyFiles.count == 1 ? plyFiles.first : nil)
 }
 
+/// What the asset browser presents the cook sheet for: the `.ply` sources of a row (or of
+/// an import batch). Only `init?(sources:)` makes one, so a request always has something
+/// to cook; the browser shows the sheet as this item (`.sheet(item:)`), which is what keeps
+/// it from opening for "0 .ply files".
+struct GaussianCookRequest: Identifiable, Equatable {
+    let id = UUID()
+    /// The `.ply` files to cook; never empty.
+    let sourceURLs: [URL]
+
+    /// `nil` when `sources` holds no `.ply` (baked `.untoldgs` files are imported as they are).
+    init?(sources: [URL]) {
+        let plyURLs = gaussianSourcesToCook(in: sources)
+        guard !plyURLs.isEmpty else { return nil }
+        sourceURLs = plyURLs
+    }
+}
+
 /// Heading for the cook sheet: the file name, or the batch size for an import of several.
 func gaussianCookSheetSourceName(for urls: [URL]) -> String {
     urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) .ply files"
+}
+
+/// The sheet's title. With nothing to cook it asks for sources rather than announcing a
+/// cook of "0 .ply files".
+func gaussianCookSheetTitle(for urls: [URL]) -> String {
+    urls.isEmpty ? "Select .ply files to cook" : "Cook \(gaussianCookSheetSourceName(for: urls)) to .untoldgs"
+}
+
+/// Whether the Cook button does anything: at least one source, and a positive scale (zero
+/// collapses the capture, negative mirrors it).
+func gaussianCookSheetCanCook(sourceURLs: [URL], settings: GaussianCookSettings) -> Bool {
+    !sourceURLs.isEmpty && settings.scale > 0
+}
+
+/// Caption under the budget row: what the budget does to the source's splats, or that
+/// there is no source to count.
+func gaussianCookSourceCaption(sourceURLs: [URL], sourceSplatCount: Int?, maxSplatCount: Int?) -> String {
+    guard !sourceURLs.isEmpty else { return "No .ply file selected; nothing to cook." }
+    return gaussianBudgetCaption(sourceCount: sourceSplatCount, maxSplatCount: maxSplatCount)
 }
 
 /// Tasks panel detail while a cook runs. The baker reports no progress, so this is all
@@ -702,10 +738,10 @@ func updateEditorGaussianStreamingSettings(entityId: EntityID, settings: EditorG
 }
 
 struct GaussianCookSheet: View {
-    let sourceName: String
     /// The `.ply` files about to be cooked; a single file's header gives the splat count shown
-    /// under the budget row.
-    var sourceURLs: [URL] = []
+    /// under the budget row. Empty (nothing selected) disables Cook and says so, so the sheet
+    /// stays honest however it was presented.
+    let sourceURLs: [URL]
     @Binding var settings: GaussianCookSettings
     var onCook: () -> Void
     var onCancel: () -> Void
@@ -717,7 +753,7 @@ struct GaussianCookSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Cook \(sourceName) to .untoldgs")
+            Text(gaussianCookSheetTitle(for: sourceURLs))
                 .font(.headline)
 
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
@@ -780,7 +816,7 @@ struct GaussianCookSheet: View {
                 }
                 GridRow {
                     Text("")
-                    Text(gaussianBudgetCaption(sourceCount: sourceSplatCount, maxSplatCount: settings.cookOptions.maxSplatCount))
+                    Text(gaussianCookSourceCaption(sourceURLs: sourceURLs, sourceSplatCount: sourceSplatCount, maxSplatCount: settings.cookOptions.maxSplatCount))
                         .font(.caption)
                         .foregroundColor(.editorTextSecondary)
                 }
@@ -810,7 +846,7 @@ struct GaussianCookSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Cook", action: onCook)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(settings.scale <= 0)
+                    .disabled(!gaussianCookSheetCanCook(sourceURLs: sourceURLs, settings: settings))
             }
         }
         .padding(20)
