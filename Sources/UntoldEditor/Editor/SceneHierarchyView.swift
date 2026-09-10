@@ -43,7 +43,6 @@ struct AddEntityActions {
 /// Primitives and Lights shelves (see AssetBrowserView.swift), which drag as well
 /// as click; Empty Entity stays here since it has no visual or component to
 /// preview, so it doesn't fit the "drop at a point" pattern.
-@ViewBuilder
 func addEntityMenuItems(_ actions: AddEntityActions) -> some View {
     Button("Empty Entity", systemImage: "plus") { actions.empty() }
 }
