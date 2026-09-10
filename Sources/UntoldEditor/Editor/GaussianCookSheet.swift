@@ -95,9 +95,10 @@ enum GaussianRecenterMode: String, CaseIterable, Identifiable {
 /// Splat budget presets: the per-entity caps the engine runtime enforces per platform
 /// (`GaussianRuntimeLimits`), or no cap at all.
 enum GaussianSplatBudget: String, CaseIterable, Identifiable {
-    /// 20,000,000 splats: Apple Vision Pro, iPhone, iPad and Apple TV.
+    /// The engine's mobile per-entity cap (`UntoldGSCookOptions.splatBudgetMobile`): Apple
+    /// Vision Pro, iPhone, iPad and Apple TV.
     case visionPro
-    /// 40,000,000 splats: Mac only.
+    /// The engine's Mac per-entity cap (`UntoldGSCookOptions.splatBudgetMac`).
     case mac
     case custom
     case unlimited
