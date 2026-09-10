@@ -58,12 +58,13 @@ final class GaussianCookSheetTests: XCTestCase {
         XCTAssertEqual(settings.cookOptions.maxSplatCount, 123_456)
         XCTAssertTrue(gaussianCookTaskDetail(settings: settings).contains("budget 123,456"))
 
+        let overMobileBudget = UntoldGSCookOptions.splatBudgetMobile + 1
         XCTAssertEqual(
-            gaussianBudgetCaption(sourceCount: 8_085_051, maxSplatCount: UntoldGSCookOptions.splatBudgetMobile),
-            "8,085,051 splats in the source; the budget keeps the 5,242,880 most important."
+            gaussianBudgetCaption(sourceCount: overMobileBudget, maxSplatCount: UntoldGSCookOptions.splatBudgetMobile),
+            "\(GaussianSplatBudget.formatted(overMobileBudget)) splats in the source; the budget keeps the \(GaussianSplatBudget.formatted(UntoldGSCookOptions.splatBudgetMobile)) most important."
         )
         XCTAssertEqual(gaussianBudgetCaption(sourceCount: 1000, maxSplatCount: 5000), "1,000 splats in the source, within the budget.")
-        XCTAssertTrue(gaussianBudgetCaption(sourceCount: 8_085_051, maxSplatCount: nil).contains("do not load on Vision Pro"))
+        XCTAssertTrue(gaussianBudgetCaption(sourceCount: overMobileBudget, maxSplatCount: nil).contains("do not load on Vision Pro"))
         XCTAssertEqual(gaussianBudgetCaption(sourceCount: nil, maxSplatCount: nil), "No splat budget.")
 
         var report = UntoldGSCookReport.passthrough(splatCount: 10, shDegree: 0)

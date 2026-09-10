@@ -1537,7 +1537,6 @@ public struct EditorView: View {
         }
     }
 
-
     private func editor_addEntityWithAsset() {
         editor_addNewEntity()
 
