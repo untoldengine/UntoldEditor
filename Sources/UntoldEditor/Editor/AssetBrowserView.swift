@@ -2985,7 +2985,7 @@ struct AssetBrowserView: View {
         EditorGaussianAssetState.shared.clear()
 
         // Load new scene
-        deserializeScene(sceneData: sceneData)
+        deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
 
         // Reset editor state
         selectionManager.selectedEntity = nil

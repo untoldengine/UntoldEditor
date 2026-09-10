@@ -484,6 +484,48 @@ func editorGaussianLoadPlan(for url: URL, maxDistances: [Float]? = nil) -> Edito
     )
 }
 
+/// `info.baseFilename` is whatever project-relative-or-absolute identifier the scene file
+/// happened to store (see `GaussianSceneData.baseFilename` in the engine's `SceneSerializer`) —
+/// not necessarily an absolute path, unlike every `EditorGaussianLoadPlan.progressive` built
+/// from a fresh pick via `editorGaussianLoadPlan(for:maxDistances:)`, which always derives
+/// `baseFilename` from a resolved file URL. Reconstructs that same absolute-path shape instead,
+/// from the tier-0 URL the engine already resolved onto the just-restored entity's
+/// `GaussianLODComponent` — cheap string manipulation, no disk probing (unlike
+/// `progressiveGaussianTiers(for:)`, which counts tiers by checking file existence).
+private func resolvedProgressiveBaseFilename(entityId: EntityID, levelCount: Int) -> String? {
+    guard let tierZeroURL = scene.get(component: GaussianLODComponent.self, for: entityId)?.lodLevels.first?.url else {
+        return nil
+    }
+    let noExtension = tierZeroURL.deletingPathExtension()
+    let name = noExtension.lastPathComponent
+    guard levelCount > 1, name.hasSuffix("_lod0") else {
+        return noExtension.path
+    }
+    let baseName = String(name.dropLast("_lod0".count))
+    return noExtension.deletingLastPathComponent().appendingPathComponent(baseName).path
+}
+
+/// Rebuilds this entity's `EditorGaussianAssetState` entry from what `deserializeScene` already
+/// resolved for it, so the Inspector's Gaussian panel reflects a splat restored from a
+/// `.untoldscene` the same way it reflects one just dropped or assigned interactively —
+/// without re-reading the asset off disk. Pass as `deserializeScene`'s
+/// `onGaussianEntityRestored` callback.
+func restoreEditorGaussianState(entityId: EntityID, info: GaussianSceneRestoreInfo) {
+    let plan: EditorGaussianLoadPlan
+    if info.isProgressive, let levelCount = info.levelCount, let maxDistances = info.maxDistances,
+       let baseFilename = resolvedProgressiveBaseFilename(entityId: entityId, levelCount: levelCount)
+    {
+        plan = .progressive(baseFilename: baseFilename, levelCount: levelCount, maxDistances: maxDistances)
+    } else {
+        plan = .single(filename: info.sourceURL.deletingPathExtension().path, withExtension: info.fileExtension)
+    }
+
+    EditorGaussianAssetState.shared.setMetadata(
+        EditorGaussianAssetMetadata(sourceURL: info.sourceURL, plan: plan),
+        for: entityId
+    )
+}
+
 @discardableResult
 func loadEditorGaussianAuto(
     entityId: EntityID,

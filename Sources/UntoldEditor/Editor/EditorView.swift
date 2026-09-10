@@ -1290,7 +1290,7 @@ public struct EditorView: View {
             EditorGaussianAssetState.shared.clear()
             EditorUndoManager.shared.clear()
             sceneAuthoredGameCamera = nil
-            deserializeScene(sceneData: sceneData)
+            deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
             editorController?.currentSceneURL = nil
             editor_entities = getAllGameEntities()
             selectionManager.selectedEntity = nil
@@ -1318,7 +1318,7 @@ public struct EditorView: View {
         EditorUndoManager.shared.clear()
         sceneAuthoredGameCamera = nil
 
-        deserializeScene(sceneData: sceneData)
+        deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
         editorController?.currentSceneURL = url
 
         editor_entities = getAllGameEntities()
