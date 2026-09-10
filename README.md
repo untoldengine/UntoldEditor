@@ -111,7 +111,7 @@ cd UntoldEditor
 ```
 
 The Editor is a Swift Package with an executable target named UntoldEditor.
-It declares a dependency on the Untold Engine package; Xcode/SwiftPM will resolve it automatically.
+It declares a dependency on the Untold Engine package (and on UntoldGaussianTwins, for the splat twin preview); Xcode/SwiftPM will resolve them automatically.
 
 ### Build & run via CLI
 
@@ -161,6 +161,21 @@ xcodebuild -resolvePackageDependencies
 
 > 💡 Why an *external* asset folder?  
 > It enables **runtime importing** and iteration without copying everything into the app bundle.
+
+### Splat twins
+
+A mesh placed from a `.untold` asset can stand in for a captured Gaussian splat up close. Select the mesh (the asset root of a single-node asset, or a mesh node of a multi-node one) and use the Inspector's **Splat Twin** section:
+
+- **Assign Selected** links the `.untoldgs` selected in the Asset Browser's Gaussians folder; **Choose…** picks one from disk; **Remove** unlinks it. Sources must be cooked first (`Cook to .untoldgs…`).
+- **Swap Distance** (m, 0 = swap at any distance), **Occluder Shrink** (m) and **Exposure Offset** (EV) apply live and are saved shortly after the last edit; every change is undoable (⌘Z).
+
+#### Aligning a twin
+
+A capture rarely shares its mesh's frame (scanner origin, a turned or slightly mis-scaled scan), so the section's **Alignment** group places the splat inside the mesh without re-cooking: **Offset X/Y/Z** (m, in the entity's local space), **Yaw** (°, about the entity's +Y) and **Scale** (uniform, 0.01–100). The values apply live to the previewed twin, are saved shortly after the last edit and undo as one step each; **Reset** puts the splat back where the payload has it (the record then stores no alignment, like a link never aligned). The status line under the fields shows the current alignment. Turn on **Align Mode** while tuning: the twin swaps in at any distance with the mesh still drawing and the occluder shells off, so mesh and splat are both visible at once — the splat simply fades in over the untouched mesh, and fades out again when the mode ends, without the mesh ever dithering. It is session state — never saved — and ends when it is turned off, the section leaves the screen (another selection, the inspector hidden), the scene changes, View ▸ Preview Splat Twins is turned off or the link is removed (an undo included), restoring the shells and the link's own swap distance. Every placement of the record is aligned together, including one whose mesh finishes loading while the mode is on (it joins at the next edit). Assigning a different capture keeps the stored alignment — a re-cook of the same scan shares its frame — and the status line says so; press Reset if the new capture has its own.
+
+The alignment is stored in the link's `gaussianAsset` record (the `alignment` flag plus the offset, yaw and scale fields; `untoldengine gaussian-link --align-translate x,y,z --align-yaw-degrees d --align-scale s` sets the same thing from the command line, `--clear-alignment` removes it; a record edited that way while the editor is open is picked up, viewport twin included, the next time the entity is selected). The engine applies it at runtime as `GaussianComponent.splatToEntity` — the splat is drawn with the entity's transform times the alignment — so every app that loads the asset gets the aligned twin; the cook transform baked into the `.untoldgs` header is untouched.
+
+The link is stored in the `.untold` file itself — its `gaussianAsset` record, written through the engine's `UntoldAssetPatcher` — not in the scene. Any app that loads the asset and runs `GaussianTwinSystem` (package [UntoldGaussianTwins](https://github.com/miolabs/UntoldGaussianTwins)) gets the swap; the payload path is stored relative to the `.untold` file (`../../Gaussians/chair.untoldgs` from `Models/Chair/`), so the `.untoldgs` can live in the project's Gaussians folder as long as the two folders move together; only a payload on another volume is stored by file name and must then sit next to the `.untold` at runtime (the status line warns). **View ▸ Preview Splat Twins** (on by default) runs the same system in the editor viewport so the swap can be checked as the scene camera approaches.
 
 ---
 
