@@ -68,8 +68,10 @@ final class GaussianTwinPreviewSettings: ObservableObject {
     }
 
     /// Called when the scene is loaded, cleared or the project switches: the old scene's
-    /// entities are gone and their ids will be reused, so adoption starts over.
+    /// entities are gone and their ids will be reused, so adoption starts over and an align
+    /// mode on the old entities ends.
     func sceneDidReset() {
+        GaussianTwinAlignMode.shared.leave()
         installer.resetAdoption()
     }
 
@@ -80,6 +82,8 @@ final class GaussianTwinPreviewSettings: ObservableObject {
             installer.resetAdoption()
             installer.install()
         } else {
+            // Nothing swaps without the system: an align mode would only leave the shells off.
+            GaussianTwinAlignMode.shared.leave()
             installer.uninstall()
         }
     }

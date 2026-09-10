@@ -37,6 +37,9 @@ private func pickGaussianPayloadFile() -> URL? {
 struct GaussianTwinInspectorView: View {
     @StateObject private var model: GaussianTwinInspectorModel
     @ObservedObject private var preview = GaussianTwinPreviewSettings.shared
+    /// Observed so the Align Mode checkbox (`model.isAlignMode` reads it) follows a mode ended
+    /// elsewhere: scene reset, preview off, the link undone away.
+    @ObservedObject private var alignMode = GaussianTwinAlignMode.shared
     @State private var liveState: String?
     let asset: Asset?
     let refreshView: () -> Void
@@ -115,6 +118,8 @@ struct GaussianTwinInspectorView: View {
                 Text("Swap distance 0 swaps at any distance. Exposure offset −4…4 EV.")
                     .font(.caption)
                     .foregroundColor(.editorTextTertiary)
+
+                alignmentGroup
             }
 
             if let status = model.status {
@@ -144,7 +149,80 @@ struct GaussianTwinInspectorView: View {
             liveState = model.liveTwinDescription()
         }
         .onDisappear {
+            // The mode ends here, on the way out, rather than in the model's deinit: SwiftUI
+            // releases the section's model inside its next update, when the section of the
+            // new selection already observes the align mode, and publishing from there is a
+            // runtime issue. The deinit's leave stays as the fallback.
+            model.setAlignMode(false)
             model.flushPendingPersist()
+        }
+    }
+
+    /// Where the splat sits in the mesh's space: offset, yaw and scale, applied live to the
+    /// previewed twin and stored in the link (the runtime applies them as
+    /// `GaussianComponent.splatToEntity`). Align Mode shows the splat over the mesh at any
+    /// distance while the values are tuned.
+    private var alignmentGroup: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+            Text("Alignment")
+                .font(.subheadline)
+                .foregroundColor(.editorTextSecondary)
+
+            ComponentForm(
+                entityId: model.entityId,
+                fields: [
+                    .vector3(
+                        label: "Offset X/Y/Z (m)",
+                        get: { _ in model.alignmentOffset },
+                        set: { _, value in model.setAlignmentOffset(value) }
+                    ),
+                    .number(
+                        label: "Yaw (°)",
+                        get: { _ in model.alignmentYawDegrees },
+                        set: { _, value in model.setAlignmentYawDegrees(value) }
+                    ),
+                    .number(
+                        label: "Scale",
+                        get: { _ in model.alignmentScale },
+                        set: { _, value in model.setAlignmentScale(value) }
+                    ),
+                ],
+                refresh: refreshView
+            )
+
+            HStack(spacing: 10) {
+                Button("Reset") {
+                    model.resetAlignment()
+                    refreshView()
+                }
+                .disabled(!model.hasAlignment)
+                .help("Back to identity: the splat where the payload has it")
+
+                Toggle("Align Mode", isOn: Binding(
+                    get: { model.isAlignMode },
+                    set: { on in
+                        model.setAlignMode(on)
+                        refreshView()
+                    }
+                ))
+                .toggleStyle(.checkbox)
+                .disabled(model.link == nil || !preview.isEnabled)
+                .help("Show the splat over the mesh at any distance, occluder shells off, while the alignment is tuned. Not saved.")
+            }
+            .controlSize(.small)
+
+            Text("Alignment: \(model.alignmentDescription)")
+                .font(.caption)
+                .foregroundColor(.editorTextTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if model.isAlignMode {
+                Text("Align mode: mesh and splat both visible; shells off until it is turned off, the section leaves the screen or the scene resets.")
+                    .font(.caption)
+                    .foregroundColor(.editorInfo)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

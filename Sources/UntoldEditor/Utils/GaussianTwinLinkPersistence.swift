@@ -283,13 +283,15 @@ enum GaussianTwinLinkPersistence {
     }
 
     /// The link for a payload: the file must be a version 3 `.untoldgs`; its header fills one
-    /// LOD level with the file's splat count. Settings default to the record's defaults.
+    /// LOD level with the file's splat count. Settings default to the record's defaults;
+    /// `alignment` nil is identity (no alignment flag in the record).
     static func makeLink(
         payloadURL: URL,
         untoldURL: URL,
         swapDistanceMeters: Float = 0,
         occluderShrinkMeters: Float = 0.02,
-        exposureOffsetEV: Float = 0
+        exposureOffsetEV: Float = 0,
+        alignment: GaussianSplatAlignment? = nil
     ) throws -> UntoldAssetPatcher.GaussianAssetLink {
         guard FileManager.default.fileExists(atPath: payloadURL.path) else {
             throw GaussianTwinLinkError.payloadNotFound(payloadURL)
@@ -310,7 +312,8 @@ enum GaussianTwinLinkPersistence {
             lodSwitchScreenHeights: [0],
             occluderShrinkMeters: occluderShrinkMeters,
             exposureOffsetEV: exposureOffsetEV,
-            swapDistanceMeters: swapDistanceMeters
+            swapDistanceMeters: swapDistanceMeters,
+            alignment: alignment
         )
     }
 
@@ -394,14 +397,40 @@ enum GaussianTwinLinkPersistence {
         component.occluderShrinkMeters = link.occluderShrinkMeters
         component.exposureOffsetEV = link.exposureOffsetEV
         component.swapDistanceMeters = link.swapDistanceMeters
+        component.alignment = link.alignment
     }
 
-    /// Brings the viewport twin in line with the entity's `GaussianAssetLinkComponent`. A twin
-    /// that exists is always kept in step, whether the preview is on or off — `uninstall()`
-    /// keeps twins and re-adoption skips entities that have one, so a twin left behind would
-    /// show the old payload or distance once the preview is back on: a twin whose payload did
-    /// not change only takes the new options (no reload), a new payload relinks, no link
-    /// unlinks. Only the creation of a twin waits for the preview to be on.
+    /// Whether `entityId` already carries what `applyLinkComponent(link, …)` would set: no
+    /// component for a nil link, else one with the same payload (as resolved), flags, LOD
+    /// table, margin, exposure offset, swap distance and alignment.
+    static func linkComponentMatches(_ link: UntoldAssetPatcher.GaussianAssetLink?, on entityId: EntityID, untoldURL: URL) -> Bool {
+        let component = scene.get(component: GaussianAssetLinkComponent.self, for: entityId)
+        guard let link else { return component == nil }
+        guard let component else { return false }
+        return component.payloadURL == resolvedPayloadURL(path: link.payloadPath, untoldURL: untoldURL)
+            && component.flags == link.flags
+            && component.lodCount == link.lodCount
+            && component.lodSplatCounts == link.lodSplatCounts
+            && component.lodSwitchScreenHeights == link.lodSwitchScreenHeights
+            && component.occluderShrinkMeters == link.occluderShrinkMeters
+            && component.exposureOffsetEV == link.exposureOffsetEV
+            && component.swapDistanceMeters == link.swapDistanceMeters
+            && component.alignment == link.alignment
+    }
+
+    /// The options the viewport twin of `entityId` runs: the link's, forced to show the twin
+    /// over the mesh while the entity is in align mode (`GaussianTwinAlignMode`).
+    static func previewOptions(entityId: EntityID, link component: GaussianAssetLinkComponent) -> GaussianTwinOptions {
+        GaussianTwinAlignMode.shared.previewOptions(for: entityId, options: GaussianTwinOptions(link: component))
+    }
+
+    /// Brings the viewport twin in line with the entity's `GaussianAssetLinkComponent` and the
+    /// align mode (`previewOptions`). A twin that exists is always kept in step, whether the
+    /// preview is on or off — `uninstall()` keeps twins and re-adoption skips entities that
+    /// have one, so a twin left behind would show the old payload or distance once the preview
+    /// is back on: a twin whose payload did not change only takes the new options (no reload),
+    /// a new payload relinks, no link unlinks. Only the creation of a twin waits for the
+    /// preview to be on.
     static func applyPreview(entityId: EntityID) {
         let component = scene.get(component: GaussianAssetLinkComponent.self, for: entityId)
         guard let component, component.isMeshTwin, let payloadURL = component.payloadURL else {
@@ -410,7 +439,7 @@ enum GaussianTwinLinkPersistence {
             }
             return
         }
-        let options = GaussianTwinOptions(link: component)
+        let options = previewOptions(entityId: entityId, link: component)
         if let twin = scene.get(component: GaussianTwinComponent.self, for: entityId) {
             if twin.payloadURL?.standardizedFileURL == payloadURL.standardizedFileURL {
                 twin.options = options
