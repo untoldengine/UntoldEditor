@@ -183,18 +183,18 @@ public struct EditorView: View {
                                         entityList: editor_entities,
                                         onAddEntity_Editor: editor_addNewEntity,
                                         onRemoveEntity_Editor: editor_removeEntity,
-                                        onAddCube: editor_createCube,
-                                        onAddSphere: editor_createSphere,
-                                        onAddPlane: editor_createPlane,
-                                        onAddDirLight: editor_createDirLight,
-                                        onAddPointLight: editor_createPointLight,
-                                        onAddSpotLight: editor_createSpotLight,
-                                        onAddAreaLight: editor_createAreaLight,
                                         onParentEntity: editor_parentEntity,
                                         onUnparentEntity: editor_unparentEntity,
                                         onDeleteEntity: editor_removeEntity(_:),
-                                        onDropAsset: { payload, parent in
-                                            editor_placeDroppedAsset(payload, parent: parent)
+                                        onDropRow: { payload, parent in
+                                            switch payload {
+                                            case let .asset(assetPayload):
+                                                editor_placeDroppedAsset(assetPayload, parent: parent)
+                                            case let .light(lightPayload):
+                                                editor_placeDroppedLight(lightPayload, parent: parent)
+                                            case let .primitive(primitivePayload):
+                                                editor_placeDroppedPrimitive(primitivePayload, parent: parent)
+                                            }
                                         }
                                     )
                                 }
@@ -510,9 +510,16 @@ public struct EditorView: View {
     /// or at the origin when the ray misses it (looking at the sky, say).
     private func editor_dropAssetOnViewport(providers: [NSItemProvider], location: CGPoint) -> Bool {
         let viewportSize = renderer?.metalView.bounds.size ?? .zero
-        return loadAssetDragPayload(from: providers) { payload in
+        return loadDroppedRowPayload(from: providers) { payload in
             let position = sceneCameraGroundPlaneHit(atViewportLocation: location, viewportSize: viewportSize)
-            editor_placeDroppedAsset(payload, parent: nil, at: position)
+            switch payload {
+            case let .asset(assetPayload):
+                editor_placeDroppedAsset(assetPayload, parent: nil, at: position)
+            case let .light(lightPayload):
+                editor_placeDroppedLight(lightPayload, parent: nil, at: position)
+            case let .primitive(primitivePayload):
+                editor_placeDroppedPrimitive(primitivePayload, parent: nil, at: position)
+            }
         }
     }
 
@@ -527,6 +534,38 @@ public struct EditorView: View {
 
         let placement = placeAsset(
             placeable,
+            at: position,
+            sceneGraphModel: sceneGraphModel,
+            selectionManager: selectionManager
+        )
+        if let parent {
+            editor_parentEntity(childId: placement.entityId, parentId: parent)
+        }
+        editor_entities = getAllGameEntities()
+        showDropStatus(placement.statusMessage, isError: placement.isError)
+    }
+
+    /// Places a dropped Lights shelf row, parenting it under `parent` for a
+    /// hierarchy drop, same as `editor_placeDroppedAsset`.
+    private func editor_placeDroppedLight(_ payload: LightDragPayload, parent: EntityID?, at position: simd_float3? = nil) {
+        let placement = placeLight(
+            payload.lightType,
+            at: position,
+            sceneGraphModel: sceneGraphModel,
+            selectionManager: selectionManager
+        )
+        if let parent {
+            editor_parentEntity(childId: placement.entityId, parentId: parent)
+        }
+        editor_entities = getAllGameEntities()
+        showDropStatus(placement.statusMessage, isError: placement.isError)
+    }
+
+    /// Places a dropped Primitives shelf row, parenting it under `parent` for a
+    /// hierarchy drop, same as `editor_placeDroppedAsset`.
+    private func editor_placeDroppedPrimitive(_ payload: PrimitiveDragPayload, parent: EntityID?, at position: simd_float3? = nil) {
+        let placement = placePrimitive(
+            payload.primitiveType,
             at: position,
             sceneGraphModel: sceneGraphModel,
             selectionManager: selectionManager
@@ -1498,57 +1537,6 @@ public struct EditorView: View {
         }
     }
 
-    private func editor_createDirLight() {
-        let entityId = createEntity()
-
-        let name = generateEntityName()
-        setEntityName(entityId: entityId, name: name)
-        registerTransformComponent(entityId: entityId)
-        registerSceneGraphComponent(entityId: entityId)
-
-        createDirLight(entityId: entityId)
-        editor_entities = getAllGameEntities()
-        sceneGraphModel.refreshHierarchy()
-    }
-
-    private func editor_createPointLight() {
-        let entityId = createEntity()
-
-        let name = generateEntityName()
-        setEntityName(entityId: entityId, name: name)
-        registerTransformComponent(entityId: entityId)
-        registerSceneGraphComponent(entityId: entityId)
-
-        createPointLight(entityId: entityId)
-        editor_entities = getAllGameEntities()
-        sceneGraphModel.refreshHierarchy()
-    }
-
-    private func editor_createSpotLight() {
-        let entityId = createEntity()
-
-        let name = generateEntityName()
-        setEntityName(entityId: entityId, name: name)
-        registerTransformComponent(entityId: entityId)
-        registerSceneGraphComponent(entityId: entityId)
-
-        createSpotLight(entityId: entityId)
-        editor_entities = getAllGameEntities()
-        sceneGraphModel.refreshHierarchy()
-    }
-
-    private func editor_createAreaLight() {
-        let entityId = createEntity()
-
-        let name = generateEntityName()
-        setEntityName(entityId: entityId, name: name)
-        registerTransformComponent(entityId: entityId)
-        registerSceneGraphComponent(entityId: entityId)
-
-        createAreaLight(entityId: entityId)
-        editor_entities = getAllGameEntities()
-        sceneGraphModel.refreshHierarchy()
-    }
 
     private func editor_addEntityWithAsset() {
         editor_addNewEntity()
@@ -1612,21 +1600,6 @@ public struct EditorView: View {
         selectionManager.selectedEntity = entityId
         editor_entities = getAllGameEntities()
         sceneGraphModel.refreshHierarchy()
-    }
-
-    private func editor_createCube() {
-        let meshes = BasicPrimitives.createCube()
-        editor_createPrimitive(name: "Cube", meshes: meshes)
-    }
-
-    private func editor_createSphere() {
-        let meshes = BasicPrimitives.createSphere()
-        editor_createPrimitive(name: "Sphere", meshes: meshes)
-    }
-
-    private func editor_createPlane() {
-        let meshes = BasicPrimitives.createPlane()
-        editor_createPrimitive(name: "Plane", meshes: meshes)
     }
 
     private func editor_createCylinder() {

@@ -24,4 +24,9 @@ final class AssetBrowserNavigationState: ObservableObject {
     /// directory the user created) is selected. Overrides the category selection.
     @Published var selectedDirURL: URL?
     @Published var rootExpanded: Bool = true
+    /// True when the Lights shelf (a fixed pseudo-category, not backed by disk) is
+    /// selected. Overrides the category and generic-directory selection.
+    @Published var lightsSelected: Bool = false
+    /// Same as `lightsSelected`, for the Primitives shelf (Cube/Sphere/Plane).
+    @Published var primitivesSelected: Bool = false
 }
