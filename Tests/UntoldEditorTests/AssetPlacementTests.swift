@@ -90,6 +90,60 @@ final class AssetPlacementTests: XCTestCase {
         XCTAssertEqual(object?["name"] as? String, "a.ply")
     }
 
+    func test_lightDragPayloadRoundTripsThroughJSON() throws {
+        for kind in PlaceableLightType.allCases {
+            let payload = LightDragPayload(lightType: kind)
+            let decoded = try LightDragPayload.decode(payload.encoded())
+            XCTAssertEqual(decoded, payload)
+        }
+    }
+
+    func test_lightAndAssetPayloadsShareTheJSONTypeButNeverBothDecode() throws {
+        // Both travel under the same standard `.json` pasteboard type (see
+        // `test_dragPayloadTravelsAsStandardJSON`), so `loadDroppedRowPayload` tells
+        // them apart by which one successfully decodes. That only works if their
+        // required fields never overlap.
+        XCTAssertEqual(LightDragPayload.contentType, AssetDragPayload.contentType)
+
+        let assetData = try AssetDragPayload(
+            name: "chair.untold",
+            category: AssetCategory.models.rawValue,
+            path: URL(fileURLWithPath: "/tmp/chair.untold")
+        ).encoded()
+        XCTAssertNil(try? LightDragPayload.decode(assetData))
+
+        let lightData = try LightDragPayload(lightType: .spot).encoded()
+        XCTAssertNil(try? AssetDragPayload.decode(lightData))
+    }
+
+    func test_primitiveDragPayloadRoundTripsThroughJSON() throws {
+        for kind in PlaceablePrimitiveType.allCases {
+            let payload = PrimitiveDragPayload(primitiveType: kind)
+            let decoded = try PrimitiveDragPayload.decode(payload.encoded())
+            XCTAssertEqual(decoded, payload)
+        }
+    }
+
+    func test_primitiveLightAndAssetPayloadsNeverBothDecode() throws {
+        // Same reasoning as `test_lightAndAssetPayloadsShareTheJSONTypeButNeverBothDecode`,
+        // now that a third payload kind shares the `.json` type too.
+        XCTAssertEqual(PrimitiveDragPayload.contentType, AssetDragPayload.contentType)
+
+        let primitiveData = try PrimitiveDragPayload(primitiveType: .cube).encoded()
+        XCTAssertNil(try? LightDragPayload.decode(primitiveData))
+        XCTAssertNil(try? AssetDragPayload.decode(primitiveData))
+
+        let lightData = try LightDragPayload(lightType: .point).encoded()
+        XCTAssertNil(try? PrimitiveDragPayload.decode(lightData))
+
+        let assetData = try AssetDragPayload(
+            name: "chair.untold",
+            category: AssetCategory.models.rawValue,
+            path: URL(fileURLWithPath: "/tmp/chair.untold")
+        ).encoded()
+        XCTAssertNil(try? PrimitiveDragPayload.decode(assetData))
+    }
+
     // MARK: - Placeable dispatch
 
     func test_modelRuntimeAssetIsPlaceable() {

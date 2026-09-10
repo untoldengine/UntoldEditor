@@ -321,13 +321,6 @@ final class SceneHierarchyViewTests: XCTestCase {
         // Arrange
         var addEntityCalled = false
         var removeEntityCalled = false
-        var addCubeCalled = false
-        var addSphereCalled = false
-        var addPlaneCalled = false
-        var addDirLightCalled = false
-        var addPointLightCalled = false
-        var addSpotLightCalled = false
-        var addAreaLightCalled = false
 
         // Act
         let view = SceneHierarchyView(
@@ -340,14 +333,7 @@ final class SceneHierarchyViewTests: XCTestCase {
             onTogglePlay: {},
             entityList: [],
             onAddEntity_Editor: { addEntityCalled = true },
-            onRemoveEntity_Editor: { removeEntityCalled = true },
-            onAddCube: { addCubeCalled = true },
-            onAddSphere: { addSphereCalled = true },
-            onAddPlane: { addPlaneCalled = true },
-            onAddDirLight: { addDirLightCalled = true },
-            onAddPointLight: { addPointLightCalled = true },
-            onAddSpotLight: { addSpotLightCalled = true },
-            onAddAreaLight: { addAreaLightCalled = true }
+            onRemoveEntity_Editor: { removeEntityCalled = true }
         )
 
         // Assert: Test that callbacks can be invoked via reflection
@@ -361,41 +347,6 @@ final class SceneHierarchyViewTests: XCTestCase {
         if let onRemoveEntity = mirror.descendant("onRemoveEntity_Editor") as? () -> Void {
             onRemoveEntity()
             XCTAssertTrue(removeEntityCalled, "onRemoveEntity_Editor should be callable")
-        }
-
-        if let onAddCube = mirror.descendant("onAddCube") as? () -> Void {
-            onAddCube()
-            XCTAssertTrue(addCubeCalled, "onAddCube should be callable")
-        }
-
-        if let onAddSphere = mirror.descendant("onAddSphere") as? () -> Void {
-            onAddSphere()
-            XCTAssertTrue(addSphereCalled, "onAddSphere should be callable")
-        }
-
-        if let onAddPlane = mirror.descendant("onAddPlane") as? () -> Void {
-            onAddPlane()
-            XCTAssertTrue(addPlaneCalled, "onAddPlane should be callable")
-        }
-
-        if let onAddDirLight = mirror.descendant("onAddDirLight") as? () -> Void {
-            onAddDirLight()
-            XCTAssertTrue(addDirLightCalled, "onAddDirLight should be callable")
-        }
-
-        if let onAddPointLight = mirror.descendant("onAddPointLight") as? () -> Void {
-            onAddPointLight()
-            XCTAssertTrue(addPointLightCalled, "onAddPointLight should be callable")
-        }
-
-        if let onAddSpotLight = mirror.descendant("onAddSpotLight") as? () -> Void {
-            onAddSpotLight()
-            XCTAssertTrue(addSpotLightCalled, "onAddSpotLight should be callable")
-        }
-
-        if let onAddAreaLight = mirror.descendant("onAddAreaLight") as? () -> Void {
-            onAddAreaLight()
-            XCTAssertTrue(addAreaLightCalled, "onAddAreaLight should be callable")
         }
     }
 
@@ -417,14 +368,7 @@ final class SceneHierarchyViewTests: XCTestCase {
             onTogglePlay: {},
             entityList: entityList,
             onAddEntity_Editor: {},
-            onRemoveEntity_Editor: {},
-            onAddCube: {},
-            onAddSphere: {},
-            onAddPlane: {},
-            onAddDirLight: {},
-            onAddPointLight: {},
-            onAddSpotLight: {},
-            onAddAreaLight: {}
+            onRemoveEntity_Editor: {}
         )
 
         // Assert
@@ -447,14 +391,7 @@ final class SceneHierarchyViewTests: XCTestCase {
             onTogglePlay: {},
             entityList: [],
             onAddEntity_Editor: {},
-            onRemoveEntity_Editor: {},
-            onAddCube: {},
-            onAddSphere: {},
-            onAddPlane: {},
-            onAddDirLight: {},
-            onAddPointLight: {},
-            onAddSpotLight: {},
-            onAddAreaLight: {}
+            onRemoveEntity_Editor: {}
         )
 
         // Assert

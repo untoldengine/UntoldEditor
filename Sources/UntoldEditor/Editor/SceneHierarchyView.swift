@@ -37,27 +37,15 @@ func hierarchyIconName(for entityId: EntityID) -> String {
 /// bottom "+" toolbar and the right-click context menu.
 struct AddEntityActions {
     var empty: () -> Void = {}
-    var cube: () -> Void = {}
-    var sphere: () -> Void = {}
-    var plane: () -> Void = {}
-    var dirLight: () -> Void = {}
-    var pointLight: () -> Void = {}
-    var spotLight: () -> Void = {}
-    var areaLight: () -> Void = {}
 }
 
+/// Cube/Sphere/Plane and all four light types moved to the Asset Browser's
+/// Primitives and Lights shelves (see AssetBrowserView.swift), which drag as well
+/// as click; Empty Entity stays here since it has no visual or component to
+/// preview, so it doesn't fit the "drop at a point" pattern.
 @ViewBuilder
 func addEntityMenuItems(_ actions: AddEntityActions) -> some View {
     Button("Empty Entity", systemImage: "plus") { actions.empty() }
-    Divider()
-    Button("Cube", systemImage: "cube") { actions.cube() }
-    Button("Sphere", systemImage: "circle") { actions.sphere() }
-    Button("Plane", systemImage: "square") { actions.plane() }
-    Divider()
-    Button("Directional Light", systemImage: "sun.max") { actions.dirLight() }
-    Button("Point Light", systemImage: "lightbulb") { actions.pointLight() }
-    Button("Spot Light", systemImage: "flashlight.on.fill") { actions.spotLight() }
-    Button("Area Light", systemImage: "square") { actions.areaLight() }
 }
 
 struct SceneHierarchyView: View {
@@ -72,34 +60,18 @@ struct SceneHierarchyView: View {
     var entityList: [EntityID]
     var onAddEntity_Editor: () -> Void
     var onRemoveEntity_Editor: () -> Void
-    var onAddCube: () -> Void
-    var onAddSphere: () -> Void
-    var onAddPlane: () -> Void
-    var onAddDirLight: () -> Void
-    var onAddPointLight: () -> Void
-    var onAddSpotLight: () -> Void
-    var onAddAreaLight: () -> Void
     var onParentEntity: (EntityID, EntityID) -> Void = { _, _ in }
     var onUnparentEntity: (EntityID) -> Void = { _ in }
     var onDeleteEntity: (EntityID) -> Void = { _ in }
-    /// An asset browser row dropped on the tree: on the scene row the parent is
-    /// `nil` (scene root), on an entity row it is that entity.
-    var onDropAsset: (AssetDragPayload, EntityID?) -> Void = { _, _ in }
+    /// An asset browser or Lights shelf row dropped on the tree: on the scene row
+    /// the parent is `nil` (scene root), on an entity row it is that entity.
+    var onDropRow: (DroppedRowPayload, EntityID?) -> Void = { _, _ in }
 
     @State private var activeSceneExpanded = true
     @State private var isSceneDropTargeted = false
 
     private var addActions: AddEntityActions {
-        AddEntityActions(
-            empty: onAddEntity_Editor,
-            cube: onAddCube,
-            sphere: onAddSphere,
-            plane: onAddPlane,
-            dirLight: onAddDirLight,
-            pointLight: onAddPointLight,
-            spotLight: onAddSpotLight,
-            areaLight: onAddAreaLight
-        )
+        AddEntityActions(empty: onAddEntity_Editor)
     }
 
     /// A scene node in the tree. `url == nil` represents the current, not-yet-saved
@@ -158,7 +130,7 @@ struct SceneHierarchyView: View {
                                     onParentEntity: onParentEntity,
                                     onUnparentEntity: onUnparentEntity,
                                     onDeleteEntity: onDeleteEntity,
-                                    onDropAsset: onDropAsset,
+                                    onDropRow: onDropRow,
                                     addActions: addActions
                                 )
                             }
@@ -284,8 +256,8 @@ struct SceneHierarchyView: View {
         // payload type, so it is not accepted here.
         .onDrop(of: [AssetDragPayload.contentType], isTargeted: item.isActive ? $isSceneDropTargeted : .constant(false)) { providers in
             guard item.isActive else { return false }
-            return loadAssetDragPayload(from: providers) { payload in
-                onDropAsset(payload, nil)
+            return loadDroppedRowPayload(from: providers) { payload in
+                onDropRow(payload, nil)
             }
         }
         .onTapGesture {
@@ -379,7 +351,7 @@ struct HierarchyNode: View {
     var onParentEntity: (EntityID, EntityID) -> Void = { _, _ in }
     var onUnparentEntity: (EntityID) -> Void = { _ in }
     var onDeleteEntity: (EntityID) -> Void = { _ in }
-    var onDropAsset: (AssetDragPayload, EntityID?) -> Void = { _, _ in }
+    var onDropRow: (DroppedRowPayload, EntityID?) -> Void = { _, _ in }
     var addActions: AddEntityActions = .init()
     @State private var isDragOver = false
 
@@ -434,7 +406,7 @@ struct HierarchyNode: View {
                         onParentEntity: onParentEntity,
                         onUnparentEntity: onUnparentEntity,
                         onDeleteEntity: onDeleteEntity,
-                        onDropAsset: onDropAsset,
+                        onDropRow: onDropRow,
                         addActions: addActions
                     )
                 }
@@ -443,11 +415,11 @@ struct HierarchyNode: View {
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        // An asset browser row: place it as a child of this node. Asset nodes
-        // can't be parents, so a drop on one adds at the scene root instead.
+        // An asset browser or Lights shelf row: place it as a child of this node.
+        // Asset nodes can't be parents, so a drop on one adds at the scene root instead.
         let droppedOnAssetNode = isDerivedAssetNode(entityId)
-        if loadAssetDragPayload(from: providers, completion: { payload in
-            onDropAsset(payload, droppedOnAssetNode ? nil : entityId)
+        if loadDroppedRowPayload(from: providers, completion: { payload in
+            onDropRow(payload, droppedOnAssetNode ? nil : entityId)
         }) {
             return true
         }
@@ -522,16 +494,7 @@ struct HierarchyNode: View {
 
     /// Add actions that parent the created entity to this node.
     private var parentedAddActions: AddEntityActions {
-        AddEntityActions(
-            empty: { addChild(addActions.empty) },
-            cube: { addChild(addActions.cube) },
-            sphere: { addChild(addActions.sphere) },
-            plane: { addChild(addActions.plane) },
-            dirLight: { addChild(addActions.dirLight) },
-            pointLight: { addChild(addActions.pointLight) },
-            spotLight: { addChild(addActions.spotLight) },
-            areaLight: { addChild(addActions.areaLight) }
-        )
+        AddEntityActions(empty: { addChild(addActions.empty) })
     }
 
     /// Context menu for entity row

@@ -64,21 +64,144 @@ struct AssetDragPayload: Codable, Equatable, Transferable {
     }
 }
 
-/// Decodes the asset payload among `providers`, if any, and hands it to `completion`
-/// on the main queue. Returns `false` when no provider carries one, so an `onDrop`
-/// can decline drops of other types (the hierarchy's entity-id text, say).
+/// A light type a Lights shelf row can create by drag or double-click, mirroring
+/// `PlaceableAsset` for models and Gaussians.
+enum PlaceableLightType: String, Codable, CaseIterable {
+    case directional
+    case point
+    case spot
+    case area
+
+    var displayName: String {
+        switch self {
+        case .directional: return "Directional Light"
+        case .point: return "Point Light"
+        case .spot: return "Spot Light"
+        case .area: return "Area Light"
+        }
+    }
+
+    /// Matches the icon `hierarchyIconName(for:)` shows once the light is placed.
+    var iconName: String {
+        switch self {
+        case .directional: return "sun.max"
+        case .point: return "lightbulb"
+        case .spot: return "flashlight.on.fill"
+        case .area: return "square"
+        }
+    }
+}
+
+/// What a Lights shelf row puts on the drag pasteboard: no file is involved, just
+/// which light type to create. Travels under the same standard `.json` type as
+/// `AssetDragPayload` (see its comment for why a custom UTType doesn't work here);
+/// `loadDroppedRowPayload` tells the two apart by which one successfully decodes.
+struct LightDragPayload: Codable, Equatable, Transferable {
+    static let contentType: UTType = .json
+
+    var lightType: PlaceableLightType
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: contentType)
+    }
+
+    func encoded() throws -> Data {
+        try JSONEncoder().encode(self)
+    }
+
+    static func decode(_ data: Data) throws -> LightDragPayload {
+        try JSONDecoder().decode(LightDragPayload.self, from: data)
+    }
+}
+
+/// A basic primitive a Primitives shelf row can create by drag or double-click,
+/// mirroring `PlaceableLightType`.
+enum PlaceablePrimitiveType: String, Codable, CaseIterable {
+    case cube
+    case sphere
+    case plane
+
+    var displayName: String {
+        switch self {
+        case .cube: return "Cube"
+        case .sphere: return "Sphere"
+        case .plane: return "Plane"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .cube: return "cube"
+        case .sphere: return "circle"
+        case .plane: return "square"
+        }
+    }
+
+    var meshes: [Mesh] {
+        switch self {
+        case .cube: return BasicPrimitives.createCube()
+        case .sphere: return BasicPrimitives.createSphere()
+        case .plane: return BasicPrimitives.createPlane()
+        }
+    }
+}
+
+/// What a Primitives shelf row puts on the drag pasteboard: no file is involved,
+/// just which primitive to create. Travels under the same standard `.json` type as
+/// `AssetDragPayload` (see its comment for why a custom UTType doesn't work here);
+/// `loadDroppedRowPayload` tells the payload kinds apart by which one decodes.
+struct PrimitiveDragPayload: Codable, Equatable, Transferable {
+    static let contentType: UTType = .json
+
+    var primitiveType: PlaceablePrimitiveType
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: contentType)
+    }
+
+    func encoded() throws -> Data {
+        try JSONEncoder().encode(self)
+    }
+
+    static func decode(_ data: Data) throws -> PrimitiveDragPayload {
+        try JSONDecoder().decode(PrimitiveDragPayload.self, from: data)
+    }
+}
+
+/// Either shape a dropped row can carry: a file-backed asset browser row, a Lights
+/// shelf row naming a light type, or a Primitives shelf row naming a primitive.
+enum DroppedRowPayload {
+    case asset(AssetDragPayload)
+    case light(LightDragPayload)
+    case primitive(PrimitiveDragPayload)
+}
+
+/// Decodes whichever payload `providers` carries and hands it to `completion` on the
+/// main queue. All payload kinds travel under the same standard `.json` pasteboard
+/// type, so the data is tried against each Codable shape in turn; their required
+/// fields don't overlap, so at most one ever decodes. Returns `false` when no
+/// provider carries one of them, so an `onDrop` can decline drops of other types
+/// (the hierarchy's entity-id text, say).
 @discardableResult
-func loadAssetDragPayload(from providers: [NSItemProvider], completion: @escaping (AssetDragPayload) -> Void) -> Bool {
+func loadDroppedRowPayload(from providers: [NSItemProvider], completion: @escaping (DroppedRowPayload) -> Void) -> Bool {
     let identifier = AssetDragPayload.contentType.identifier
     guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(identifier) }) else {
         return false
     }
     provider.loadDataRepresentation(forTypeIdentifier: identifier) { data, error in
-        guard let data, let payload = try? AssetDragPayload.decode(data) else {
-            Logger.log(message: "⚠️ Dropped asset payload could not be read: \(error?.localizedDescription ?? "invalid data")")
+        guard let data else {
+            Logger.log(message: "⚠️ Dropped row payload could not be read: \(error?.localizedDescription ?? "no data")")
             return
         }
-        DispatchQueue.main.async { completion(payload) }
+        if let light = try? LightDragPayload.decode(data) {
+            DispatchQueue.main.async { completion(.light(light)) }
+        } else if let primitive = try? PrimitiveDragPayload.decode(data) {
+            DispatchQueue.main.async { completion(.primitive(primitive)) }
+        } else if let asset = try? AssetDragPayload.decode(data) {
+            DispatchQueue.main.async { completion(.asset(asset)) }
+        } else {
+            Logger.log(message: "⚠️ Dropped row payload could not be read: invalid data")
+        }
     }
     return true
 }
@@ -210,6 +333,80 @@ func placeAsset(
     selectionManager.selectedEntity = entityId
 
     return AssetPlacementResult(entityId: entityId, entityName: uniqueName, statusMessage: statusMessage, isError: isError)
+}
+
+/// Creates a named light entity of `kind`, mirroring `placeAsset`'s model case: a
+/// generated name, the transform and scene-graph components every hierarchy entity
+/// needs, the light component itself, an optional world-space position, then
+/// selection and a hierarchy refresh. Unlike a model or Gaussian, a light has
+/// nothing to load asynchronously, so the entity is ready immediately.
+@discardableResult
+func placeLight(
+    _ kind: PlaceableLightType,
+    at position: simd_float3? = nil,
+    sceneGraphModel: SceneGraphModel,
+    selectionManager: SelectionManager
+) -> AssetPlacementResult {
+    let entityId = createEntity()
+
+    let uniqueName = generateEntityName()
+    setEntityName(entityId: entityId, name: uniqueName)
+    registerTransformComponent(entityId: entityId)
+    registerSceneGraphComponent(entityId: entityId)
+
+    switch kind {
+    case .directional:
+        createDirLight(entityId: entityId)
+    case .point:
+        createPointLight(entityId: entityId)
+    case .spot:
+        createSpotLight(entityId: entityId)
+    case .area:
+        createAreaLight(entityId: entityId)
+    }
+
+    if let position {
+        translateTo(entityId: entityId, position: position)
+    }
+
+    selectionManager.selectedEntity = entityId
+    sceneGraphModel.refreshHierarchy()
+
+    return AssetPlacementResult(
+        entityId: entityId,
+        entityName: uniqueName,
+        statusMessage: "Added \(kind.displayName): \(uniqueName)"
+    )
+}
+
+/// Creates a named primitive entity of `kind`, mirroring `placeLight`. A dropped
+/// primitive lands at `position`; `setEntityMeshDirect` registers the transform and
+/// scene-graph components a primitive needs.
+@discardableResult
+func placePrimitive(
+    _ kind: PlaceablePrimitiveType,
+    at position: simd_float3? = nil,
+    sceneGraphModel: SceneGraphModel,
+    selectionManager: SelectionManager
+) -> AssetPlacementResult {
+    let entityId = createEntity()
+
+    let uniqueName = generateEntityName()
+    setEntityName(entityId: entityId, name: uniqueName)
+    setEntityMeshDirect(entityId: entityId, meshes: kind.meshes, assetName: kind.displayName)
+
+    if let position {
+        translateTo(entityId: entityId, position: position)
+    }
+
+    selectionManager.selectedEntity = entityId
+    sceneGraphModel.refreshHierarchy()
+
+    return AssetPlacementResult(
+        entityId: entityId,
+        entityName: uniqueName,
+        statusMessage: "Added \(kind.displayName): \(uniqueName)"
+    )
 }
 
 /// Farthest ground hit a viewport drop will use; a near-horizontal view would
