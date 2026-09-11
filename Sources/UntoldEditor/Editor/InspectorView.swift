@@ -331,6 +331,12 @@ func sortEntityComponents(componentOption_Editor: [ObjectIdentifier: ComponentOp
 }
 
 struct InspectorView: View {
+    /// The gate `body` puts the Splat Twin section behind: the section's own policy, in every
+    /// authoring mode (the composition-only inspector hides the Gaussian editor, not this).
+    static func showsGaussianTwinSection(for entityId: EntityID) -> Bool {
+        GaussianTwinInspector.isAvailable(entityId)
+    }
+
     @ObservedObject var selectionManager: SelectionManager
     @ObservedObject var sceneGraphModel: SceneGraphModel
     @ObservedObject var editorComponentsState = EditorComponentsState.shared
@@ -459,6 +465,16 @@ struct InspectorView: View {
                                     editor_component.view(entityId, selectedAsset, refreshView)
                                         .frame(minWidth: 200, maxWidth: 250)
                                 }
+                                Divider()
+                            }
+
+                            // Splat Twin: the mesh's link to its cooked .untoldgs stand-in, stored in
+                            // the .untold asset itself. An ad-hoc section (not a ComponentOption_Editor)
+                            // so scene-composition mode, which hides the Gaussian editor, keeps it.
+                            if InspectorView.showsGaussianTwinSection(for: entityId) {
+                                GaussianTwinInspectorView(entityId: entityId, asset: selectedAsset, refreshView: refreshView)
+                                    .frame(minWidth: 200, maxWidth: 250)
+                                    .id(entityId)
                                 Divider()
                             }
 
