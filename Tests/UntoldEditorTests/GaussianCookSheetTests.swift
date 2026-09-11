@@ -3,10 +3,11 @@
 //  UntoldEditorTests
 //
 //  The "Cook to .untoldgs" path: settings → engine cook options, the bake beside the
-//  source .ply, the Tasks-panel wrapper the browser runs cooks through, progressive
+//  source .ply/.spz, the Tasks-panel wrapper the browser runs cooks through, progressive
 //  tier detection for placement, and the sheet's empty state (nothing selected).
 //
 
+import Compression
 import simd
 @testable import UntoldEditor
 import UntoldEngine
@@ -150,14 +151,62 @@ final class GaussianCookSheetTests: XCTestCase {
         XCTAssertEqual(result.tiers.map { $0.url.deletingLastPathComponent() }, [packageFolder, packageFolder])
     }
 
+    /// Same cook path as `test_cookWritesTiersBesideTheSource`, but from a `.spz` source --
+    /// confirms `cookGaussianPLY` dispatches to the engine's `spzURL:` overload correctly,
+    /// not just the `.ply` one.
+    func test_cookWritesTiersBesideTheSourceSPZ() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectory = directory
+        let spzURL = directory.appendingPathComponent("chair.spz")
+        try makeTestSPZ(splatCount: 200).write(to: spzURL)
+
+        var settings = GaussianCookSettings()
+        settings.levelCount = 2
+        let result = try cookGaussianPLY(plyURL: spzURL, settings: settings)
+
+        XCTAssertEqual(result.tiers.count, 2)
+        XCTAssertEqual(result.tiers.map(\.url.lastPathComponent), ["chair_lod0.untoldgs", "chair_lod1.untoldgs"])
+        XCTAssertEqual(result.cookReport.inputSplatCount, 200)
+        for tier in result.tiers {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: tier.url.path))
+            XCTAssertNoThrow(try UntoldGSFormat.readHeader(from: tier.url))
+        }
+    }
+
+    func test_sourceBoundsComeFromTheSpzSplatCentres() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        temporaryDirectory = directory
+        let spzURL = directory.appendingPathComponent("grid.spz")
+        try makeTestSPZ(splatCount: 200).write(to: spzURL)
+
+        // Bounds must come back finite and non-degenerate; unlike the .ply fixture (whose
+        // grid coordinates are asserted exactly in test_sourceBoundsComeFromTheSplatCentres),
+        // .spz's RUB->RDF flip and 24-bit position quantization make an exact-value
+        // comparison pointless here -- SPZReader's own byte-level correctness is covered by
+        // UntoldEngine's SPZReaderTest. This only checks gaussianSourceBounds dispatches to
+        // the .spz reader at all instead of throwing or silently reading nothing.
+        let bounds = try gaussianSourceBounds(plyURL: spzURL)
+        XCTAssertTrue(bounds.min.x.isFinite && bounds.max.x.isFinite)
+        XCTAssertLessThanOrEqual(bounds.min.x, bounds.max.x)
+        XCTAssertLessThanOrEqual(bounds.min.y, bounds.max.y)
+        XCTAssertLessThanOrEqual(bounds.min.z, bounds.max.z)
+    }
+
     func test_importBatchHelpers() {
         let ply = URL(fileURLWithPath: "/tmp/Gaussians/room.PLY")
+        let spz = URL(fileURLWithPath: "/tmp/Gaussians/room.SPZ")
         let baked = URL(fileURLWithPath: "/tmp/Gaussians/room.untoldgs")
-        XCTAssertEqual(gaussianSourcesToCook(in: [baked, ply]), [ply], "only .ply sources are cooked, any case")
+        XCTAssertEqual(gaussianSourcesToCook(in: [baked, ply]), [ply], "only .ply/.spz sources are cooked, any case")
+        XCTAssertEqual(gaussianSourcesToCook(in: [baked, spz]), [spz])
+        XCTAssertEqual(gaussianSourcesToCook(in: [baked, ply, spz]), [ply, spz])
         XCTAssertEqual(gaussianSourcesToCook(in: [baked]), [])
 
         XCTAssertEqual(gaussianCookSheetSourceName(for: [ply]), "room.PLY")
-        XCTAssertEqual(gaussianCookSheetSourceName(for: [ply, ply]), "2 .ply files")
+        XCTAssertEqual(gaussianCookSheetSourceName(for: [ply, ply]), "2 Gaussian splat files")
 
         var settings = GaussianCookSettings()
         XCTAssertEqual(gaussianCookTaskDetail(settings: settings), "→ .untoldgs")
@@ -302,9 +351,9 @@ final class GaussianCookSheetTests: XCTestCase {
         let baked = URL(fileURLWithPath: "/tmp/Gaussians/room.untoldgs")
         let settings = GaussianCookSettings()
 
-        XCTAssertEqual(gaussianCookSheetTitle(for: []), "Select .ply files to cook")
+        XCTAssertEqual(gaussianCookSheetTitle(for: []), "Select .ply/.spz files to cook")
         XCTAssertEqual(gaussianCookSheetTitle(for: [ply]), "Cook room.PLY to .untoldgs")
-        XCTAssertEqual(gaussianCookSheetTitle(for: [ply, ply]), "Cook 2 .ply files to .untoldgs")
+        XCTAssertEqual(gaussianCookSheetTitle(for: [ply, ply]), "Cook 2 Gaussian splat files to .untoldgs")
 
         XCTAssertFalse(gaussianCookSheetCanCook(sourceURLs: [], settings: settings), "nothing to cook")
         XCTAssertTrue(gaussianCookSheetCanCook(sourceURLs: [ply], settings: settings))
@@ -314,17 +363,19 @@ final class GaussianCookSheetTests: XCTestCase {
 
         XCTAssertEqual(
             gaussianCookSourceCaption(sourceURLs: [], sourceSplatCount: nil, maxSplatCount: settings.cookOptions.maxSplatCount),
-            "No .ply file selected; nothing to cook."
+            "No .ply/.spz file selected; nothing to cook."
         )
         XCTAssertEqual(
             gaussianCookSourceCaption(sourceURLs: [ply], sourceSplatCount: 1000, maxSplatCount: 5000),
             gaussianBudgetCaption(sourceCount: 1000, maxSplatCount: 5000)
         )
 
-        // The browser presents the sheet for a request, and a request needs a .ply.
+        // The browser presents the sheet for a request, and a request needs a .ply/.spz.
         XCTAssertNil(GaussianCookRequest(sources: []))
         XCTAssertNil(GaussianCookRequest(sources: [baked]), "baked files are imported as they are")
         XCTAssertEqual(GaussianCookRequest(sources: [baked, ply])?.sourceURLs, [ply])
+        let spz = URL(fileURLWithPath: "/tmp/Gaussians/room.spz")
+        XCTAssertEqual(GaussianCookRequest(sources: [baked, spz])?.sourceURLs, [spz])
     }
 
     func test_trackedCookSucceedsAsATask() async throws {
@@ -348,6 +399,45 @@ final class GaussianCookSheetTests: XCTestCase {
         let tracked = await trackedTask(handle.id)
         let task = try XCTUnwrap(tracked)
         XCTAssertEqual(task.title, "Cooking chair.ply")
+        XCTAssertEqual(task.state, .succeeded)
+        XCTAssertNil(task.progress, "the baker reports no progress; the row stays indeterminate")
+        XCTAssertFalse(task.isCancellable)
+        XCTAssertEqual(task.detail, "Kept 200 of 200 splats")
+    }
+
+    /// Same Tasks-panel wiring as `test_trackedCookSucceedsAsATask`, from a `.spz` source --
+    /// `cookGaussianPLYTracked` is format-agnostic (it delegates to `cookGaussianPLY`), so a
+    /// `.spz` cook should report through `TaskCenter` identically to a `.ply` one: same
+    /// title/detail shape, indeterminate progress, not cancellable, succeeded state.
+    func test_trackedCookSucceedsAsATaskSPZ() async throws {
+        let directory = try temporaryDirectory ?? {
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            temporaryDirectory = url
+            return url
+        }()
+        let spzURL = directory.appendingPathComponent("chair.spz")
+        try makeTestSPZ(splatCount: 200).write(to: spzURL)
+        var settings = GaussianCookSettings()
+        settings.levelCount = 2
+
+        let finished = expectation(description: "completion on main")
+        var completionResult: Result<GaussianProgressiveBakeResult, Error>?
+        let handle = cookGaussianPLYTracked(plyURL: spzURL, settings: settings) { result in
+            XCTAssertTrue(Thread.isMainThread)
+            completionResult = result
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 30)
+        await settleTaskCenter()
+
+        let bake = try XCTUnwrap(completionResult?.get())
+        XCTAssertEqual(bake.tiers.map(\.url.lastPathComponent), ["chair_lod0.untoldgs", "chair_lod1.untoldgs"])
+
+        let tracked = await trackedTask(handle.id)
+        let task = try XCTUnwrap(tracked)
+        XCTAssertEqual(task.title, "Cooking chair.spz")
         XCTAssertEqual(task.state, .succeeded)
         XCTAssertNil(task.progress, "the baker reports no progress; the row stays indeterminate")
         XCTAssertFalse(task.isCancellable)
@@ -557,5 +647,74 @@ final class GaussianCookSheetTests: XCTestCase {
 
         """
         return Data((header + body).utf8)
+    }
+
+    /// A minimal legacy SPZ v2 fixture (gzip-wrapped, first-three quaternion, degree-0 SH,
+    /// no fractional bits so raw position ints are the float values directly) on the same
+    /// grid `makeTestPLY` uses. Only exercises the cook path's format dispatch -- SPZReader's
+    /// own byte-level decode correctness is covered by UntoldEngine's SPZReaderTest, so this
+    /// doesn't need real capture data, just something that decodes to `splatCount` splats.
+    private func makeTestSPZ(splatCount: Int) -> Data {
+        var positions: [UInt8] = []
+        var alphas: [UInt8] = []
+        var colors: [UInt8] = []
+        var scales: [UInt8] = []
+        var rotations: [UInt8] = []
+        positions.reserveCapacity(splatCount * 9)
+        for index in 0 ..< splatCount {
+            for value in [Int32(index % 10), Int32(index / 10 % 10), Int32(index / 100)] {
+                let unsigned = UInt32(bitPattern: value) & 0x00FF_FFFF
+                positions.append(UInt8(unsigned & 0xFF))
+                positions.append(UInt8((unsigned >> 8) & 0xFF))
+                positions.append(UInt8((unsigned >> 16) & 0xFF))
+            }
+            alphas.append(255)
+            colors.append(contentsOf: [128, 128, 128] as [UInt8])
+            scales.append(contentsOf: [160, 160, 160] as [UInt8])
+            rotations.append(contentsOf: [127, 127, 127] as [UInt8]) // v2 first-three, near-identity
+        }
+
+        var payload: [UInt8] = []
+        func appendUInt32LE(_ value: UInt32) {
+            payload.append(UInt8(value & 0xFF))
+            payload.append(UInt8((value >> 8) & 0xFF))
+            payload.append(UInt8((value >> 16) & 0xFF))
+            payload.append(UInt8((value >> 24) & 0xFF))
+        }
+        appendUInt32LE(0x5053_474E) // "NGSP"
+        appendUInt32LE(2) // version 2 (first-three quaternion)
+        appendUInt32LE(UInt32(splatCount))
+        payload.append(contentsOf: [0, 0, 0, 0] as [UInt8]) // shDegree, fractionalBits, flags, reserved
+        payload.append(contentsOf: positions)
+        payload.append(contentsOf: alphas)
+        payload.append(contentsOf: colors)
+        payload.append(contentsOf: scales)
+        payload.append(contentsOf: rotations)
+
+        let deflateCapacity = payload.count * 2 + 128
+        var deflated = [UInt8](repeating: 0, count: deflateCapacity)
+        let written = deflated.withUnsafeMutableBytes { destBuffer -> Int in
+            payload.withUnsafeBytes { sourceBuffer -> Int in
+                compression_encode_buffer(
+                    destBuffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
+                    deflateCapacity,
+                    sourceBuffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
+                    payload.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+        }
+        deflated = Array(deflated.prefix(written))
+
+        var gzip: [UInt8] = [0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF]
+        gzip.append(contentsOf: deflated)
+        gzip.append(contentsOf: [0, 0, 0, 0] as [UInt8]) // CRC32, unchecked by SPZReader
+        let isize = UInt32(payload.count) // ISIZE: the file's final 4 bytes
+        gzip.append(UInt8(isize & 0xFF))
+        gzip.append(UInt8((isize >> 8) & 0xFF))
+        gzip.append(UInt8((isize >> 16) & 0xFF))
+        gzip.append(UInt8((isize >> 24) & 0xFF))
+        return Data(gzip)
     }
 }

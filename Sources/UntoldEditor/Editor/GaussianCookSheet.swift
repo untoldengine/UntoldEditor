@@ -2,10 +2,11 @@
 //  GaussianCookSheet.swift
 //  UntoldEditor
 //
-//  "Cook to .untoldgs" for a Gaussian splat .ply in the asset browser: the options
-//  the engine's baker takes (progressive tiers, spherical-harmonics degree, chunk
-//  size, up axis, scale, opacity floor) and the call that writes the tiers next
-//  to the source file. Runs in-process through the engine, no CLI needed.
+//  "Cook to .untoldgs" for a Gaussian splat .ply or .spz in the asset browser: the
+//  options the engine's baker takes (progressive tiers, spherical-harmonics degree,
+//  chunk size, up axis, scale, opacity floor) and the call that writes the tiers next
+//  to the source file. Runs in-process through the engine, no CLI needed. `.spz`
+//  support is limited to legacy gzip versions 2-3, matching the engine's SPZReader.
 //  `cookGaussianPLYTracked` is the entry point the browser uses: it queues the bake
 //  off the main thread and reports it as a job in the Tasks panel.
 //
@@ -180,12 +181,14 @@ func gaussianRecenterTranslation(
     }
 }
 
-/// Bounds of the splat centres in a source `.ply`, in capture space. Reads the whole
-/// file, so a recentred cook parses the source twice (once here, once in the baker).
+/// Bounds of the splat centres in a source `.ply` or `.spz`, in capture space. Reads the
+/// whole file, so a recentred cook parses the source twice (once here, once in the baker).
 func gaussianSourceBounds(plyURL: URL) throws -> (min: simd_float3, max: simd_float3) {
-    let splats = try PLYReader.readGaussianSplats(from: plyURL)
+    let splats = plyURL.pathExtension.lowercased() == "spz"
+        ? try SPZReader.readGaussianAsset(from: plyURL).splats
+        : try PLYReader.readGaussianSplats(from: plyURL)
     guard let first = splats.first else {
-        throw UntoldGSError.sizeMismatch("source .ply contains no splats")
+        throw UntoldGSError.sizeMismatch("source contains no splats")
     }
     var boundsMin = simd_float3(first.center.x, first.center.y, first.center.z)
     var boundsMax = boundsMin
@@ -197,9 +200,10 @@ func gaussianSourceBounds(plyURL: URL) throws -> (min: simd_float3, max: simd_fl
     return (boundsMin, boundsMax)
 }
 
-/// Writes `<ply name>.untoldgs` (or `<ply name>_lodN.untoldgs` tiers) beside `plyURL`,
-/// or inside `outputDirectory` when the editor is organizing the asset as a folder package.
-/// A recentred cook reads the source bounds first and bakes the offset into the transform.
+/// Writes `<name>.untoldgs` (or `<name>_lodN.untoldgs` tiers) beside `plyURL` (a `.ply` or
+/// `.spz` source), or inside `outputDirectory` when the editor is organizing the asset as a
+/// folder package. A recentred cook reads the source bounds first and bakes the offset into
+/// the transform.
 func cookGaussianPLY(
     plyURL: URL,
     settings: GaussianCookSettings,
@@ -213,11 +217,21 @@ func cookGaussianPLY(
         .appendingPathExtension("untoldgs")
         ?? plyURL.deletingPathExtension().appendingPathExtension("untoldgs")
     let bounds = settings.recenter ? try gaussianSourceBounds(plyURL: plyURL) : nil
+    let cookOptions = settings.cookOptions(recenteringBounds: bounds)
+    let levelCount = max(1, settings.levelCount)
+    if plyURL.pathExtension.lowercased() == "spz" {
+        return try bakeGaussianSplatProgressiveTiers(
+            spzURL: plyURL,
+            outputBaseURL: outputBaseURL,
+            levelCount: levelCount,
+            cookOptions: cookOptions
+        )
+    }
     return try bakeGaussianSplatProgressiveTiers(
         plyURL: plyURL,
         outputBaseURL: outputBaseURL,
-        levelCount: max(1, settings.levelCount),
-        cookOptions: settings.cookOptions(recenteringBounds: bounds)
+        levelCount: levelCount,
+        cookOptions: cookOptions
     )
 }
 
@@ -225,10 +239,10 @@ func cookGaussianPLY(
 /// import batch of several `.ply` files should queue up rather than contend.
 let gaussianCookQueue = DispatchQueue(label: "com.untoldengine.editor.gaussian-cook", qos: .userInitiated)
 
-/// The files an import batch should cook: `.ply` sources. Baked `.untoldgs` files are
-/// imported as they are.
+/// The files an import batch should cook: `.ply` or `.spz` sources. Baked `.untoldgs` files
+/// are imported as they are.
 func gaussianSourcesToCook(in urls: [URL]) -> [URL] {
-    urls.filter { $0.pathExtension.lowercased() == "ply" }
+    urls.filter { ["ply", "spz"].contains($0.pathExtension.lowercased()) }
 }
 
 func gaussianPackageName(for sourceURL: URL) -> String {
@@ -313,16 +327,17 @@ func primaryGaussianAsset(in folder: URL, fileManager fm: FileManager = .default
         ?? (plyFiles.count == 1 ? plyFiles.first : nil)
 }
 
-/// What the asset browser presents the cook sheet for: the `.ply` sources of a row (or of
-/// an import batch). Only `init?(sources:)` makes one, so a request always has something
-/// to cook; the browser shows the sheet as this item (`.sheet(item:)`), which is what keeps
-/// it from opening for "0 .ply files".
+/// What the asset browser presents the cook sheet for: the `.ply`/`.spz` sources of a row
+/// (or of an import batch). Only `init?(sources:)` makes one, so a request always has
+/// something to cook; the browser shows the sheet as this item (`.sheet(item:)`), which is
+/// what keeps it from opening for "0 files".
 struct GaussianCookRequest: Identifiable, Equatable {
     let id = UUID()
-    /// The `.ply` files to cook; never empty.
+    /// The `.ply`/`.spz` files to cook; never empty.
     let sourceURLs: [URL]
 
-    /// `nil` when `sources` holds no `.ply` (baked `.untoldgs` files are imported as they are).
+    /// `nil` when `sources` holds no `.ply`/`.spz` (baked `.untoldgs` files are imported as
+    /// they are).
     init?(sources: [URL]) {
         let plyURLs = gaussianSourcesToCook(in: sources)
         guard !plyURLs.isEmpty else { return nil }
@@ -332,13 +347,13 @@ struct GaussianCookRequest: Identifiable, Equatable {
 
 /// Heading for the cook sheet: the file name, or the batch size for an import of several.
 func gaussianCookSheetSourceName(for urls: [URL]) -> String {
-    urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) .ply files"
+    urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) Gaussian splat files"
 }
 
 /// The sheet's title. With nothing to cook it asks for sources rather than announcing a
-/// cook of "0 .ply files".
+/// cook of "0 files".
 func gaussianCookSheetTitle(for urls: [URL]) -> String {
-    urls.isEmpty ? "Select .ply files to cook" : "Cook \(gaussianCookSheetSourceName(for: urls)) to .untoldgs"
+    urls.isEmpty ? "Select .ply/.spz files to cook" : "Cook \(gaussianCookSheetSourceName(for: urls)) to .untoldgs"
 }
 
 /// Whether the Cook button does anything: at least one source, and a positive scale (zero
@@ -350,7 +365,7 @@ func gaussianCookSheetCanCook(sourceURLs: [URL], settings: GaussianCookSettings)
 /// Caption under the budget row: what the budget does to the source's splats, or that
 /// there is no source to count.
 func gaussianCookSourceCaption(sourceURLs: [URL], sourceSplatCount: Int?, maxSplatCount: Int?) -> String {
-    guard !sourceURLs.isEmpty else { return "No .ply file selected; nothing to cook." }
+    guard !sourceURLs.isEmpty else { return "No .ply/.spz file selected; nothing to cook." }
     return gaussianBudgetCaption(sourceCount: sourceSplatCount, maxSplatCount: maxSplatCount)
 }
 
@@ -391,10 +406,10 @@ func gaussianCookFailureDetail(_ error: Error) -> String {
     }
 }
 
-/// Cooks `plyURL` as a job in the Tasks panel. The bake runs on `queue` (the shared
-/// serial cook queue by default) so the UI never blocks; the task is indeterminate
-/// and finishes with the kept/pruned summary or the error's description. The `.ply`
-/// is never modified, so a failed cook leaves it in place to re-cook from the
+/// Cooks `plyURL` (a `.ply` or `.spz` source) as a job in the Tasks panel. The bake runs on
+/// `queue` (the shared serial cook queue by default) so the UI never blocks; the task is
+/// indeterminate and finishes with the kept/pruned summary or the error's description. The
+/// source file is never modified, so a failed cook leaves it in place to re-cook from the
 /// context menu. `completion` runs on the main queue after the task is finished.
 @discardableResult
 func cookGaussianPLYTracked(
@@ -781,8 +796,9 @@ func updateEditorGaussianStreamingSettings(entityId: EntityID, settings: EditorG
 }
 
 struct GaussianCookSheet: View {
-    /// The `.ply` files about to be cooked; a single file's header gives the splat count shown
-    /// under the budget row. Empty (nothing selected) disables Cook and says so, so the sheet
+    /// The `.ply`/`.spz` files about to be cooked; a single file's splat count is shown under
+    /// the budget row (cheap header read for `.ply`; a full decode for `.spz`, which has no
+    /// header-only count). Empty (nothing selected) disables Cook and says so, so the sheet
     /// stays honest however it was presented.
     let sourceURLs: [URL]
     @Binding var settings: GaussianCookSettings
@@ -879,7 +895,7 @@ struct GaussianCookSheet: View {
                 }
             }
 
-            Text("Writes the file next to the source .ply. Re-cook after changing the .ply; version 3 files replace any earlier .untoldgs of the same name. Recenter bakes a translation so the capture no longer sits wherever the training run left it.")
+            Text("Writes the file next to the source .ply/.spz. Re-cook after changing the source; version 3 files replace any earlier .untoldgs of the same name. Recenter bakes a translation so the capture no longer sits wherever the training run left it.")
                 .font(.caption)
                 .foregroundColor(.editorTextSecondary)
 
@@ -895,12 +911,16 @@ struct GaussianCookSheet: View {
         .padding(20)
         .frame(width: 440)
         .task(id: sourceURLs) {
-            // Header-only read, so it is cheap however large the capture; batches show no count.
+            // .ply: a header-only read, cheap however large the capture. .spz has no
+            // header-only count (the point count lives inside the gzip payload), so this
+            // decodes the whole file -- batches show no count either way.
             guard sourceURLs.count == 1, let url = sourceURLs.first else {
                 sourceSplatCount = nil
                 return
             }
-            sourceSplatCount = try? PLYReader.readGaussianSplatCount(from: url)
+            sourceSplatCount = url.pathExtension.lowercased() == "spz"
+                ? try? SPZReader.readGaussianAsset(from: url).splats.count
+                : try? PLYReader.readGaussianSplatCount(from: url)
         }
     }
 }
