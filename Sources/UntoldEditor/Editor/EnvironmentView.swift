@@ -342,7 +342,7 @@ private struct UndoableEffectSlider: View {
     let undoName: String
     let range: ClosedRange<Float>
     var format: String = "%.2f"
-    var help: String? = nil
+    var help: String?
     let get: () -> Float
     let set: (Float) -> Void
 
