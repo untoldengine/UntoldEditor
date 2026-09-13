@@ -37,7 +37,7 @@ rm -rf "$APP_BUNDLE"
 
 # Build the executable with Swift Package Manager
 echo "🔧 Building executable..."
-swift build --configuration release
+swift build --configuration release -Xswiftc -DENGINE_STATS_ENABLED
 
 # Create app bundle structure
 echo "📦 Creating app bundle structure..."
