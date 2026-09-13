@@ -684,7 +684,7 @@ private func loadEditorGaussianStreaming(
         )
     }
 
-    setEntityGaussianStreaming(
+    setEntityGaussianTileStreaming(
         entityId: entityId,
         source: source,
         options: GaussianStreamingOptions(
