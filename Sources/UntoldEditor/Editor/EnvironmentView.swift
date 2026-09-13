@@ -32,6 +32,7 @@ func addIBL(asset: Asset?) {
         // Only enable IBL if HDR was successfully loaded
         if iblSuccessful {
             applyIBL = true
+            EditorSceneDirtyState.shared.markDirty()
             Logger.log(message: "✅ IBL enabled with HDR: \(filename)")
         } else {
             Logger.log(message: "⚠️ Failed to enable IBL - HDR loading failed")
@@ -41,11 +42,6 @@ func addIBL(asset: Asset?) {
 
 @available(macOS 12.0, *)
 struct EnvironmentView: View {
-    @State private var enableApplyIBL: Bool = false
-    @State private var enableRenderEnvironment: Bool = false
-    @State private var enableSkyBackground: Bool = true
-    @State private var enableColorLUT: Bool = false
-    @State private var intensity: Float = 1.0
     @Binding var selectedAsset: Asset?
     var onLoadSceneAuthored: (Asset) -> Void = { _ in }
 
@@ -160,47 +156,56 @@ struct EnvironmentView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Label("Apply IBL", systemImage: enableApplyIBL ? "checkmark.circle.fill" : "circle")
+                    Label("Apply IBL", systemImage: applyIBL ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 12))
                     Spacer()
-                    Toggle("", isOn: $enableApplyIBL)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .tint(Color.editorAccent)
-                }
-                .onChange(of: enableApplyIBL) { _, newValue in
-                    applyIBL = newValue
+                    Toggle("", isOn: Binding(
+                        get: { applyIBL },
+                        set: { newValue in
+                            applyIBL = newValue
+                            EditorSceneDirtyState.shared.markDirty()
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(Color.editorAccent)
                 }
 
                 HStack {
-                    Label("Render Environment", systemImage: enableRenderEnvironment ? "checkmark.circle.fill" : "circle")
+                    Label("Render Environment", systemImage: renderEnvironment ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 12))
                     Spacer()
-                    Toggle("", isOn: $enableRenderEnvironment)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .tint(Color.editorAccent)
-                }
-                .onChange(of: enableRenderEnvironment) { _, newValue in
-                    renderEnvironment = newValue
+                    Toggle("", isOn: Binding(
+                        get: { renderEnvironment },
+                        set: { newValue in
+                            renderEnvironment = newValue
+                            EditorSceneDirtyState.shared.markDirty()
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(Color.editorAccent)
                 }
 
                 HStack {
-                    Label(enableSkyBackground ? "Sky Background" : "Grid Background", systemImage: enableSkyBackground ? "sun.max.fill" : "square.grid.3x3")
+                    Label(renderSkyBackground ? "Sky Background" : "Grid Background", systemImage: renderSkyBackground ? "sun.max.fill" : "square.grid.3x3")
                         .font(.system(size: 12))
                     Spacer()
-                    Toggle("", isOn: $enableSkyBackground)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .tint(Color.editorAccent)
+                    Toggle("", isOn: Binding(
+                        get: { renderSkyBackground },
+                        set: { newValue in
+                            renderSkyBackground = newValue
+                            EditorSceneDirtyState.shared.markDirty()
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .tint(Color.editorAccent)
                 }
                 .help("Switch the non-IBL background between the procedural sky and the debug/editor grid")
-                .onChange(of: enableSkyBackground) { _, newValue in
-                    renderSkyBackground = newValue
-                }
             }
 
             Divider()
@@ -208,16 +213,18 @@ struct EnvironmentView: View {
             // MARK: - Color LUT Toggle (Compact)
 
             VStack(alignment: .leading, spacing: 4) {
-                Toggle(isOn: $enableColorLUT) {
-                    Label("Apply Color LUT", systemImage: enableColorLUT ? "checkmark.circle.fill" : "circle")
+                Toggle(isOn: Binding(
+                    get: { ColorLUTParams.shared.enabled },
+                    set: { newValue in
+                        ColorLUTParams.shared.enabled = newValue
+                        EditorSceneDirtyState.shared.markDirty()
+                    }
+                )) {
+                    Label("Apply Color LUT", systemImage: ColorLUTParams.shared.enabled ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 12))
                 }
                 .toggleStyle(SwitchToggleStyle())
                 .scaleEffect(0.85)
-                .onChange(of: enableColorLUT) { _, newValue in
-                    ColorLUTParams.shared.enabled = newValue
-                    enableColorLUT = ColorLUTParams.shared.enabled
-                }
 
                 Text("Compares the baked Blender color-grading LUT against the default tonemap. Only takes effect if the loaded asset has a baked LUT.")
                     .font(.system(size: 10))
@@ -234,21 +241,14 @@ struct EnvironmentView: View {
                     .foregroundColor(.editorTextPrimary)
 
                 TextInputNumberView(label: "Intensity", value: Binding(
-                    get: { intensity },
+                    get: { ambientIntensity },
                     set: { newIntensity in
                         ambientIntensity = newIntensity
-                        intensity = newIntensity
+                        EditorSceneDirtyState.shared.markDirty()
                     }
                 ))
                 .frame(maxWidth: 80) // Make the input field smaller
             }
-        }
-        .onAppear {
-            enableApplyIBL = applyIBL
-            enableRenderEnvironment = renderEnvironment
-            enableSkyBackground = renderSkyBackground
-            enableColorLUT = ColorLUTParams.shared.enabled
-            intensity = ambientIntensity
         }
     }
 

@@ -46,6 +46,7 @@ func bindingForWrapMode(
         },
         set: { newValue in
             updateTextureSampler(entityId: entityId, textureType: textureType, wrapMode: newValue)
+            EditorSceneDirtyState.shared.markDirty()
             onChange()
         }
     )

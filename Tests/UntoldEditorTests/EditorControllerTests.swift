@@ -258,7 +258,7 @@ final class EditorControllerTests: XCTestCase {
         let saveURL = tempBaseURL.appendingPathComponent("test_scene.untoldscene")
 
         // Act
-        saveSceneDirect(sceneData: sceneData, to: saveURL)
+        try saveSceneDirect(sceneData: sceneData, to: saveURL)
 
         // Assert
         XCTAssertTrue(FileManager.default.fileExists(atPath: saveURL.path), "Scene file should be created")
@@ -275,7 +275,7 @@ final class EditorControllerTests: XCTestCase {
         let saveURL = tempBaseURL.appendingPathComponent("test_scene.untoldscene")
 
         // Act
-        saveSceneDirect(sceneData: sceneData, to: saveURL)
+        try saveSceneDirect(sceneData: sceneData, to: saveURL)
 
         // Assert
         let content = try String(contentsOf: saveURL)
@@ -294,7 +294,7 @@ final class EditorControllerTests: XCTestCase {
         let sceneData = SceneData(entities: [])
 
         // Act
-        saveSceneDirect(sceneData: sceneData, to: saveURL)
+        try saveSceneDirect(sceneData: sceneData, to: saveURL)
 
         // Assert
         let copiedURL = scenesFolder.appendingPathComponent("test_scene.untoldscene")
@@ -312,7 +312,7 @@ final class EditorControllerTests: XCTestCase {
         let sceneData = SceneData(entities: [])
 
         // Act
-        saveSceneDirect(sceneData: sceneData, to: saveURL)
+        try saveSceneDirect(sceneData: sceneData, to: saveURL)
 
         // Assert
         let files = try FileManager.default.contentsOfDirectory(at: scenesFolder, includingPropertiesForKeys: nil)
@@ -331,11 +331,11 @@ final class EditorControllerTests: XCTestCase {
 
         // Create initial file
         let initialData = SceneData(entities: [])
-        saveSceneDirect(sceneData: initialData, to: saveURL)
+        try saveSceneDirect(sceneData: initialData, to: saveURL)
 
         // Act: Overwrite with different data
         let newData = SceneData(entities: [])
-        saveSceneDirect(sceneData: newData, to: saveURL)
+        try saveSceneDirect(sceneData: newData, to: saveURL)
 
         // Assert
         XCTAssertTrue(FileManager.default.fileExists(atPath: saveURL.path), "File should still exist")
@@ -538,7 +538,7 @@ final class EditorControllerTests: XCTestCase {
         let sceneData = SceneData(entities: [])
         let saveURL = scenesFolder.appendingPathComponent("workflow_test.untoldscene")
 
-        saveSceneDirect(sceneData: sceneData, to: saveURL)
+        try saveSceneDirect(sceneData: sceneData, to: saveURL)
 
         // 3. Verify file exists
         XCTAssertTrue(FileManager.default.fileExists(atPath: saveURL.path), "Scene file should exist")

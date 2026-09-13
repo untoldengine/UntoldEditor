@@ -233,6 +233,7 @@ final class EditorUndoManager: ObservableObject {
             return
         }
 
+        EditorSceneDirtyState.shared.markDirty()
         undoStack.append(command)
         redoStack.removeAll()
         updateAvailability()
