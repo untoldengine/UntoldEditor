@@ -600,11 +600,12 @@ struct AssetBrowserView: View {
         nonmutating set { navigation.rootExpanded = newValue }
     }
 
-    @State private var showSceneLoadConfirmation = false
-    @State private var pendingSceneToLoad: URL?
+    @State private var showUnsavedChangesAlert = false
+    @State private var unsavedChangesAlertMessage = ""
     @State private var showDeleteConfirmation = false
     @State private var pendingDeleteAsset: Asset?
     @State private var showBasePathAlert = false
+    @State private var showBlockedDuringPlayAlert = false
     @Binding var searchQuery: String
     @State private var statusMessage: String?
     @State private var statusIsError = false
@@ -1202,18 +1203,23 @@ struct AssetBrowserView: View {
         .onReceive(NotificationCenter.default.publisher(for: .assetBrowserReload)) { _ in
             loadAssets()
         }
-        .alert("Load Scene?", isPresented: $showSceneLoadConfirmation) {
+        .alert("Unsaved Changes", isPresented: $showUnsavedChangesAlert) {
             Button("Cancel", role: .cancel) {
-                pendingSceneToLoad = nil
+                EditorPendingSwitchAction.shared.cancel()
             }
-            Button("Load Scene", role: .destructive) {
-                if let sceneURL = pendingSceneToLoad {
-                    loadScene(from: sceneURL)
-                }
-                pendingSceneToLoad = nil
+            Button("Discard Changes", role: .destructive) {
+                EditorPendingSwitchAction.shared.consume()
+            }
+            Button("Save") {
+                NotificationCenter.default.post(name: .editorMenuSave, object: nil)
             }
         } message: {
-            Text("Loading a new scene will replace the current scene. Any unsaved changes will be lost.")
+            Text(unsavedChangesAlertMessage)
+        }
+        .alert("Stop Play Mode First", isPresented: $showBlockedDuringPlayAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("This action is disabled while Play mode is running. Stop Play mode and try again.")
         }
         .alert("No Project Loaded", isPresented: $showBasePathAlert) {
             Button("OK", role: .cancel) {}
@@ -2567,6 +2573,9 @@ struct AssetBrowserView: View {
                 selectedAssetName = nil
             }
             loadAssets()
+            // Other listeners (e.g. the Scene Hierarchy's ProjectSceneCatalog) need to
+            // know a file disappeared too, not just this view's own asset list.
+            NotificationCenter.default.post(name: .assetBrowserReload, object: nil)
             showStatus("Queued delete: \(asset.name) (see Console)")
         } catch {
             print("❌ Failed to delete asset \(asset.name): \(error)")
@@ -2679,6 +2688,7 @@ struct AssetBrowserView: View {
         }
 
         let sceneRoot = createEntity()
+        EditorSceneDirtyState.shared.markDirty()
         let sceneName = manifestAsset.path.deletingPathExtension().lastPathComponent
         setEntityName(entityId: sceneRoot, name: sceneName)
 
@@ -2778,6 +2788,7 @@ struct AssetBrowserView: View {
         }
 
         let sceneRoot = createEntity()
+        EditorSceneDirtyState.shared.markDirty()
         let sceneName = asset.name
         setEntityName(entityId: sceneRoot, name: sceneName)
 
@@ -2933,10 +2944,16 @@ struct AssetBrowserView: View {
         else if asset.category == AssetCategory.scenes.rawValue,
                 withExtension.lowercased() == untoldSceneFileExtension
         {
-            // Show confirmation dialog before loading scene
-            pendingSceneToLoad = asset.path
-            showSceneLoadConfirmation = true
-            editorController?.currentSceneURL = asset.path
+            guard gameMode == false else {
+                showBlockedDuringPlayAlert = true
+                return
+            }
+            requestDestructiveSceneAction(
+                { loadScene(from: asset.path) },
+                describing: "loading a new scene",
+                showAlert: $showUnsavedChangesAlert,
+                alertMessage: $unsavedChangesAlertMessage
+            )
         }
         // Handle HDR files (hdr, exr)
         else if asset.category == AssetCategory.hdr.rawValue,
@@ -2978,6 +2995,10 @@ struct AssetBrowserView: View {
     // MARK: - Load Scene Helper
 
     private func loadScene(from url: URL) {
+        guard gameMode == false else {
+            showBlockedDuringPlayAlert = true
+            return
+        }
         guard let sceneData = loadGameScene(from: url) else {
             print("❌ Failed to load scene from \(url.lastPathComponent)")
             return
@@ -2988,9 +3009,12 @@ struct AssetBrowserView: View {
         removeGizmo()
         EditorComponentsState.shared.clear()
         EditorGaussianAssetState.shared.clear()
+        EditorUndoManager.shared.clear()
+        EditorSceneDirtyState.shared.clear()
 
         // Load new scene
         deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
+        NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
 
         // Reset editor state
         selectionManager.selectedEntity = nil

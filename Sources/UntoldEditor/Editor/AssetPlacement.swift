@@ -280,6 +280,7 @@ func placeAsset(
     selectionManager: SelectionManager
 ) -> AssetPlacementResult {
     let entityId = createEntity()
+    EditorSceneDirtyState.shared.markDirty()
 
     // Use a generated name to avoid duplicate names when importing repeatedly
     let uniqueName = generateEntityName()
@@ -348,6 +349,7 @@ func placeLight(
     selectionManager: SelectionManager
 ) -> AssetPlacementResult {
     let entityId = createEntity()
+    EditorSceneDirtyState.shared.markDirty()
 
     let uniqueName = generateEntityName()
     setEntityName(entityId: entityId, name: uniqueName)
@@ -390,6 +392,7 @@ func placePrimitive(
     selectionManager: SelectionManager
 ) -> AssetPlacementResult {
     let entityId = createEntity()
+    EditorSceneDirtyState.shared.markDirty()
 
     let uniqueName = generateEntityName()
     setEntityName(entityId: entityId, name: uniqueName)

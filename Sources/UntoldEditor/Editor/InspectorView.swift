@@ -505,6 +505,7 @@ struct InspectorView: View {
         guard let entityId = selectionManager.selectedEntity else { return }
         guard canAddComponentFromInspector(componentType: componentType, to: entityId) else { return }
 
+        EditorSceneDirtyState.shared.markDirty()
         let key = ObjectIdentifier(componentType)
 
         var allComponents = availableComponents_Editor
@@ -542,6 +543,7 @@ struct InspectorView: View {
         guard let entityId = selectionManager.selectedEntity else { return }
         guard canRemoveComponentFromInspector(componentType: componentType, from: entityId) else { return }
 
+        EditorSceneDirtyState.shared.markDirty()
         let key = ObjectIdentifier(componentType)
 
         // Remove component from the editor's state
@@ -763,6 +765,7 @@ struct RenderingEditorView: View {
                     get: { getEntityCastsShadow(entityId: entityId) },
                     set: { enabled in
                         setEntityCastsShadow(entityId: entityId, enabled)
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 )) {
@@ -797,11 +800,13 @@ struct RenderingEditorView: View {
                                 Button(action: {
                                     if asset?.category == "Materials", let path = asset?.path {
                                         updateMaterialTexture(entityId: entityId, textureType: type, path: path, meshIndex: meshIndex)
+                                        EditorSceneDirtyState.shared.markDirty()
                                         refreshView()
                                     } else if let pickedURL = pickTextureImageFile(),
                                               let importedURL = importTextureAsset(from: pickedURL)
                                     {
                                         updateMaterialTexture(entityId: entityId, textureType: type, path: importedURL, meshIndex: meshIndex)
+                                        EditorSceneDirtyState.shared.markDirty()
                                         refreshView()
                                     }
                                 }) {
@@ -823,6 +828,7 @@ struct RenderingEditorView: View {
                                 HStack(spacing: 8) {
                                     Button(action: {
                                         removeMaterialTexture(entityId: entityId, textureType: type, meshIndex: meshIndex)
+                                        EditorSceneDirtyState.shared.markDirty()
                                         refreshView()
                                     }) {
                                         Image(systemName: "minus.circle.fill")
@@ -833,6 +839,7 @@ struct RenderingEditorView: View {
                                     if canRestoreEmbeddedTexture(entityId: entityId, type: type, meshIndex: meshIndex) {
                                         Button(action: {
                                             restoreEmbeddedTexture(entityId: entityId, textureType: type, meshIndex: meshIndex)
+                                            EditorSceneDirtyState.shared.markDirty()
                                             refreshView()
                                         }) {
                                             Image(systemName: "arrow.counterclockwise.circle.fill")
@@ -884,6 +891,7 @@ struct RenderingEditorView: View {
                             get: { getMaterialSTScale(entityId: entityId, meshIndex: meshIndex) },
                             set: { newValue in
                                 updateMaterialSTScale(entityId: entityId, stScale: newValue, meshIndex: meshIndex)
+                                EditorSceneDirtyState.shared.markDirty()
                                 refreshView()
                             }
                         )
@@ -899,7 +907,10 @@ struct RenderingEditorView: View {
                     VStack {
                         ColorPicker("", selection: Binding(
                             get: { colorFromSimd(getMaterialBaseColor(entityId: entityId, meshIndex: meshIndex)) },
-                            set: { newColor in updateMaterialColor(entityId: entityId, color: newColor, meshIndex: meshIndex) }
+                            set: { newColor in
+                                updateMaterialColor(entityId: entityId, color: newColor, meshIndex: meshIndex)
+                                EditorSceneDirtyState.shared.markDirty()
+                            }
                         ))
                         .frame(width: 60)
                         .disabled(inspectionOnly)
@@ -917,6 +928,7 @@ struct RenderingEditorView: View {
                                 get: { getMaterialRoughness(entityId: entityId, meshIndex: meshIndex) },
                                 set: { newValue in
                                     updateMaterialRoughness(entityId: entityId, roughness: newValue, meshIndex: meshIndex)
+                                    EditorSceneDirtyState.shared.markDirty()
                                     if inspectionOnly, isUntoldBackedMesh {
                                         hasPendingUntoldWrite = true
                                         untoldUpdateStatus = nil
@@ -940,6 +952,7 @@ struct RenderingEditorView: View {
                                 get: { getMaterialMetallic(entityId: entityId, meshIndex: meshIndex) },
                                 set: { newValue in
                                     updateMaterialMetallic(entityId: entityId, metallic: newValue, meshIndex: meshIndex)
+                                    EditorSceneDirtyState.shared.markDirty()
                                     if inspectionOnly, isUntoldBackedMesh {
                                         hasPendingUntoldWrite = true
                                         untoldUpdateStatus = nil
@@ -967,6 +980,7 @@ struct RenderingEditorView: View {
                                 get: { getMaterialHeightScale(entityId: entityId, meshIndex: meshIndex) },
                                 set: { newValue in
                                     updateMaterialHeightScale(entityId: entityId, heightScale: newValue, meshIndex: meshIndex)
+                                    EditorSceneDirtyState.shared.markDirty()
                                     if inspectionOnly, isUntoldBackedMesh {
                                         hasPendingUntoldWrite = true
                                         untoldUpdateStatus = nil
@@ -991,6 +1005,7 @@ struct RenderingEditorView: View {
                                 get: { getMaterialHeightMidlevel(entityId: entityId, meshIndex: meshIndex) },
                                 set: { newValue in
                                     updateMaterialHeightMidlevel(entityId: entityId, heightMidlevel: newValue, meshIndex: meshIndex)
+                                    EditorSceneDirtyState.shared.markDirty()
                                     if inspectionOnly, isUntoldBackedMesh {
                                         hasPendingUntoldWrite = true
                                         untoldUpdateStatus = nil
@@ -1013,6 +1028,7 @@ struct RenderingEditorView: View {
                             get: { getMaterialHeightEnabled(entityId: entityId, meshIndex: meshIndex) },
                             set: { newValue in
                                 updateMaterialHeightEnabled(entityId: entityId, heightEnabled: newValue, meshIndex: meshIndex)
+                                EditorSceneDirtyState.shared.markDirty()
                                 if inspectionOnly, isUntoldBackedMesh {
                                     hasPendingUntoldWrite = true
                                     untoldUpdateStatus = nil
@@ -1044,6 +1060,7 @@ struct RenderingEditorView: View {
                                 get: { getMaterialHeightRemapMin(entityId: entityId, meshIndex: meshIndex) },
                                 set: { newValue in
                                     updateMaterialHeightRemapMin(entityId: entityId, heightRemapMin: newValue, meshIndex: meshIndex)
+                                    EditorSceneDirtyState.shared.markDirty()
                                     if inspectionOnly, isUntoldBackedMesh {
                                         hasPendingUntoldWrite = true
                                         untoldUpdateStatus = nil
@@ -1066,6 +1083,7 @@ struct RenderingEditorView: View {
                                 get: { getMaterialHeightRemapMax(entityId: entityId, meshIndex: meshIndex) },
                                 set: { newValue in
                                     updateMaterialHeightRemapMax(entityId: entityId, heightRemapMax: newValue, meshIndex: meshIndex)
+                                    EditorSceneDirtyState.shared.markDirty()
                                     if inspectionOnly, isUntoldBackedMesh {
                                         hasPendingUntoldWrite = true
                                         untoldUpdateStatus = nil
@@ -1090,6 +1108,7 @@ struct RenderingEditorView: View {
                                 get: { getMaterialOpacity(entityId: entityId, meshIndex: meshIndex) },
                                 set: { newValue in
                                     updateMaterialOpacity(entityId: entityId, opacity: newValue, meshIndex: meshIndex, submeshIndex: 0)
+                                    EditorSceneDirtyState.shared.markDirty()
                                     if inspectionOnly, isUntoldBackedMesh {
                                         hasPendingUntoldWrite = true
                                         untoldUpdateStatus = nil
@@ -1110,6 +1129,7 @@ struct RenderingEditorView: View {
                             get: { getMaterialAlphaMode(entityId: entityId, meshIndex: meshIndex) },
                             set: { newValue in
                                 updateMaterialAlphaMode(entityId: entityId, mode: newValue, meshIndex: meshIndex)
+                                EditorSceneDirtyState.shared.markDirty()
                                 if inspectionOnly, isUntoldBackedMesh {
                                     hasPendingUntoldWrite = true
                                     untoldUpdateStatus = nil
@@ -1150,6 +1170,7 @@ struct RenderingEditorView: View {
                             get: { getMaterialEmmissive(entityId: entityId, meshIndex: meshIndex) },
                             set: { newValue in
                                 updateMaterialEmmisive(entityId: entityId, emmissive: newValue, meshIndex: meshIndex)
+                                EditorSceneDirtyState.shared.markDirty()
                                 refreshView()
                             }
                         )
@@ -1572,6 +1593,7 @@ struct DirLightEditorView: View {
                     get: { color },
                     set: { newColor in
                         updateLightColor(entityId: entityId, color: newColor)
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 ))
@@ -1581,6 +1603,7 @@ struct DirLightEditorView: View {
                     get: { intensity },
                     set: { newIntensity in
                         setLight(entityId: entityId, .strength(newIntensity))
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 ))
@@ -1667,6 +1690,7 @@ struct PointLightEditorView: View {
                     get: { color },
                     set: { newColor in
                         updateLightColor(entityId: entityId, color: newColor)
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 ))
@@ -1677,6 +1701,7 @@ struct PointLightEditorView: View {
                         get: { intensity },
                         set: { newIntensity in
                             setLight(entityId: entityId, .power(newIntensity))
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1686,6 +1711,7 @@ struct PointLightEditorView: View {
                         get: { range },
                         set: { newRange in
                             setLight(entityId: entityId, .point(.range(newRange)))
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1695,6 +1721,7 @@ struct PointLightEditorView: View {
                         get: { radius },
                         set: { newRadius in
                             updateLightRadius(entityId: entityId, radius: newRadius)
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1705,6 +1732,7 @@ struct PointLightEditorView: View {
                     get: { falloff },
                     set: { newFalloff in
                         updateLightFalloff(entityId: entityId, falloff: newFalloff)
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 ))
@@ -1714,6 +1742,7 @@ struct PointLightEditorView: View {
                     get: { castsShadow },
                     set: { enabled in
                         setLight(entityId: entityId, .point(.castsShadow(enabled)))
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 )) {
@@ -1746,6 +1775,7 @@ struct SpotLightEditorView: View {
                     get: { color },
                     set: { newColor in
                         updateLightColor(entityId: entityId, color: newColor)
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 ))
@@ -1755,6 +1785,7 @@ struct SpotLightEditorView: View {
                         get: { intensity },
                         set: { newIntensity in
                             setLight(entityId: entityId, .power(newIntensity))
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1764,6 +1795,7 @@ struct SpotLightEditorView: View {
                         get: { range },
                         set: { newRange in
                             setLight(entityId: entityId, .spot(.range(newRange)))
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1773,6 +1805,7 @@ struct SpotLightEditorView: View {
                         get: { radius },
                         set: { newRadius in
                             updateLightRadius(entityId: entityId, radius: newRadius)
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1784,6 +1817,7 @@ struct SpotLightEditorView: View {
                         get: { coneAngle },
                         set: { newConeAngle in
                             updateLightConeAngle(entityId: entityId, coneAngle: newConeAngle * 0.5)
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1794,6 +1828,7 @@ struct SpotLightEditorView: View {
                     get: { falloff },
                     set: { newFalloff in
                         updateLightFalloff(entityId: entityId, falloff: newFalloff)
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 ))
@@ -1803,6 +1838,7 @@ struct SpotLightEditorView: View {
                     get: { castsShadow },
                     set: { enabled in
                         setLight(entityId: entityId, .spot(.castsShadow(enabled)))
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 )) {
@@ -1835,6 +1871,7 @@ struct AreaLightEditorView: View {
                     get: { color },
                     set: { newColor in
                         updateLightColor(entityId: entityId, color: newColor)
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 ))
@@ -1845,6 +1882,7 @@ struct AreaLightEditorView: View {
                         get: { intensity },
                         set: { newIntensity in
                             setLight(entityId: entityId, .power(newIntensity))
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1854,6 +1892,7 @@ struct AreaLightEditorView: View {
                         get: { range },
                         set: { newRange in
                             setLight(entityId: entityId, .area(.range(newRange)))
+                            EditorSceneDirtyState.shared.markDirty()
                             refreshView()
                         }
                     ))
@@ -1898,6 +1937,7 @@ struct AreaLightEditorView: View {
                     get: { twoSided },
                     set: { enabled in
                         setLight(entityId: entityId, .area(.twoSided(enabled)))
+                        EditorSceneDirtyState.shared.markDirty()
                         refreshView()
                     }
                 )) {
@@ -1926,6 +1966,7 @@ struct CameraEditorView: View {
                 get: { eye },
                 set: { newEye in
                     cameraLookAt(entityId: entityId, eye: newEye, target: target, up: up)
+                    EditorSceneDirtyState.shared.markDirty()
                     refreshView()
                 }
             ))
@@ -1934,6 +1975,7 @@ struct CameraEditorView: View {
                 get: { up },
                 set: { newUp in
                     cameraLookAt(entityId: entityId, eye: eye, target: target, up: newUp)
+                    EditorSceneDirtyState.shared.markDirty()
                     refreshView()
                 }
             ))
@@ -1942,6 +1984,7 @@ struct CameraEditorView: View {
                 get: { target },
                 set: { newTarget in
                     cameraLookAt(entityId: entityId, eye: eye, target: newTarget, up: up)
+                    EditorSceneDirtyState.shared.markDirty()
                     refreshView()
                 }
             ))

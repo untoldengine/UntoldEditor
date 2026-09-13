@@ -56,6 +56,9 @@ struct SceneHierarchyView: View {
     var onSelectScene: (URL) -> Void
     var isPlaying: Bool
     var onTogglePlay: () -> Void
+    /// True while an async post-Play restore is in flight; disables the button
+    /// to prevent re-entrant Play/Stop toggling mid-restore.
+    var isPlayModeBusy: Bool = false
     var entityList: [EntityID]
     var onAddEntity_Editor: () -> Void
     var onRemoveEntity_Editor: () -> Void
@@ -193,6 +196,7 @@ struct SceneHierarchyView: View {
         }
         .buttonStyle(.plain)
         .focusable(false)
+        .disabled(isPlayModeBusy)
         .help(isPlaying ? "Stop play mode" : "Enter play mode")
     }
 

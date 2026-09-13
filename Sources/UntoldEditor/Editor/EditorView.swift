@@ -83,14 +83,20 @@ public struct EditorView: View {
     @StateObject private var sceneGraphModel = SceneGraphModel()
     @StateObject private var sceneCatalog = ProjectSceneCatalog()
     @ObservedObject private var editorBasePath = EditorAssetBasePath.shared
-    @State private var pendingSceneToLoad: URL?
-    @State private var showSceneSwitchAlert = false
+    @State private var showUnsavedChangesAlert = false
+    @State private var unsavedChangesAlertMessage = ""
     @State private var assets: [String: [Asset]] = [:]
     @State private var selectedAsset: Asset? = nil
     /// Kept here so the Content browser returns to the same folder after the
     /// bottom dock shows another tab (which removes the browser view).
     @StateObject private var assetBrowserNavigation = AssetBrowserNavigationState()
     @State private var isPlaying = false
+    /// Captured via `serializeScene()` the instant Play starts; consumed by
+    /// `beginPlayModeRestore` on Stop to revert physics/animation/script drift.
+    @State private var playModeSnapshot: SceneData?
+    /// True from Stop-press until the async post-Play restore completes.
+    @State private var isRestoringPlayMode: Bool = false
+    @State private var showBlockedDuringPlayAlert = false
     @State private var showCreateProject = false
     @State private var bottomPanelTab: BottomPanelTab = .assets
     @ObservedObject private var taskCenter = TaskCenter.shared
@@ -105,6 +111,12 @@ public struct EditorView: View {
     @State private var pendingTargetURL: URL?
     @State private var isSaveAs = false
     @State private var showSaveBasePathAlert = false
+    @State private var showSaveFailedAlert = false
+    @State private var saveFailedMessage = ""
+    @State private var sceneNameDraft: String = ""
+    @FocusState private var isSceneNameFieldFocused: Bool
+    @State private var showSceneRenameFailedAlert = false
+    @State private var sceneRenameFailedMessage = ""
     @ObservedObject private var playbackSettings = EditorPlaybackSettings.shared
     @ObservedObject private var panelVisibility = EditorPanelVisibility.shared
     @State private var renderPauseGeneration = 0
@@ -180,6 +192,7 @@ public struct EditorView: View {
                                         onSelectScene: editor_requestLoadScene,
                                         isPlaying: isPlaying,
                                         onTogglePlay: { editor_handlePlayToggle(!isPlaying) },
+                                        isPlayModeBusy: isRestoringPlayMode,
                                         entityList: editor_entities,
                                         onAddEntity_Editor: editor_addNewEntity,
                                         onRemoveEntity_Editor: editor_removeEntity,
@@ -342,7 +355,16 @@ public struct EditorView: View {
             openExistingProjectFromWelcome()
         }
         .onReceive(NotificationCenter.default.publisher(for: .editorMenuNewScene)) { _ in
-            editor_newScene()
+            guard gameMode == false else {
+                showBlockedDuringPlayAlert = true
+                return
+            }
+            requestDestructiveSceneAction(
+                { editor_newScene() },
+                describing: "creating a new scene",
+                showAlert: $showUnsavedChangesAlert,
+                alertMessage: $unsavedChangesAlertMessage
+            )
         }
         .onReceive(NotificationCenter.default.publisher(for: .editorMenuSaveProject)) { _ in
             editor_saveProject()
@@ -354,10 +376,24 @@ public struct EditorView: View {
             editor_handleSaveAs()
         }
         .onReceive(NotificationCenter.default.publisher(for: .editorMenuReset)) { _ in
-            editor_clearScene()
+            guard gameMode == false else {
+                showBlockedDuringPlayAlert = true
+                return
+            }
+            requestDestructiveSceneAction(
+                { editor_clearScene() },
+                describing: "resetting the scene",
+                showAlert: $showUnsavedChangesAlert,
+                alertMessage: $unsavedChangesAlertMessage
+            )
         }
         .onChange(of: experienceMode) { _, _ in
             syncEditorAvailabilityForExperienceMode()
+        }
+        // Assets changing on disk (e.g. a scene file deleted from the Asset Browser)
+        // need to be reflected in the Scene Hierarchy's separate scene catalog too.
+        .onReceive(NotificationCenter.default.publisher(for: .assetBrowserReload)) { _ in
+            sceneCatalog.refresh()
         }
         .sheet(isPresented: $showSaveNamePrompt) {
             saveScenePrompt
@@ -365,6 +401,7 @@ public struct EditorView: View {
         .alert("Overwrite Scene?", isPresented: $showOverwriteAlert) {
             Button("Cancel", role: .cancel) {
                 showSaveNamePrompt = false
+                EditorPendingSwitchAction.shared.cancel()
             }
             Button("Overwrite", role: .destructive) {
                 finalizeSceneSave(targetURL: pendingTargetURL, overwrite: true)
@@ -381,13 +418,28 @@ public struct EditorView: View {
             Text(invalidProjectMessage)
         }
         .alert("No Project Loaded", isPresented: $showSaveBasePathAlert) {
-            Button("OK", role: .cancel) {}
+            Button("OK", role: .cancel) {
+                EditorPendingSwitchAction.shared.cancel()
+            }
         } message: {
             Text("Please create a new project or open an existing project before saving scenes.")
+        }
+        .alert("Save Failed", isPresented: $showSaveFailedAlert) {
+            Button("OK", role: .cancel) {
+                EditorPendingSwitchAction.shared.cancel()
+            }
+        } message: {
+            Text(saveFailedMessage)
+        }
+        .alert("Rename Failed", isPresented: $showSceneRenameFailedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(sceneRenameFailedMessage)
         }
         .alert("Quick Preview Entities Cannot Be Saved", isPresented: $showQuickPreviewWarning) {
             Button("Cancel", role: .cancel) {
                 quickPreviewEntities = []
+                EditorPendingSwitchAction.shared.cancel()
             }
             Button("Delete and Save", role: .destructive) {
                 deleteQuickPreviewEntitiesAndSave()
@@ -401,16 +453,25 @@ public struct EditorView: View {
         .sheet(item: $pendingQuickPreviewExport) { request in
             quickPreviewRuntimeExportSheet(for: request)
         }
-        .alert("Load Scene?", isPresented: $showSceneSwitchAlert) {
+        .alert("Unsaved Changes", isPresented: $showUnsavedChangesAlert) {
             Button("Cancel", role: .cancel) {
-                pendingSceneToLoad = nil
+                EditorPendingSwitchAction.shared.cancel()
             }
-            Button("Load Scene") {
-                editor_confirmLoadPendingScene()
+            Button("Discard Changes", role: .destructive) {
+                EditorPendingSwitchAction.shared.consume()
+            }
+            Button("Save") {
+                editor_handleSave()
             }
         } message: {
-            let name = pendingSceneToLoad?.deletingPathExtension().lastPathComponent ?? "this scene"
-            return Text("Loading \"\(name)\" will replace the current scene. Any unsaved changes will be lost.")
+            Text(unsavedChangesAlertMessage)
+        }
+        .alert("Stop Play Mode First", isPresented: $showBlockedDuringPlayAlert) {
+            Button("OK", role: .cancel) {
+                EditorPendingSwitchAction.shared.cancel()
+            }
+        } message: {
+            Text("This action is disabled while Play mode is running. Stop Play mode and try again.")
         }
     }
 
@@ -662,11 +723,34 @@ public struct EditorView: View {
                 Text("Name")
                     .foregroundColor(.editorTextSecondary)
                 Spacer()
-                Text(sceneName)
-                    .foregroundColor(.editorTextPrimary)
-                    .lineLimit(1)
+                if editorController?.currentSceneURL != nil {
+                    TextField("Scene name", text: $sceneNameDraft)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 180)
+                        .focused($isSceneNameFieldFocused)
+                        .onSubmit {
+                            commitSceneRename()
+                            isSceneNameFieldFocused = false
+                        }
+                        .onChange(of: isSceneNameFieldFocused) { _, isFocused in
+                            if isFocused == false {
+                                commitSceneRename()
+                            }
+                        }
+                } else {
+                    Text(sceneName)
+                        .foregroundColor(.editorTextPrimary)
+                        .lineLimit(1)
+                }
             }
             .font(.system(size: 12))
+            .onAppear {
+                sceneNameDraft = sceneName
+            }
+            .onChange(of: editorController?.currentSceneURL) { _, _ in
+                sceneNameDraft = sceneName
+            }
 
             if let url = editorController?.currentSceneURL {
                 VStack(alignment: .leading, spacing: 2) {
@@ -687,6 +771,50 @@ public struct EditorView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Renames the active scene's file on disk to match `sceneNameDraft`, or
+    /// reverts the draft if the new name is empty/invalid/already taken.
+    private func commitSceneRename() {
+        guard let currentURL = editorController?.currentSceneURL else { return }
+        let currentName = currentURL.deletingPathExtension().lastPathComponent
+        let trimmed = sceneNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard trimmed.isEmpty == false else {
+            sceneNameDraft = currentName
+            return
+        }
+        guard trimmed != currentName else {
+            return
+        }
+        guard trimmed.contains("/") == false else {
+            sceneRenameFailedMessage = "Scene names can't contain \"/\"."
+            showSceneRenameFailedAlert = true
+            sceneNameDraft = currentName
+            return
+        }
+
+        let newURL = currentURL.deletingLastPathComponent()
+            .appendingPathComponent(trimmed)
+            .appendingPathExtension(untoldSceneFileExtension)
+
+        guard FileManager.default.fileExists(atPath: newURL.path) == false else {
+            sceneRenameFailedMessage = "A scene named \"\(trimmed)\" already exists."
+            showSceneRenameFailedAlert = true
+            sceneNameDraft = currentName
+            return
+        }
+
+        do {
+            try FileManager.default.moveItem(at: currentURL, to: newURL)
+            editorController?.currentSceneURL = newURL
+            sceneNameDraft = trimmed
+            sceneCatalog.refresh()
+        } catch {
+            sceneRenameFailedMessage = "\(error)"
+            showSceneRenameFailedAlert = true
+            sceneNameDraft = currentName
+        }
     }
 
     private var envEffectsTabs: some View {
@@ -961,7 +1089,10 @@ public struct EditorView: View {
                 .onSubmit { confirmSaveSceneName() }
 
             HStack {
-                Button("Cancel") { showSaveNamePrompt = false }
+                Button("Cancel") {
+                    showSaveNamePrompt = false
+                    EditorPendingSwitchAction.shared.cancel()
+                }
                 Spacer()
                 Button("Save") { confirmSaveSceneName() }
                     .keyboardShortcut(.defaultAction)
@@ -1174,10 +1305,19 @@ public struct EditorView: View {
     }
 
     private func editor_handleSave() {
+        guard gameMode == false else {
+            showBlockedDuringPlayAlert = true
+            return
+        }
         guard assetBasePath != nil else {
             showSaveBasePathAlert = true
             return
         }
+
+        // Ensure Save always means Save, even after a stale/cancelled Save-As
+        // attempt left this flag set (deleteQuickPreviewEntitiesAndSave() routes
+        // on it, and nothing else resets it before now).
+        isSaveAs = false
 
         // Check for Quick Preview entities before saving
         if checkForQuickPreviewEntities() {
@@ -1187,8 +1327,15 @@ public struct EditorView: View {
         // If we have a current scene path, save immediately
         if let sceneURL = editorController?.currentSceneURL {
             let sceneData: SceneData = serializeScene()
-            saveSceneDirect(sceneData: sceneData, to: sceneURL)
-            sceneCatalog.refresh()
+            do {
+                try saveSceneDirect(sceneData: sceneData, to: sceneURL)
+                sceneCatalog.refresh()
+                EditorSceneDirtyState.shared.clear()
+                EditorPendingSwitchAction.shared.consume()
+            } catch {
+                saveFailedMessage = "\(error)"
+                showSaveFailedAlert = true
+            }
             return
         }
 
@@ -1199,6 +1346,10 @@ public struct EditorView: View {
     }
 
     private func editor_handleSaveAs() {
+        guard gameMode == false else {
+            showBlockedDuringPlayAlert = true
+            return
+        }
         guard assetBasePath != nil else {
             showSaveBasePathAlert = true
             return
@@ -1260,15 +1411,26 @@ public struct EditorView: View {
             return
         }
 
-        saveSceneDirect(sceneData: sceneData, to: destinationURL)
-        editorController?.currentSceneURL = destinationURL
-        showSaveNamePrompt = false
-        showOverwriteAlert = false
-        isSaveAs = false
-        sceneCatalog.refresh()
+        do {
+            try saveSceneDirect(sceneData: sceneData, to: destinationURL)
+            editorController?.currentSceneURL = destinationURL
+            showSaveNamePrompt = false
+            showOverwriteAlert = false
+            isSaveAs = false
+            sceneCatalog.refresh()
+            EditorSceneDirtyState.shared.clear()
+            EditorPendingSwitchAction.shared.consume()
+        } catch {
+            saveFailedMessage = "\(error)"
+            showSaveFailedAlert = true
+        }
     }
 
     private func editor_handleLoad() {
+        guard gameMode == false else {
+            showBlockedDuringPlayAlert = true
+            return
+        }
         var sceneData: SceneData?
 
         // Check if a scene is selected in the Asset Browser
@@ -1289,8 +1451,10 @@ public struct EditorView: View {
             EditorComponentsState.shared.clear()
             EditorGaussianAssetState.shared.clear()
             EditorUndoManager.shared.clear()
+            EditorSceneDirtyState.shared.clear()
             sceneAuthoredGameCamera = nil
             deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
+            NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
             editorController?.currentSceneURL = nil
             editor_entities = getAllGameEntities()
             selectionManager.selectedEntity = nil
@@ -1316,9 +1480,11 @@ public struct EditorView: View {
         EditorComponentsState.shared.clear()
         EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
+        EditorSceneDirtyState.shared.clear()
         sceneAuthoredGameCamera = nil
 
         deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
+        NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
         editorController?.currentSceneURL = url
 
         editor_entities = getAllGameEntities()
@@ -1335,17 +1501,19 @@ public struct EditorView: View {
 
     /// Ask before switching scenes: loading discards the current world.
     private func editor_requestLoadScene(_ url: URL) {
+        guard gameMode == false else {
+            showBlockedDuringPlayAlert = true
+            return
+        }
         if url == editorController?.currentSceneURL {
             return
         }
-        pendingSceneToLoad = url
-        showSceneSwitchAlert = true
-    }
-
-    private func editor_confirmLoadPendingScene() {
-        guard let url = pendingSceneToLoad else { return }
-        pendingSceneToLoad = nil
-        editor_loadScene(from: url)
+        requestDestructiveSceneAction(
+            { editor_loadScene(from: url) },
+            describing: "loading a new scene",
+            showAlert: $showUnsavedChangesAlert,
+            alertMessage: $unsavedChangesAlertMessage
+        )
     }
 
     /// Save the project. Projects persist as folders (scenes + imported assets on
@@ -1354,14 +1522,61 @@ public struct EditorView: View {
         editor_handleSave()
     }
 
-    /// Start a fresh, unsaved scene (File → Add New Scene).
+    /// Start a fresh scene (File → Add New Scene) and immediately write it to disk
+    /// as a uniquely-named `.untoldscene` file, so it behaves like any other scene
+    /// from the start (savable in place, visible in the tree) instead of staying
+    /// path-less until the user later does Save As.
     private func editor_newScene() {
+        guard gameMode == false else {
+            showBlockedDuringPlayAlert = true
+            return
+        }
+        guard let basePath = assetBasePath else {
+            showSaveBasePathAlert = true
+            return
+        }
+
+        let scenesFolder = basePath.appendingPathComponent("Scenes", isDirectory: true)
+        try? FileManager.default.createDirectory(at: scenesFolder, withIntermediateDirectories: true)
+        let destinationURL = uniqueNewSceneURL(in: scenesFolder)
+
         editor_clearScene()
-        editorController?.currentSceneURL = nil
-        selectionManager.selectScene()
+
+        let sceneData: SceneData = serializeScene()
+        do {
+            try saveSceneDirect(sceneData: sceneData, to: destinationURL)
+            editorController?.currentSceneURL = destinationURL
+            sceneCatalog.refresh()
+            selectionManager.selectScene()
+            EditorSceneDirtyState.shared.clear()
+        } catch {
+            print("❌ Failed to create new scene file at \(destinationURL.lastPathComponent): \(error)")
+            editorController?.currentSceneURL = nil
+            selectionManager.selectScene()
+        }
+    }
+
+    /// Picks a collision-free `.untoldscene` URL inside `folder`: "New Scene",
+    /// then "New Scene 2", "New Scene 3", ... — same auto-increment idiom as
+    /// `createFolder(in:)` in AssetBrowserView.swift.
+    private func uniqueNewSceneURL(in folder: URL) -> URL {
+        let fm = FileManager.default
+        var name = "New Scene"
+        var index = 1
+        var candidate = folder.appendingPathComponent(name).appendingPathExtension(untoldSceneFileExtension)
+        while fm.fileExists(atPath: candidate.path) {
+            index += 1
+            name = "New Scene \(index)"
+            candidate = folder.appendingPathComponent(name).appendingPathExtension(untoldSceneFileExtension)
+        }
+        return candidate
     }
 
     private func editor_clearScene() {
+        guard gameMode == false else {
+            showBlockedDuringPlayAlert = true
+            return
+        }
         destroyAllEntities()
         removeGizmo()
         EditorComponentsState.shared.clear()
@@ -1388,6 +1603,25 @@ public struct EditorView: View {
 
         resetCameraToDefaultTransform(entityId: gameCamera)
 
+        // Environment/post-FX are process-wide globals, not tied to any single
+        // entity destroyAllEntities() destroys — reset them explicitly so a
+        // freshly cleared scene doesn't inherit whatever the previous scene had.
+        applyIBL = false
+        renderEnvironment = false
+        renderSkyBackground = false
+        ambientIntensity = 0.4
+        antiAliasingMode = .fxaa
+        TonemapParams.shared.resetToDefaults()
+        ColorGradingParams.shared.resetToDefaults()
+        BloomThresholdParams.shared.resetToDefaults()
+        VignetteParams.shared.resetToDefaults()
+        ChromaticAberrationParams.shared.resetToDefaults()
+        DepthOfFieldParams.shared.resetToDefaults()
+        SSAOParams.shared.resetToDefaults()
+        FXAAParams.shared.resetToDefaults()
+        SMAAParams.shared.resetToDefaults()
+        NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
+
         editor_entities = getAllGameEntities()
         selectionManager.selectedEntity = nil
         activeEntity = .invalid
@@ -1396,6 +1630,10 @@ public struct EditorView: View {
         sceneGraphModel.refreshHierarchy()
 
         CameraSystem.shared.activeCamera = sceneCamera
+        // Doesn't touch currentSceneURL, so a bare "Reset Scene" leaves this default
+        // content disagreeing with whatever's saved at the old URL. editor_newScene()
+        // overrides this back to clear() once its own save succeeds.
+        EditorSceneDirtyState.shared.markDirty()
     }
 
     private func editor_cameraSave() {
@@ -1460,6 +1698,7 @@ public struct EditorView: View {
         }
 
         destroyEntity(entityId: entityId)
+        EditorSceneDirtyState.shared.markDirty()
 
         editor_entities = getAllGameEntities()
         activeEntity = .invalid
@@ -1476,6 +1715,7 @@ public struct EditorView: View {
         }
 
         destroyEntity(entityId: entityId)
+        EditorSceneDirtyState.shared.markDirty()
 
         editor_entities = getAllGameEntities()
         if selectionManager.selectedEntity == entityId {
@@ -1499,33 +1739,91 @@ public struct EditorView: View {
         setEditorPlayMode(isPlaying)
     }
 
-    private func setEditorPlayMode(_ shouldPlay: Bool) {
+    /// `capturesSnapshot` gates whether Play/Stop takes part in the snapshot/revert
+    /// flow at all. Explore Navigation Mode (Welcome/demo-gallery flythrough) also
+    /// flips `gameMode` through this same function but is camera navigation only,
+    /// not scene editing, so it opts out and keeps its original behavior.
+    private func setEditorPlayMode(_ shouldPlay: Bool, capturesSnapshot: Bool = true) {
+        guard isRestoringPlayMode == false else { return }
+
         let didChangePlayState = isPlaying != shouldPlay || gameMode != shouldPlay
-        isPlaying = shouldPlay
-        gameMode = shouldPlay
-        updateActiveCameraForPlayMode()
-        AnimationSystem.shared.isEnabled = shouldPlay
         guard didChangePlayState else {
+            isPlaying = shouldPlay
+            gameMode = shouldPlay
+            updateActiveCameraForPlayMode()
+            AnimationSystem.shared.isEnabled = shouldPlay
             return
         }
 
-        // Start/stop USC System
         if shouldPlay {
+            if capturesSnapshot {
+                playModeSnapshot = serializeScene()
+            }
+            isPlaying = true
+            gameMode = true
+            updateActiveCameraForPlayMode()
+            AnimationSystem.shared.isEnabled = true
             USCSystem.shared.startPlayMode()
         } else {
+            isPlaying = false
+            gameMode = false
+            AnimationSystem.shared.isEnabled = false
             USCSystem.shared.stopPlayMode()
+            // Active-camera fixup is deliberately NOT done here: if a restore is about
+            // to run, it must target the restored entities (new IDs), not the
+            // about-to-be-destroyed drifted ones. beginPlayModeRestore's completion
+            // handles it instead; the legacy fallback below handles the no-restore case.
+            if capturesSnapshot, let snapshot = playModeSnapshot {
+                beginPlayModeRestore(from: snapshot)
+            } else {
+                updateActiveCameraForPlayMode()
+            }
+        }
+    }
+
+    /// Reverts Play-mode drift (physics/animation/USC-script mutations) by wiping
+    /// the world and reloading the exact pre-Play snapshot. Mirrors the same
+    /// destroy+deserialize sequence used by `editor_handleLoad`/`editor_loadScene`.
+    /// Entity IDs are not stable across this cycle (the engine always allocates
+    /// fresh IDs on deserialize), so the undo stack and editor-side per-entity
+    /// state are cleared along with it — entering Play mode is an accepted
+    /// "undo checkpoint" boundary.
+    private func beginPlayModeRestore(from snapshot: SceneData) {
+        isRestoringPlayMode = true
+        playModeSnapshot = nil
+
+        destroyAllEntities()
+        removeGizmo()
+        EditorComponentsState.shared.clear()
+        EditorGaussianAssetState.shared.clear()
+        EditorUndoManager.shared.clear()
+        sceneAuthoredGameCamera = nil
+
+        deserializeScene(sceneData: snapshot, onGaussianEntityRestored: restoreEditorGaussianState) {
+            NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
+            editor_entities = getAllGameEntities()
+            selectionManager.selectedEntity = nil
+            activeEntity = .invalid
+            gizmoActive = false
+            selectionManager.objectWillChange.send()
+            sceneGraphModel.refreshHierarchy()
+
+            CameraSystem.shared.activeCamera = findSceneCamera()
+            updateActiveCameraForPlayMode()
+
+            isRestoringPlayMode = false
         }
     }
 
     private func enableExploreNavigationMode() {
         playbackSettings.useSceneCameraDuringPlay = true
-        setEditorPlayMode(true)
+        setEditorPlayMode(true, capturesSnapshot: false)
         CameraSystem.shared.activeCamera = findSceneCamera()
     }
 
     private func disableExploreNavigationMode() {
         if isPlaying {
-            setEditorPlayMode(false)
+            setEditorPlayMode(false, capturesSnapshot: false)
         }
     }
 
@@ -1577,6 +1875,7 @@ public struct EditorView: View {
         removeGizmo()
 
         let entityId = createEntity()
+        EditorSceneDirtyState.shared.markDirty()
         // Append entity ID to make the name unique
         let uniqueName = "\(name)-\(entityId)"
         setEntityName(entityId: entityId, name: uniqueName)
@@ -1643,6 +1942,7 @@ public struct EditorView: View {
 
         // Use the engine's setParent function
         setParent(childId: childId, parentId: parentId, offset: simd_float3(0, 0, 0))
+        EditorSceneDirtyState.shared.markDirty()
 
         // Refresh the scene hierarchy to reflect the change
         sceneGraphModel.refreshHierarchy()
@@ -1682,6 +1982,7 @@ public struct EditorView: View {
 
         // Use the engine's removeParent function
         removeParent(childId: childId)
+        EditorSceneDirtyState.shared.markDirty()
 
         // Refresh the scene hierarchy to reflect the change
         sceneGraphModel.refreshHierarchy()
@@ -1968,6 +2269,7 @@ public struct EditorView: View {
                     let importedCamera = findImportedGameCamera(existingEntityIds: existingEntityIds)
                     refreshEditorAfterSceneAuthoredLoad(selecting: entityId, gameCamera: importedCamera)
                     NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
+                    EditorSceneDirtyState.shared.markDirty()
                     print("✅ Scene-authored cameras/lights loaded: \(sourceName)")
                 } else {
                     print("⚠️ Failed to load scene-authored cameras/lights: \(sourceName)")
@@ -1990,6 +2292,7 @@ public struct EditorView: View {
                     let importedCamera = findImportedGameCamera(existingEntityIds: existingEntityIds)
                     refreshEditorAfterSceneAuthoredLoad(selecting: entityId, gameCamera: importedCamera)
                     NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
+                    EditorSceneDirtyState.shared.markDirty()
                     print("✅ Scene-authored cameras/lights loaded: \(sourceName)")
                 } else {
                     print("⚠️ Failed to load scene-authored cameras/lights: \(sourceName)")
