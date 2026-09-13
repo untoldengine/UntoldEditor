@@ -1,4 +1,5 @@
 # Changelog
+## v0.19.0 - 2026-09-13
 ## v0.18.1 - 2026-09-05
 ### 🐞 Fixes
 - [Patch] Added import tooltip (040429b…)
