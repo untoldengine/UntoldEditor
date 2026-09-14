@@ -156,6 +156,8 @@ public struct EditorView: View {
         // Extensions that create pipelines must be registered after the renderer
         // has initialized Metal and loaded the engine shader library.
         registerEditorRenderExtension()
+        // Splat twin swaps preview in the viewport (View > Preview Splat Twins, on by default).
+        GaussianTwinPreviewSettings.shared.activate()
 
         if let r = renderer, let v = renderer?.metalView {
             r.setupCallbacks(gameUpdate: { _ in }, handleInput: r.handleSceneInput)
@@ -1452,6 +1454,7 @@ public struct EditorView: View {
             EditorGaussianAssetState.shared.clear()
             EditorUndoManager.shared.clear()
             EditorSceneDirtyState.shared.clear()
+            GaussianTwinPreviewSettings.shared.sceneDidReset()
             sceneAuthoredGameCamera = nil
             deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
             NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
@@ -1481,6 +1484,7 @@ public struct EditorView: View {
         EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
         EditorSceneDirtyState.shared.clear()
+        GaussianTwinPreviewSettings.shared.sceneDidReset()
         sceneAuthoredGameCamera = nil
 
         deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
@@ -1582,6 +1586,7 @@ public struct EditorView: View {
         EditorComponentsState.shared.clear()
         EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
+        GaussianTwinPreviewSettings.shared.sceneDidReset()
         sceneAuthoredGameCamera = nil
 
         let light = createEntity()
