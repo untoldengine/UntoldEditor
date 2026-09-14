@@ -4,29 +4,41 @@
 #  next-version.sh
 # -------------------------------------------------------------
 #  Description:
-#    Determines the current version of the Untold Editor by
-#    reading the UntoldEngine dependency pin in Package.swift.
+#    Determines the next version of the Untold Editor.
 #
-#    The editor version always mirrors the engine version, so
-#    no commit-log scanning or bump calculation is needed.
+#    The editor version normally mirrors the UntoldEngine
+#    dependency pin in Package.swift (e.g. engine 0.19.0 ->
+#    editor 0.19.0). When you need to ship an editor-only
+#    change without bumping the engine, pass --editor-patch to
+#    append/increment a 4th "editor build" segment instead
+#    (0.19.0 -> 0.19.0.1 -> 0.19.0.2, ...). The moment the
+#    engine pin moves again, the editor version snaps back to
+#    mirroring it (the 4th segment is dropped).
 #
 #  Optional Flags:
-#    --with-v   : Print version with 'v' prefix (e.g. v0.12.7)
-#    --cliff    : Run git-cliff to prepend a changelog section,
-#                 then update editorVersion in UntoldEditorApp.swift
-#    --docs     : Run Docusaurus docs:version command to
-#                 snapshot documentation for the new release
+#    --with-v       : Print version with 'v' prefix (e.g. v0.12.7)
+#    --editor-patch : Cut an editor-only release: bump the 4th
+#                     "editor build" segment instead of mirroring
+#                     the engine pin. Requires the engine pin to be
+#                     unchanged since the last editor release.
+#    --cliff        : Run git-cliff to prepend a changelog section,
+#                     then update editorVersion in UntoldEditorApp.swift
+#    --docs         : Run Docusaurus docs:version command to
+#                     snapshot documentation for the new release
 #
 #  Usage Examples:
-#    ./scripts/next-version.sh               # prints current engine-pinned version
+#    ./scripts/next-version.sh               # prints next version
 #    ./scripts/next-version.sh --with-v
 #    ./scripts/next-version.sh --cliff
 #    ./scripts/next-version.sh --cliff --docs
+#    ./scripts/next-version.sh --cliff --editor-patch   # editor-only release
 #
 #  Notes:
 #    - Must be executed from the repository root.
 #    - Requires Package.swift to pin UntoldEngine with exact: "x.y.z".
-#    - To change the editor version, update the engine pin in Package.swift first.
+#    - Requires UntoldEditorApp.swift to have: static let editorVersion = "x.y.z[.w]"
+#    - To bump the engine-mirrored version, update the engine pin in
+#      Package.swift first, then run this script without --editor-patch.
 #
 # -------------------------------------------------------------
 
@@ -35,23 +47,58 @@ set -euo pipefail
 WITH_V="false"
 DO_CLIFF="false"
 DO_DOCS="false"
+EDITOR_PATCH="false"
 
 for arg in "$@"; do
   case "$arg" in
-    --with-v) WITH_V="true" ;;
-    --cliff)  DO_CLIFF="true" ;;
-    --docs)   DO_DOCS="true" ;;
+    --with-v)       WITH_V="true" ;;
+    --cliff)        DO_CLIFF="true" ;;
+    --docs)         DO_DOCS="true" ;;
+    --editor-patch) EDITOR_PATCH="true" ;;
     *) echo "Unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
 
-# Read version from UntoldEngine dependency pin in Package.swift
-NEXT="$(grep -oE 'exact: "[0-9]+\.[0-9]+\.[0-9]+"' Package.swift | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-[[ -n "${NEXT}" ]] || {
+MAIN_SWIFT="Sources/UntoldEditor/UntoldEditorApp.swift"
+
+# Read the engine version from the UntoldEngine dependency pin in Package.swift
+ENGINE_VER="$(grep -oE 'exact: "[0-9]+\.[0-9]+\.[0-9]+"' Package.swift | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+[[ -n "${ENGINE_VER}" ]] || {
   echo "Could not read engine version from Package.swift." >&2
   echo "Make sure UntoldEngine is pinned with: exact: \"x.y.z\"" >&2
   exit 1
 }
+
+# Read the currently released editor version (may carry a 4th "editor build" segment)
+CURRENT_VERSION_PATTERN='static let editorVersion = "([0-9]+\.[0-9]+\.[0-9]+)(\.[0-9]+)?"'
+CURRENT_LINE="$(grep -E "${CURRENT_VERSION_PATTERN}" "${MAIN_SWIFT}" || true)"
+[[ -n "${CURRENT_LINE}" ]] || {
+  echo "Could not find 'static let editorVersion = \"x.y.z\"' in ${MAIN_SWIFT}." >&2
+  exit 1
+}
+if [[ "${CURRENT_LINE}" =~ ${CURRENT_VERSION_PATTERN} ]]; then
+  CURRENT_BASE="${BASH_REMATCH[1]}"
+  CURRENT_REV="${BASH_REMATCH[2]#.}"
+  CURRENT_REV="${CURRENT_REV:-0}"
+fi
+
+# Decide the next version
+if [[ "${EDITOR_PATCH}" == "true" ]]; then
+  if [[ "${ENGINE_VER}" != "${CURRENT_BASE}" ]]; then
+    echo "Engine pin (${ENGINE_VER}) differs from the last editor release's base (${CURRENT_BASE})." >&2
+    echo "--editor-patch is for editor-only releases on top of an unchanged engine version." >&2
+    echo "Run without --editor-patch to cut a normal engine-mirrored release instead." >&2
+    exit 1
+  fi
+  NEXT="${ENGINE_VER}.$(( CURRENT_REV + 1 ))"
+else
+  if [[ "${ENGINE_VER}" == "${CURRENT_BASE}" ]]; then
+    echo "Engine pin (${ENGINE_VER}) is unchanged since the last editor release (${CURRENT_BASE}.${CURRENT_REV})." >&2
+    echo "Bump the engine pin in Package.swift first, or pass --editor-patch to cut an editor-only release." >&2
+    exit 1
+  fi
+  NEXT="${ENGINE_VER}"
+fi
 
 # Print version (default behavior)
 if [[ "${WITH_V}" == "true" ]]; then
@@ -74,13 +121,7 @@ if [[ "${DO_CLIFF}" == "true" ]]; then
 
   # Update the editor version constant in UntoldEditorApp.swift. The launch log line and
   # the window title both read from it, so this is the only string to bump.
-  MAIN_SWIFT="Sources/UntoldEditor/UntoldEditorApp.swift"
-  VERSION_PATTERN='static let editorVersion = "[^"]*"'
-  grep -qE "${VERSION_PATTERN}" "${MAIN_SWIFT}" || {
-    echo "Could not find 'static let editorVersion = \"x.y.z\"' in ${MAIN_SWIFT}." >&2
-    exit 1
-  }
-  sed -i '' 's/'"${VERSION_PATTERN}"'/static let editorVersion = "'"${NEXT}"'"/' "${MAIN_SWIFT}"
+  sed -i '' -E 's/'"${CURRENT_VERSION_PATTERN}"'/static let editorVersion = "'"${NEXT}"'"/' "${MAIN_SWIFT}"
   echo "Updated editorVersion to ${NEXT} in ${MAIN_SWIFT}."
 
 fi
