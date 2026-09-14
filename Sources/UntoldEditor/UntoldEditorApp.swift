@@ -20,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var window: NSWindow!
 
     private let appName = "Untold Engine Editor"
-    static let editorVersion = "0.19.0"
+    static let editorVersion = "0.19.0.1"
 
     private var projectTitleSubscription: AnyCancellable?
 
