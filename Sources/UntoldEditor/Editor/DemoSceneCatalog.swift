@@ -27,7 +27,14 @@ enum DemoSceneSource {
             return url
         case let .bundledManifest(resourceName, fileExtension),
              let .bundledAsset(resourceName, fileExtension):
+            // Same three-tier fallback as thumbnail lookups (see Bundle+ResourceFallback.swift):
+            // Bundle.main's resource index, then a direct filesystem check under it (packaged
+            // .app layout), then the unpackaged `swift run`/Xcode dev-build layout.
             return Bundle.main.url(forResource: resourceName, withExtension: fileExtension)
+                ?? Bundle.mainResourceURLByPath(forResource: resourceName, withExtension: fileExtension)
+                ?? Bundle.devBuildResourceURL(
+                    forResource: resourceName, withExtension: fileExtension, bundleName: "UntoldEditor_UntoldEditor.bundle"
+                )
         }
     }
 
