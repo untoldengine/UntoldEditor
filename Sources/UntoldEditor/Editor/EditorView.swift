@@ -156,6 +156,8 @@ public struct EditorView: View {
         // Extensions that create pipelines must be registered after the renderer
         // has initialized Metal and loaded the engine shader library.
         registerEditorRenderExtension()
+        // The working set the frame draws from (View > Splat Debug > Working Set).
+        EditorGaussianRuntimeSettings.shared.activate()
 
         if let r = renderer, let v = renderer?.metalView {
             r.setupCallbacks(gameUpdate: { _ in }, handleInput: r.handleSceneInput)

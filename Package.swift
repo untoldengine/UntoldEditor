@@ -13,7 +13,10 @@ let package = Package(
         // Use a branch during active development:
         // .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
         // Or pin to a release:
-        .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
+        // TEMPORARY: the Splat Debug switches and the runtime limits this branch exposes land in
+        // untoldengine/UntoldEngine#1207; this pin follows that branch until it merges, then goes
+        // back to develop.
+        .package(url: "https://github.com/miolabs/UntoldEngine.git", branch: "feature/gaussian_render_fidelity_upstream"),
     ],
     targets: [
         .executableTarget(
