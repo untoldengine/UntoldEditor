@@ -2,12 +2,20 @@
 
 set -e  # Exit on error
 
+# Optional Flags:
+#   --sign : Code sign the app bundle with a Developer ID Application identity
+#            (required before the app can be notarized or run cleanly on other Macs).
+#            Override the identity with the SIGNING_IDENTITY env var.
+SIGN_APP="false"
+[[ "${1:-}" == "--sign" ]] && SIGN_APP="true"
+
 echo "🔨 Building UntoldEditor app bundle..."
 
 # Configuration
 APP_NAME="Untold Engine Studio"
 EXECUTABLE_NAME="UntoldEditor"
 BUNDLE_ID="com.untoldengine.studio"
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-Developer ID Application: UNTOLD ENGINE STUDIOS LLC (PXXZLXYJ26)}"
 
 # Determine version (env -> release/* branch -> latest tag vX.Y.Z -> fallback)
 detect_version() {
@@ -27,9 +35,6 @@ detect_version() {
 VERSION="$(detect_version)"
 BUILD_DIR=".build/arm64-apple-macosx/release"
 APP_BUNDLE="$APP_NAME.app"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-UNTOLD_ENGINE_ROOT="$SCRIPT_DIR/../UntoldEngine"
-METALLIB_PATH="$UNTOLD_ENGINE_ROOT/Sources/UntoldEngine/UntoldEngineKernels/UntoldEngineKernels.metallib"
 
 # Clean previous bundle
 echo "🧹 Cleaning previous bundle..."
@@ -48,27 +53,35 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 echo "📋 Copying executable..."
 cp "$BUILD_DIR/$EXECUTABLE_NAME" "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 
-# Copy Metal shaders
-if [ -f "$METALLIB_PATH" ]; then
-    echo "🎨 Copying Metal shaders..."
-    cp "$METALLIB_PATH" "$APP_BUNDLE/Contents/Resources/"
-else
-    echo "⚠️  Warning: Metal shader library not found at $METALLIB_PATH"
-fi
-
-# Copy UntoldEngine's SPM resource bundle (Bundle.module) to the app root.
-# Without this, Bundle.module's generated accessor can only find shaders/HDR
-# skies/icons via a hardcoded fallback path pointing at the build machine's
-# own .build directory — the app crashes with an uncatchable fatalError on
-# any other machine. See Bundle.main.bundleURL.appendingPathComponent(...)
-# lookup in SwiftPM's generated resource_bundle_accessor.swift.
-UNTOLD_ENGINE_RESOURCE_BUNDLE="$BUILD_DIR/UntoldEngine_UntoldEngine.bundle"
-if [ -d "$UNTOLD_ENGINE_RESOURCE_BUNDLE" ]; then
-    echo "📦 Copying UntoldEngine resource bundle..."
-    cp -R "$UNTOLD_ENGINE_RESOURCE_BUNDLE" "$APP_BUNDLE/"
-else
-    echo "⚠️  Warning: UntoldEngine resource bundle not found at $UNTOLD_ENGINE_RESOURCE_BUNDLE — run 'swift build' first"
-fi
+# Flatten each target's SPM resource bundle (shaders/HDR skies/light icons for UntoldEngine,
+# demo scene/asset pack thumbnails for UntoldEditor) into Contents/Resources. Both targets look
+# these up via Bundle.main first (falling back to Bundle.module only on platforms/targets that
+# still ship the resource bundle as-is), so placing the files directly in Contents/Resources
+# lets Bundle.main find them by name. Copying a whole .bundle folder to the app root instead
+# would make codesign refuse to seal the app ("unsealed contents present in the bundle root"),
+# which is fatal for notarization.
+flatten_resource_bundle() {
+    local bundle_path="$1"
+    local label="$2"
+    if [ -d "$bundle_path" ]; then
+        echo "📦 Copying $label resources..."
+        # Fail loudly on a filename collision with resources already flattened in from an
+        # earlier call, rather than silently overwriting one target's resource with another's.
+        while IFS= read -r -d '' src_file; do
+            rel_path="${src_file#"$bundle_path"/}"
+            dest_file="$APP_BUNDLE/Contents/Resources/$rel_path"
+            if [ -e "$dest_file" ]; then
+                echo "❌ Error: $label resource '$rel_path' collides with a resource already copied into Contents/Resources." >&2
+                exit 1
+            fi
+        done < <(find "$bundle_path" -type f -print0)
+        cp -R "$bundle_path"/. "$APP_BUNDLE/Contents/Resources/"
+    else
+        echo "⚠️  Warning: $label resource bundle not found at $bundle_path — run 'swift build' first"
+    fi
+}
+flatten_resource_bundle "$BUILD_DIR/UntoldEngine_UntoldEngine.bundle" "UntoldEngine"
+flatten_resource_bundle "$BUILD_DIR/UntoldEditor_UntoldEditor.bundle" "UntoldEditor"
 
 # Copy app icon if it exists
 if [ -f "Resources/AppIcon.icns" ]; then
@@ -76,8 +89,14 @@ if [ -f "Resources/AppIcon.icns" ]; then
     cp "Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
 fi
 
-# Copy exporter scripts
+# Copy exporter scripts. SPM only checks the dependency out under .build/checkouts/ for a
+# git-URL dependency; while Package.swift points at a local path (e.g. during engine+editor
+# co-development), fall back to that sibling checkout directly.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPTS_SRC=".build/checkouts/UntoldEngine/scripts"
+if [ ! -d "$SCRIPTS_SRC" ]; then
+    SCRIPTS_SRC="$SCRIPT_DIR/../UntoldEngine/scripts"
+fi
 if [ -d "$SCRIPTS_SRC" ]; then
     echo "📜 Copying exporter scripts..."
     mkdir -p "$APP_BUNDLE/Contents/Resources/scripts"
@@ -132,6 +151,20 @@ EOF
 
 # Make executable
 chmod +x "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
+
+# Optionally code sign with a Developer ID Application identity. Required for the app to
+# run on other Macs without a Gatekeeper "damaged" error, and before it can be notarized.
+if [[ "${SIGN_APP}" == "true" ]]; then
+    security find-identity -v -p codesigning | grep -qF "${SIGNING_IDENTITY}" || {
+        echo "❌ Error: Signing identity not found in keychain: ${SIGNING_IDENTITY}" >&2
+        echo "Run 'security find-identity -v -p codesigning' to see available identities." >&2
+        exit 1
+    }
+    echo "🔏 Code signing app bundle with: ${SIGNING_IDENTITY}..."
+    codesign --force --deep --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "$APP_BUNDLE"
+    codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+    echo "✅ App bundle signed."
+fi
 
 echo "✅ App bundle created successfully at: $APP_BUNDLE"
 echo ""

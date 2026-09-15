@@ -712,8 +712,12 @@ struct AssetPackBrowserView: View {
             return nil
         }
 
-        return Bundle.module.url(forResource: thumbnailName, withExtension: "png")
-            .flatMap { NSImage(contentsOf: $0) }
+        return Bundle.editorThumbnailImage(
+            forResource: thumbnailName,
+            extensions: ["png"],
+            bundleName: "UntoldEditor_UntoldEditor.bundle",
+            context: "AssetPackBrowserView"
+        )
     }
 
     private func showStatus(_ message: String, isError: Bool = false) {

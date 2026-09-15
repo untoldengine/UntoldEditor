@@ -363,14 +363,12 @@ private struct DemoSceneCard: View {
     var onSelect: () -> Void
 
     private var thumbnailImage: NSImage? {
-        for ext in ["png", "jpg", "jpeg"] {
-            if let url = Bundle.module.url(forResource: demo.thumbnailName, withExtension: ext),
-               let img = NSImage(contentsOf: url)
-            {
-                return img
-            }
-        }
-        return nil
+        Bundle.editorThumbnailImage(
+            forResource: demo.thumbnailName,
+            extensions: ["png", "jpg", "jpeg"],
+            bundleName: "UntoldEditor_UntoldEditor.bundle",
+            context: "DemoSceneCard"
+        )
     }
 
     var body: some View {
