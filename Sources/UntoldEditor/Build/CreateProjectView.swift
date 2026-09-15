@@ -9,6 +9,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 //
 
+import AppKit
 import SwiftUI
 import UntoldEngine
 
@@ -21,6 +22,7 @@ struct CreateProjectView: View {
     @State private var optimizationLevel: Int = 0 // none
     @State private var teamID: String = ""
     @State private var outputPath: String = ""
+    @State private var isXcodeGenAvailable: Bool = true
 
     @State private var isBuilding: Bool = false
     @State private var buildProgress: String = ""
@@ -51,6 +53,11 @@ struct CreateProjectView: View {
             .background(Color(NSColor.controlBackgroundColor))
 
             Divider()
+
+            if !isXcodeGenAvailable {
+                xcodeGenMissingBanner
+                Divider()
+            }
 
             // Settings Form
             Form {
@@ -157,7 +164,37 @@ struct CreateProjectView: View {
         }
         .onAppear {
             loadDefaultSettings()
+            isXcodeGenAvailable = BuildSystem.isXcodeGenAvailable
         }
+    }
+
+    private var xcodeGenMissingBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.yellow)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("XcodeGen not found")
+                    .font(.subheadline.weight(.semibold))
+                Text("Project creation generates an Xcode project with XcodeGen, which isn't installed. Install it, then try again.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("brew install xcodegen")
+                    .font(.system(.caption, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(4)
+            }
+            Spacer()
+            Button("Copy Command") {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString("brew install xcodegen", forType: .string)
+            }
+            .controlSize(.small)
+        }
+        .padding()
+        .background(Color.yellow.opacity(0.12))
     }
 
     private func loadDefaultSettings() {
