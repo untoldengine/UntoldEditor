@@ -33,7 +33,6 @@ detect_version() {
     echo "0.0.0-dev"
 }
 VERSION="$(detect_version)"
-BUILD_DIR=".build/arm64-apple-macosx/release"
 APP_BUNDLE="$APP_NAME.app"
 
 # Clean previous bundle
@@ -43,6 +42,11 @@ rm -rf "$APP_BUNDLE"
 # Build the executable with Swift Package Manager
 echo "🔧 Building executable..."
 swift build --configuration release -Xswiftc -DENGINE_STATS_ENABLED
+
+# Ask SwiftPM where it actually put the build products rather than hardcoding a path — the
+# default build system backend (and its output layout, e.g. .build/<triple>/release vs.
+# .build/out/Products/Release) can change between toolchain versions.
+BUILD_DIR="$(swift build --configuration release -Xswiftc -DENGINE_STATS_ENABLED --show-bin-path)"
 
 # Create app bundle structure
 echo "📦 Creating app bundle structure..."
@@ -65,17 +69,25 @@ flatten_resource_bundle() {
     local label="$2"
     if [ -d "$bundle_path" ]; then
         echo "📦 Copying $label resources..."
+        # SwiftPM resource bundles are flat (files directly at the bundle root) under the
+        # legacy "native" build system, but the "swiftbuild" backend wraps them in a full
+        # Contents/Resources bundle structure (with its own Contents/Info.plist) for code
+        # signing. Flatten from whichever layout the active build system actually produced.
+        local resource_root="$bundle_path"
+        if [ -d "$bundle_path/Contents/Resources" ]; then
+            resource_root="$bundle_path/Contents/Resources"
+        fi
         # Fail loudly on a filename collision with resources already flattened in from an
         # earlier call, rather than silently overwriting one target's resource with another's.
         while IFS= read -r -d '' src_file; do
-            rel_path="${src_file#"$bundle_path"/}"
+            rel_path="${src_file#"$resource_root"/}"
             dest_file="$APP_BUNDLE/Contents/Resources/$rel_path"
             if [ -e "$dest_file" ]; then
                 echo "❌ Error: $label resource '$rel_path' collides with a resource already copied into Contents/Resources." >&2
                 exit 1
             fi
-        done < <(find "$bundle_path" -type f -print0)
-        cp -R "$bundle_path"/. "$APP_BUNDLE/Contents/Resources/"
+        done < <(find "$resource_root" -type f -print0)
+        cp -R "$resource_root"/. "$APP_BUNDLE/Contents/Resources/"
     else
         echo "⚠️  Warning: $label resource bundle not found at $bundle_path — run 'swift build' first"
     fi
