@@ -29,6 +29,13 @@ enum EditorFeatureFlags {
     /// When disabled, users write game logic in Swift within their game project
     static let enableScriptComponent: Bool = true
 
+    // MARK: - Code Components
+
+    /// Components and editor extensions written in Swift, compiled and loaded by the editor
+    /// from the open project (`Sources/<Project>Components`), with their `@UntoldAttribute`
+    /// properties in the Inspector and their `@UntoldMenu` items in the menu bar.
+    static let enableCodeComponents: Bool = true
+
     // MARK: - Future Use Cases
 
     // When these might be re-enabled:
