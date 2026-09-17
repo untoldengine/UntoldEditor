@@ -1300,8 +1300,11 @@ public struct EditorView: View {
         let fm = FileManager.default
         let projectName = projectURL.lastPathComponent
         let xcodeProjectPath = projectURL.appendingPathComponent("\(projectName).xcodeproj")
-        guard fm.fileExists(atPath: xcodeProjectPath.path) else {
-            invalidProjectMessage = "This doesn't appear to be a valid UntoldEngine project.\n\nExpected to find: \(projectName).xcodeproj"
+        // XcodeGen projects are defined by project.yml; the .xcodeproj is generated from it and
+        // is often not checked in, so either one marks a project folder.
+        let projectSpecPath = projectURL.appendingPathComponent("project.yml")
+        guard fm.fileExists(atPath: xcodeProjectPath.path) || fm.fileExists(atPath: projectSpecPath.path) else {
+            invalidProjectMessage = "This doesn't appear to be a valid UntoldEngine project.\n\nExpected to find: \(projectName).xcodeproj or project.yml"
             showInvalidProjectAlert = true
             showWelcomeStart = true
             return false
