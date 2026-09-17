@@ -156,6 +156,8 @@ public struct EditorView: View {
         // Extensions that create pipelines must be registered after the renderer
         // has initialized Metal and loaded the engine shader library.
         registerEditorRenderExtension()
+        // Compiles and loads the open project's code components and editor extensions.
+        ComponentLibraryController.shared.activate()
 
         if let r = renderer, let v = renderer?.metalView {
             r.setupCallbacks(gameUpdate: { _ in }, handleInput: r.handleSceneInput)
@@ -306,6 +308,13 @@ public struct EditorView: View {
             sceneCatalog.refresh()
             syncEditorAvailabilityForExperienceMode()
 
+            // `UntoldEditor --open-project <folder>` skips the welcome screen.
+            if let launchProject = EditorLaunchOptions.projectToOpen() {
+                switchToEditMode()
+                showWelcomeStart = false
+                openProject(at: launchProject)
+            }
+
             // Listen for asset instance loading completion
             NotificationCenter.default.addObserver(
                 forName: .assetInstanceDidLoad,
@@ -323,6 +332,19 @@ public struct EditorView: View {
                 queue: .main
             ) { _ in
                 cleanupForProjectSwitch()
+            }
+
+            // A freshly built component library cannot replace the running one mid-play.
+            // Registered here, not as another view modifier: this body is at the limit of
+            // what the type checker resolves in reasonable time.
+            NotificationCenter.default.addObserver(
+                forName: .codeComponentsRequestStopPlay,
+                object: nil,
+                queue: .main
+            ) { _ in
+                if isPlaying {
+                    setEditorPlayMode(false)
+                }
             }
         }
         .onChange(of: playbackSettings.useSceneCameraDuringPlay) { _, _ in
@@ -657,6 +679,7 @@ public struct EditorView: View {
         case explore
         case console
         case tasks
+        case components
     }
 
     private enum EnvEffectsTab: Hashable {
@@ -859,6 +882,9 @@ public struct EditorView: View {
             panelTabButton(.explore, title: "Explore", icon: "square.grid.2x2")
             panelTabButton(.console, title: "Console", icon: "terminal")
             panelTabButton(.tasks, title: "Tasks", icon: "list.bullet.rectangle")
+            if EditorFeatureFlags.enableCodeComponents {
+                panelTabButton(.components, title: "Components", icon: "puzzlepiece.extension")
+            }
         }
         .padding(3)
         .background(Color.editorSurface.opacity(0.6))
@@ -907,6 +933,7 @@ public struct EditorView: View {
         case .explore: return "Browse asset packs."
         case .console: return "Show Console"
         case .tasks: return "Show background tasks (exports, cooks, builds, loads)"
+        case .components: return "Show the project's code components: build status, loaded types, compiler errors"
         }
     }
 
@@ -916,6 +943,7 @@ public struct EditorView: View {
         case .explore: return "Filter packs"
         case .console: return "Filter console"
         case .tasks: return "Filter tasks"
+        case .components: return "Filter components"
         }
     }
 
@@ -1069,6 +1097,8 @@ public struct EditorView: View {
                     LogConsoleView(searchQuery: $bottomSearchQuery, autoScroll: $consoleAutoScroll)
                 case .tasks:
                     TasksPanelView(searchQuery: $bottomSearchQuery)
+                case .components:
+                    ComponentsPanelView(searchQuery: $bottomSearchQuery)
                 }
             }
             .frame(height: 200)
@@ -1260,7 +1290,13 @@ public struct EditorView: View {
             showWelcomeStart = true
             return
         }
+        openProject(at: projectURL)
+    }
 
+    /// Validates and opens the project folder at `projectURL`. Shared by the Open panel and the
+    /// `--open-project` launch argument.
+    @discardableResult
+    private func openProject(at projectURL: URL) -> Bool {
         let fm = FileManager.default
         let projectName = projectURL.lastPathComponent
         let xcodeProjectPath = projectURL.appendingPathComponent("\(projectName).xcodeproj")
@@ -1268,7 +1304,7 @@ public struct EditorView: View {
             invalidProjectMessage = "This doesn't appear to be a valid UntoldEngine project.\n\nExpected to find: \(projectName).xcodeproj"
             showInvalidProjectAlert = true
             showWelcomeStart = true
-            return
+            return false
         }
 
         let gameDataPath = projectURL
@@ -1284,7 +1320,7 @@ public struct EditorView: View {
                 invalidProjectMessage = "Failed to create GameData folder structure:\n\n\(error.localizedDescription)"
                 showInvalidProjectAlert = true
                 showWelcomeStart = true
-                return
+                return false
             }
         }
 
@@ -1302,6 +1338,7 @@ public struct EditorView: View {
 
         print("✅ Opened project: \(projectName)")
         print("📁 Asset base path set to: \(gameDataPath.path)")
+        return true
     }
 
     private func editor_handleSave() {
@@ -1451,6 +1488,7 @@ public struct EditorView: View {
             EditorComponentsState.shared.clear()
             EditorGaussianAssetState.shared.clear()
             EditorUndoManager.shared.clear()
+            EditorExtensionHost.shared.sceneDidReset()
             EditorSceneDirtyState.shared.clear()
             sceneAuthoredGameCamera = nil
             deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
@@ -1480,6 +1518,7 @@ public struct EditorView: View {
         EditorComponentsState.shared.clear()
         EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
+        EditorExtensionHost.shared.sceneDidReset()
         EditorSceneDirtyState.shared.clear()
         sceneAuthoredGameCamera = nil
 
@@ -1582,6 +1621,7 @@ public struct EditorView: View {
         EditorComponentsState.shared.clear()
         EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
+        EditorExtensionHost.shared.sceneDidReset()
         sceneAuthoredGameCamera = nil
 
         let light = createEntity()
@@ -1764,11 +1804,14 @@ public struct EditorView: View {
             updateActiveCameraForPlayMode()
             AnimationSystem.shared.isEnabled = true
             USCSystem.shared.startPlayMode()
+            ComponentLibraryController.shared.playModeDidStart()
         } else {
             isPlaying = false
             gameMode = false
             AnimationSystem.shared.isEnabled = false
             USCSystem.shared.stopPlayMode()
+            // A library built during play waits for the snapshot restore below before it loads.
+            ComponentLibraryController.shared.playModeDidStop(restoring: capturesSnapshot && playModeSnapshot != nil)
             // Active-camera fixup is deliberately NOT done here: if a restore is about
             // to run, it must target the restored entities (new IDs), not the
             // about-to-be-destroyed drifted ones. beginPlayModeRestore's completion
@@ -1812,6 +1855,7 @@ public struct EditorView: View {
             updateActiveCameraForPlayMode()
 
             isRestoringPlayMode = false
+            ComponentLibraryController.shared.playModeRestoreDidFinish()
         }
     }
 
