@@ -587,15 +587,8 @@
             activeHitGizmoEntity = .invalid
 
             // A handle of an entity written in code (a spline's control point) is drawn over
-            // everything, so it takes the click before whatever mesh lies under it. Selecting it
-            // selects its entity and puts the move gizmo on the point.
-            if let rayContext,
-               let handle = EditorRepresentationHandles.pick(rayOrigin: rayContext.rayOrigin, rayDirection: rayContext.rayDirection)
-            {
-                EditorRepresentationHandles.select(handle)
-                activeEntity = handle.entityId
-                selectionDelegate?.didSelectEntity(handle.entityId)
-                selectionDelegate?.resetActiveAxis()
+            // everything, so it takes the click before whatever mesh lies under it.
+            if selectHandleUnderCursor(currentLocation: currentLocation, view: view) {
                 return
             }
             EditorRepresentationHandles.select(nil)
@@ -646,14 +639,15 @@
             }
 
             let currentLocation = gestureRecognizer.location(in: view)
-            let (_, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
-            guard hit == false else {
+
+            // A handle of an entity written in code is a small target made to be clicked, so
+            // either button selects it; it is checked before meshes because it is drawn over them.
+            if selectHandleUnderCursor(currentLocation: currentLocation, view: view) {
                 return
             }
-            // A handle of an entity written in code has no mesh, but it is not empty space.
-            if let rayContext = raycastContext(currentLocation: currentLocation, view: view),
-               EditorRepresentationHandles.pick(rayOrigin: rayContext.rayOrigin, rayDirection: rayContext.rayDirection) != nil
-            {
+
+            let (_, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
+            guard hit == false else {
                 return
             }
 
@@ -662,6 +656,32 @@
             editorController?.activeAxis = .none
             activeHitGizmoEntity = .invalid
             clearViewportSelection()
+        }
+
+        /// Selects the handle under the cursor, if there is one: its entity becomes the
+        /// selection and the move gizmo goes on the point. Returns `false` when no handle is there.
+        func selectHandleUnderCursor(currentLocation: NSPoint, view: NSView) -> Bool {
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera()),
+                  let handle = EditorRepresentationHandles.pick(
+                      atViewLocation: currentLocation,
+                      viewSize: view.bounds.size,
+                      viewSpace: cameraComponent.viewSpace,
+                      perspectiveSpace: renderInfo.perspectiveSpace
+                  )
+            else {
+                return false
+            }
+
+            gizmoActive = false
+            removeGizmo()
+            editorController?.activeMode = .none
+            editorController?.activeAxis = .none
+            activeHitGizmoEntity = .invalid
+            EditorRepresentationHandles.select(handle)
+            activeEntity = handle.entityId
+            selectionDelegate?.didSelectEntity(handle.entityId)
+            selectionDelegate?.resetActiveAxis()
+            return true
         }
 
         /// Drops the engine-side selection and tells the editor so the SwiftUI

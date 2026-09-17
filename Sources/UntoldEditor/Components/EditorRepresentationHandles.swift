@@ -32,9 +32,6 @@ enum EditorRepresentationHandles {
         let tint: SIMD3<Float>
     }
 
-    /// How close, on screen, a click has to land: a fraction of the gizmo's screen size.
-    static let pickScreenFraction: Float = 0.18
-
     private static var selected: Handle?
     private static var dragStartValue: UntoldAttributeValue?
 
@@ -99,45 +96,52 @@ enum EditorRepresentationHandles {
 
     // MARK: Picking
 
-    /// The handle under a click, if one is close enough to the ray on screen. Among several,
-    /// the one nearest to the ray relative to its own pick radius wins, so a far handle behind
-    /// a near one does not steal the click.
+    /// How far from a handle's centre, in points, a click still counts.
+    static let pickDistancePoints: Float = 14
+
+    /// The handle under a click. `location` and `viewSize` are in the viewport view's own
+    /// coordinates (points, origin bottom-left, as its gesture recognizers report them). Each
+    /// handle is projected with the camera's matrices, so this matches what is on screen on
+    /// any display; the nearest one within `pickDistancePoints` wins.
     static func pick(
-        rayOrigin: SIMD3<Float>,
-        rayDirection: SIMD3<Float>,
-        viewportHeight: Float? = renderInfo.viewPort?.y,
-        fieldOfView: Float = fov
+        atViewLocation location: CGPoint,
+        viewSize: CGSize,
+        viewSpace: simd_float4x4,
+        perspectiveSpace: simd_float4x4
     ) -> Handle? {
-        pick(among: placed(), rayOrigin: rayOrigin, rayDirection: rayDirection, viewportHeight: viewportHeight, fieldOfView: fieldOfView)
+        pick(among: placed(), atViewLocation: location, viewSize: viewSize, viewSpace: viewSpace, perspectiveSpace: perspectiveSpace)
     }
 
     static func pick(
         among candidates: [Placed],
-        rayOrigin: SIMD3<Float>,
-        rayDirection: SIMD3<Float>,
-        viewportHeight: Float?,
-        fieldOfView: Float
+        atViewLocation location: CGPoint,
+        viewSize: CGSize,
+        viewSpace: simd_float4x4,
+        perspectiveSpace: simd_float4x4,
+        maxDistance: Float = pickDistancePoints
     ) -> Handle? {
-        let length = simd_length(rayDirection)
-        guard length > 0.0001, length.isFinite, let viewportHeight, viewportHeight > 0 else { return nil }
-        let direction = rayDirection / length
-        let pixels = gizmoDesiredScreenSize * pickScreenFraction
-
-        var best: (handle: Handle, score: Float)?
+        guard viewSize.width > 0, viewSize.height > 0 else { return nil }
+        let viewProjection = perspectiveSpace * viewSpace
+        var best: (handle: Handle, distance: Float)?
         for candidate in candidates {
-            let toPoint = candidate.worldPosition - rayOrigin
-            let depth = simd_dot(toPoint, direction)
-            guard depth > 0 else { continue }
-            let distance = simd_length(simd_cross(toPoint, direction))
-            // The world size of `pixels` at that depth, as the gizmo sizes itself.
-            let radius = 2 * depth * tan(fieldOfView * 0.5) * (pixels / viewportHeight)
-            guard radius > 0, distance <= radius else { continue }
-            let score = distance / radius
-            if best == nil || score < best!.score {
-                best = (candidate.handle, score)
+            guard let projected = project(candidate.worldPosition, viewProjection: viewProjection, viewSize: viewSize) else { continue }
+            let distance = hypot(projected.x - Float(location.x), projected.y - Float(location.y))
+            guard distance <= maxDistance else { continue }
+            if best == nil || distance < best!.distance {
+                best = (candidate.handle, distance)
             }
         }
         return best?.handle
+    }
+
+    /// Where a world position lands in the view, in points with the origin bottom-left, the
+    /// frame `rayDirectionInWorldSpace` reads clicks in. `nil` behind the camera.
+    static func project(_ world: SIMD3<Float>, viewProjection: simd_float4x4, viewSize: CGSize) -> SIMD2<Float>? {
+        let clip = viewProjection * SIMD4<Float>(world.x, world.y, world.z, 1)
+        guard clip.w > 0.0001 else { return nil }
+        let ndc = SIMD2<Float>(clip.x, clip.y) / clip.w
+        guard ndc.x.isFinite, ndc.y.isFinite else { return nil }
+        return SIMD2<Float>((ndc.x + 1) * 0.5 * Float(viewSize.width), (ndc.y + 1) * 0.5 * Float(viewSize.height))
     }
 
     // MARK: Drag undo

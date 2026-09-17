@@ -287,34 +287,56 @@ final class EntityPluginEditorTests: XCTestCase {
         XCTAssertNil(EditorRepresentationHandles.worldPosition(of: EditorRepresentationHandles.Handle(entityId: path.entity, property: "thickness")))
     }
 
-    func test_pickTakesTheHandleNearestTheRayWithinItsScreenRadius() {
-        let near = EditorRepresentationHandles.Handle(entityId: 1, property: "a")
-        let far = EditorRepresentationHandles.Handle(entityId: 1, property: "b")
+    func test_pickTakesTheHandleNearestTheClickOnScreen() {
+        let left = EditorRepresentationHandles.Handle(entityId: 1, property: "a")
+        let right = EditorRepresentationHandles.Handle(entityId: 1, property: "b")
+        let behind = EditorRepresentationHandles.Handle(entityId: 1, property: "c")
         let candidates = [
-            EditorRepresentationHandles.Placed(handle: near, worldPosition: SIMD3<Float>(0.02, 0, -5), tint: .one),
-            EditorRepresentationHandles.Placed(handle: far, worldPosition: SIMD3<Float>(0, 0.01, -20), tint: .one),
+            EditorRepresentationHandles.Placed(handle: left, worldPosition: SIMD3<Float>(-1, 0, -5), tint: .one),
+            EditorRepresentationHandles.Placed(handle: right, worldPosition: SIMD3<Float>(1, 0, -5), tint: .one),
+            EditorRepresentationHandles.Placed(handle: behind, worldPosition: SIMD3<Float>(0, 0, 5), tint: .one),
         ]
-        let fieldOfView: Float = .pi / 2
+        // A camera at the origin looking down -Z, a 90 degree square view of 1000 by 1000 points:
+        // x = 1 at depth 5 lands 100 points right of the centre.
+        let view = matrix_identity_float4x4
+        let projection = matrixPerspectiveRightHand(fovyRadians: .pi / 2, aspectRatio: 1, nearZ: 0.1, farZ: 100)
+        let size = CGSize(width: 1000, height: 1000)
+        func pick(_ x: CGFloat, _ y: CGFloat) -> EditorRepresentationHandles.Handle? {
+            EditorRepresentationHandles.pick(among: candidates, atViewLocation: CGPoint(x: x, y: y), viewSize: size, viewSpace: view, perspectiveSpace: projection)
+        }
 
-        // Straight down -Z: both are close to the ray; the far one is nearer relative to its radius.
-        XCTAssertEqual(
-            EditorRepresentationHandles.pick(among: candidates, rayOrigin: .zero, rayDirection: SIMD3<Float>(0, 0, -1), viewportHeight: 1000, fieldOfView: fieldOfView),
-            far,
-            "0.01 at depth 20 is a smaller fraction of the pick radius than 0.02 at depth 5"
+        XCTAssertEqual(pick(600, 500), right, "dead on")
+        XCTAssertEqual(pick(608, 506), right, "within the pick distance")
+        XCTAssertEqual(pick(400, 500), left)
+        XCTAssertNil(pick(500, 500), "between the two, too far from either")
+        XCTAssertNil(pick(500, 900), "nothing there")
+        XCTAssertNil(pick(500, 500), "the one behind the camera projects onto the centre only in appearance; it is never picked")
+        XCTAssertNil(EditorRepresentationHandles.pick(among: candidates, atViewLocation: CGPoint(x: 600, y: 500), viewSize: .zero, viewSpace: view, perspectiveSpace: projection))
+    }
+
+    func test_projectionAgreesWithTheEnginesClickRay() {
+        // The same frame the viewport's gesture recognizers report in: what projects to a view
+        // location must be on the ray the engine builds from that location. This guards the
+        // screen orientation, on which a click landing on a handle depends.
+        let eye = SIMD3<Float>(2, 3, 8)
+        let view = matrix_look_at_right_hand(eye, SIMD3<Float>(0, 0.5, 0), SIMD3<Float>(0, 1, 0))
+        let projection = matrixPerspectiveRightHand(fovyRadians: degreesToRadians(degrees: 65), aspectRatio: 1.6, nearZ: 0.1, farZ: 100)
+        let size = CGSize(width: 1600, height: 1000)
+        let world = SIMD3<Float>(-0.5, 1.2, 1.0)
+
+        let projected = EditorRepresentationHandles.project(world, viewProjection: projection * view, viewSize: size)!
+        let direction = rayDirectionInWorldSpace(
+            uMouseLocation: projected,
+            uViewPortDim: SIMD2<Float>(Float(size.width), Float(size.height)),
+            uPerspectiveSpace: projection,
+            uViewSpace: view
         )
-        XCTAssertEqual(
-            EditorRepresentationHandles.pick(among: [candidates[0]], rayOrigin: .zero, rayDirection: SIMD3<Float>(0, 0, -1), viewportHeight: 1000, fieldOfView: fieldOfView),
-            near
-        )
-        XCTAssertNil(
-            EditorRepresentationHandles.pick(among: candidates, rayOrigin: .zero, rayDirection: SIMD3<Float>(1, 0, 0), viewportHeight: 1000, fieldOfView: fieldOfView),
-            "a ray that misses both"
-        )
-        XCTAssertNil(
-            EditorRepresentationHandles.pick(among: candidates, rayOrigin: .zero, rayDirection: SIMD3<Float>(0, 0, 1), viewportHeight: 1000, fieldOfView: fieldOfView),
-            "handles behind the camera are never picked"
-        )
-        XCTAssertNil(EditorRepresentationHandles.pick(among: candidates, rayOrigin: .zero, rayDirection: .zero, viewportHeight: 1000, fieldOfView: fieldOfView))
+
+        let toPoint = world - eye
+        let along = simd_dot(toPoint, simd_normalize(direction))
+        let offRay = simd_length(toPoint - along * simd_normalize(direction))
+        XCTAssertGreaterThan(along, 0, "in front of the camera")
+        XCTAssertLessThan(offRay, 0.001, "the ray through the projected location passes through the point")
     }
 
     func test_movingAHandleWritesThePropertyInTheEntitysLocalSpace() throws {
