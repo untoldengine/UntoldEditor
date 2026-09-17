@@ -462,6 +462,16 @@ struct InspectorView: View {
                                 Divider()
                             }
 
+                            // Code Components: components written in the project's Swift sources
+                            // and loaded by the editor. An ad-hoc section (not a ComponentOption_Editor)
+                            // so scene-composition mode, which whitelists registered components, keeps it.
+                            if CodeComponentInspectorView.isAvailable(for: entityId) {
+                                CodeComponentInspectorView(entityId: entityId, refreshView: refreshView)
+                                    .frame(minWidth: 200, maxWidth: 250)
+                                    .id(entityId)
+                                Divider()
+                            }
+
                             let addableComponents = availableComponentsWithFlags()
                             if addableComponents.isEmpty == false {
                                 Menu {
