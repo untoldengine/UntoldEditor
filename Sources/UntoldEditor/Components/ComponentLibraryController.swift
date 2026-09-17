@@ -107,6 +107,10 @@ final class ComponentLibraryController: ObservableObject {
         projectKey = key
         sdk = ComponentSDK.resolve()
         layout = ComponentSourceLocator.layout(forAssetBasePath: basePath, sdk: sdk)
+        // The Plugins tab shows these too; the console keeps them where they are easy to find.
+        for problem in layout?.problems ?? [] {
+            Logger.logWarning(message: "[Plugins] \(problem)", category: "Plugins")
+        }
         rebuildOnSave = UserDefaults.standard.bool(forKey: Self.rebuildOnSaveKey(key))
         try? FileManager.default.removeItem(at: cacheDirectory(for: key))
         restartWatcher()
@@ -227,7 +231,7 @@ final class ComponentLibraryController: ObservableObject {
         } else {
             let errors = diagnostics.filter { $0.severity == .error }
             for diagnostic in errors {
-                Logger.logError(message: "[Components] \(diagnostic.fileName):\(diagnostic.line): \(diagnostic.message)", category: "Components")
+                Logger.logError(message: "[Plugins] \(diagnostic.fileName):\(diagnostic.line): \(diagnostic.message)", category: "Plugins")
             }
             let summary = errors.isEmpty ? "The compiler failed. See the Components panel for its output." : "\(errors.count) error\(errors.count == 1 ? "" : "s")"
             task.fail(summary)
@@ -241,7 +245,7 @@ final class ComponentLibraryController: ObservableObject {
     }
 
     private func fail(_ message: String) {
-        Logger.logError(message: "[Components] \(message)", category: "Components")
+        Logger.logError(message: "[Plugins] \(message)", category: "Plugins")
         phase = .failed(message)
     }
 
@@ -280,17 +284,17 @@ final class ComponentLibraryController: ObservableObject {
         } else {
             phase = .loaded
             let components = loaded.flatMap(\.componentNames)
-            Logger.log(message: "[Components] Loaded revision \(revision): \(components.isEmpty ? "no components" : components.joined(separator: ", "))", category: "Components")
+            Logger.log(message: "[Plugins] Loaded revision \(revision): \(components.isEmpty ? "no components" : components.joined(separator: ", "))", category: "Plugins")
             let entityPlugins = loaded.flatMap(\.entityPluginNames)
             if entityPlugins.isEmpty == false {
-                Logger.log(message: "[Components] Entity plugins: \(entityPlugins.joined(separator: ", "))", category: "Components")
+                Logger.log(message: "[Plugins] Entity plugins: \(entityPlugins.joined(separator: ", "))", category: "Plugins")
             }
             for entry in EditorMenuPluginHost.shared.live {
                 let items = entry.menuIdentifiers.isEmpty ? "no menu items" : entry.menuIdentifiers.joined(separator: ", ")
-                Logger.log(message: "[Components] Menu plugin \(entry.name): \(items)", category: "Components")
+                Logger.log(message: "[Plugins] Menu plugin \(entry.name): \(items)", category: "Plugins")
             }
             for issue in extensionIssues {
-                Logger.logWarning(message: "[Components] \(issue)", category: "Components")
+                Logger.logWarning(message: "[Plugins] \(issue)", category: "Plugins")
             }
         }
         editorController?.refreshInspector()
@@ -338,24 +342,24 @@ final class ComponentLibraryController: ObservableObject {
         apply(pending.requests)
     }
 
-    // MARK: Creating the components folder
+    // MARK: Creating the plugins folder
 
-    /// Gives the open project a components folder with a starter component, links the kit in
+    /// Gives the open project a plugins folder with a starter component, links the kit in
     /// its `project.yml`, regenerates the Xcode project, and builds. What is left for the
     /// developer (the registration calls in the game) is written to the console.
-    func createComponentPackage() throws {
+    func createPluginsFolder() throws {
         guard let layout else { return }
         let result = try BuildSystem.shared.addCodeComponents(toProjectAt: layout.projectRoot, projectName: layout.projectName)
-        var summary = "[Components] Components folder: \(result.componentsDirectory.path)."
+        var summary = "[Plugins] Plugins folder: \(result.pluginsDirectory.path)."
         if result.updatedProjectSpec {
             summary += " project.yml now links UntoldComponentKit."
         }
         if result.regeneratedXcodeProject {
             summary += " The Xcode project was regenerated."
         }
-        Logger.log(message: summary, category: "Components")
+        Logger.log(message: summary, category: "Plugins")
         for note in result.notes {
-            Logger.log(message: "[Components] \(note)", category: "Components")
+            Logger.log(message: "[Plugins] \(note)", category: "Plugins")
         }
         restartWatcher()
         buildAndLoad()

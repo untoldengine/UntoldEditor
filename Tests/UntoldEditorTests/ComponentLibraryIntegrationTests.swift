@@ -43,8 +43,8 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
         let environment = try Environment.locate(for: Self.self)
         let scratch = try ScratchDirectory("ComponentLibraryIntegration")
         let basePath = try scratch.directory("Sample/Sources/Sample/GameData")
-        try scratch.write(Self.componentSource, to: "Sample/Sources/SampleComponents/Orbiter.swift")
-        try scratch.write(Self.extensionSource, to: "Sample/Sources/SampleComponents/SampleTools.swift")
+        try scratch.write(Self.componentSource, to: "Sample/Sources/SamplePlugins/Orbiter.swift")
+        try scratch.write(Self.extensionSource, to: "Sample/Sources/SamplePlugins/SampleTools.swift")
 
         let layout = ComponentSourceLocator.layout(forAssetBasePath: basePath, sdk: environment.sdk)
         let unit = try XCTUnwrap(layout.units.first)
@@ -69,7 +69,7 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
         XCTAssertEqual(library.componentNames, ["Orbiter"])
         XCTAssertEqual(library.menuPluginNames, ["SampleTools"])
         XCTAssertEqual(library.entityPluginNames, ["OrbiterEntity"])
-        XCTAssertEqual(library.moduleName, "SampleComponents_r\(Self.revision)")
+        XCTAssertEqual(library.moduleName, "SamplePlugins_r\(Self.revision)")
         XCTAssertGreaterThan(library.byteSize, 0)
 
         // The loaded component runs against this process's engine.
@@ -110,7 +110,7 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
             @UntoldAttribute var speed: Float = 1
             override func onStart() { speeed = 2 }
         }
-        """, to: "Broken/Sources/BrokenComponents/Broken.swift")
+        """, to: "Broken/Sources/BrokenPlugins/Broken.swift")
 
         let layout = ComponentSourceLocator.layout(forAssetBasePath: basePath, sdk: environment.sdk)
         Self.revision += 1
