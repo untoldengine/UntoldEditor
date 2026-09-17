@@ -18,9 +18,9 @@ struct LoadedComponentLibrary: Equatable, Identifiable {
     let role: ComponentSourceUnit.Role
     let revision: Int
     let componentNames: [String]
-    let extensionNames: [String]
+    let menuPluginNames: [String]
     /// Kinds of entity the library adds to the creation shelves.
-    var templateNames: [String] = []
+    var entityPluginNames: [String] = []
     let byteSize: Int
 
     var id: String {
@@ -42,9 +42,9 @@ enum ComponentLibraryLoader {
             return .failure(.loadFailed(detail))
         }
 
-        let components = CodeComponentRegistry.shared.discover(imagePath: path, revision: request.revision, policy: .replace)
-        let extensions = EditorExtensionRegistry.shared.discover(imagePath: path, revision: request.revision, replaceExisting: true)
-        let templates = EntityTemplateRegistry.shared.discover(imagePath: path, revision: request.revision, replaceExisting: true)
+        let components = ComponentPluginRegistry.shared.discover(imagePath: path, revision: request.revision, policy: .replace)
+        let menuPlugins = EditorMenuPluginRegistry.shared.discover(imagePath: path, revision: request.revision, replaceExisting: true)
+        let templates = EntityPluginRegistry.shared.discover(imagePath: path, revision: request.revision, replaceExisting: true)
         let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
 
         return .success(LoadedComponentLibrary(
@@ -53,8 +53,8 @@ enum ComponentLibraryLoader {
             role: request.unit.role,
             revision: request.revision,
             componentNames: (components.registered + components.replaced).sorted(),
-            extensionNames: extensions.sorted(),
-            templateNames: templates.sorted(),
+            menuPluginNames: menuPlugins.sorted(),
+            entityPluginNames: templates.sorted(),
             byteSize: size
         ))
     }

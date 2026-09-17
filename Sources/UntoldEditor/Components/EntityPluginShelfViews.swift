@@ -1,5 +1,5 @@
 //
-//  EntityTemplateShelfViews.swift
+//  EntityPluginShelfViews.swift
 //  UntoldEditor
 //
 // Copyright (C) Untold Engine Studios
@@ -18,7 +18,7 @@ import UntoldEngine
 ///
 /// The rows follow the component libraries: they appear when a library loads, change when it
 /// reloads, and go when the project closes.
-struct EntityTemplateShelfRows: View {
+struct EntityPluginShelfRows: View {
     let shelf: UntoldEntityShelf
     let sceneGraphModel: SceneGraphModel
     let selectionManager: SelectionManager
@@ -28,7 +28,7 @@ struct EntityTemplateShelfRows: View {
 
     var body: some View {
         // Reading the revision ties the rows to a reload; the registry itself is not observable.
-        let items = library.revision >= 0 ? EntityTemplateShelfItem.items(on: shelf) : []
+        let items = library.revision >= 0 ? EntityPluginShelfItem.items(on: shelf) : []
         ForEach(items) { item in
             row(item)
         }
@@ -41,7 +41,7 @@ struct EntityTemplateShelfRows: View {
         }
     }
 
-    private func row(_ item: EntityTemplateShelfItem) -> some View {
+    private func row(_ item: EntityPluginShelfItem) -> some View {
         HStack {
             Image(systemName: item.systemImage)
                 .foregroundColor(.editorTextTertiary)
@@ -57,9 +57,9 @@ struct EntityTemplateShelfRows: View {
         .padding(.horizontal, 10)
         .cornerRadius(6)
         .contentShape(Rectangle())
-        .draggable(EntityTemplateDragPayload(entityTemplate: item.typeName))
+        .draggable(EntityPluginDragPayload(entityPlugin: item.typeName))
         .onTapGesture(count: 2) {
-            if let placement = placeEntityTemplate(item.typeName, sceneGraphModel: sceneGraphModel, selectionManager: selectionManager) {
+            if let placement = placeEntityPlugin(item.typeName, sceneGraphModel: sceneGraphModel, selectionManager: selectionManager) {
                 showStatus(placement.statusMessage, placement.isError)
             } else {
                 showStatus("'\(item.displayName)' is no longer loaded.", true)
@@ -70,14 +70,14 @@ struct EntityTemplateShelfRows: View {
 
 /// Fixed left-tree entry for the Entities shelf, next to Primitives and Lights. It holds the
 /// kinds of entity that fit neither, and takes no room until loaded code adds one.
-struct EntityTemplatesCategoryRow: View {
+struct EntityPluginsCategoryRow: View {
     let isSelected: Bool
     let onSelect: () -> Void
 
     @ObservedObject private var library = ComponentLibraryController.shared
 
     var body: some View {
-        if library.revision >= 0, EntityTemplateShelfItem.items(on: .entities).isEmpty == false || isSelected {
+        if library.revision >= 0, EntityPluginShelfItem.items(on: .entities).isEmpty == false || isSelected {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .semibold))

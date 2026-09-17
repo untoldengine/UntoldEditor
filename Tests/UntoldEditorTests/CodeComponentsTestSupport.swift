@@ -19,7 +19,7 @@ import XCTest
 final class ScratchDirectory {
     let url: URL
 
-    init(_ name: String = "CodeComponentsTests") throws {
+    init(_ name: String = "ComponentPluginsTests") throws {
         url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(name)-\(UUID().uuidString)", isDirectory: true)
             .resolvingSymlinksInPath()
@@ -71,12 +71,12 @@ func makeEditorLikeMainMenu() -> NSMenu {
     return mainMenu
 }
 
-final class MenuProbeExtension: EditorExtension {
+final class MenuProbeExtension: EditorMenuPlugin {
     enum Quality: String, CaseIterable { case low, high }
 
     @UntoldMenu(.view, "Preview Twins") var preview = true
     @UntoldMenu(.debug, "Splat Twin/Quality") var quality: Quality = .low
-    @UntoldMenu(.debug, "Splat Twin/Reset") var reset = UntoldMenuAction { (owner: EditorExtension) in
+    @UntoldMenu(.debug, "Splat Twin/Reset") var reset = UntoldMenuAction { (owner: EditorMenuPlugin) in
         (owner as? MenuProbeExtension)?.events.append("reset")
     }
 
@@ -113,7 +113,7 @@ final class MenuProbeExtension: EditorExtension {
     }
 }
 
-final class ClashingExtension: EditorExtension {
+final class ClashingExtension: EditorMenuPlugin {
     @UntoldMenu(.view, "Preview Twins") var alsoPreview = false
     @UntoldMenu(.debug, " / ") var untitled = false
     @UntoldMenu(.tools, "Unique") var unique = false

@@ -33,7 +33,7 @@ final class EditorRenderingSystemTests: XCTestCase {
         super.tearDown()
     }
 
-    func testRegistrationAddsEditorExtension() {
+    func testRegistrationAddsEditorMenuPlugin() {
         XCTAssertTrue(
             RenderExtensionRegistry.shared.registeredIDs().contains(EditorRenderExtension.shared.id)
         )

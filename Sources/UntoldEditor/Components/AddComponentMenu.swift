@@ -27,7 +27,7 @@ struct AddComponentMenu: View {
     static let codeSectionTitle = "From Code"
 
     var body: some View {
-        let codeComponents = library.revision >= 0 ? CodeComponentInspectorView.addableTypes(for: entityId) : []
+        let codeComponents = library.revision >= 0 ? ScenePluginInspectorView.addableTypes(for: entityId) : []
 
         if engineComponents.isEmpty == false || codeComponents.isEmpty == false {
             Menu {
@@ -40,7 +40,7 @@ struct AddComponentMenu: View {
                     Section(Self.codeSectionTitle) {
                         ForEach(codeComponents, id: \.name) { entry in
                             Button(entry.type.displayName) {
-                                CodeComponentInspectorView.add(entry.name, to: entityId)
+                                ScenePluginInspectorView.add(entry.name, to: entityId)
                                 refreshView()
                             }
                         }

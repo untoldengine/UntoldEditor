@@ -14,55 +14,90 @@ import simd
 import UntoldComponentKit
 import UntoldEngine
 
-/// Draws the stand-in for entities that exist only as data: a spawn point, a trigger, a rules
-/// object. A code component asks for one through `editorRepresentation`; the editor draws it
-/// the way it draws its own light markers, in the same pass and with the same billboard
-/// pipeline. Nothing here is saved, and the pass is not part of play mode or of a game.
+/// Draws what an entity written in code asks the editor to show besides its geometry: the
+/// flag of a spawn point, the control points of a spline. An `EntityPlugin` describes it in
+/// `editorRepresentation`; the editor draws it in the pass that draws its own light markers.
+/// Nothing here is saved, and the pass is not part of play mode or of a game.
+///
+/// Icons are hidden by geometry in front of them, like the light markers. Lines and points
+/// are drawn over everything, so a handle inside a mesh can still be seen.
 enum EditorRepresentationRenderer {
-    struct Marker: Equatable {
+    struct Drawing: Equatable {
         let entityId: EntityID
-        let systemImage: String
-        let tint: SIMD3<Float>
+        let representation: EditorRepresentation
     }
 
-    /// The entities to mark. One that already shows itself (it has a mesh, or it is a light
-    /// with the editor's own marker) is left alone, and so is one being destroyed.
-    static func markers() -> [Marker] {
+    /// Every entity of a kind written in code that has something to show right now.
+    static func drawings() -> [Drawing] {
         guard EditorFeatureFlags.enableCodeComponents else { return [] }
-        let storageId = getComponentId(for: CodeComponentsComponent.self)
+        let storageId = getComponentId(for: ScenePluginsComponent.self)
         let transformId = getComponentId(for: LocalTransformComponent.self)
-        var result: [Marker] = []
-        for entityId in queryEntitiesWithComponentIds([storageId, transformId], in: scene) {
-            guard hasComponent(entityId: entityId, componentType: RenderComponent.self) == false,
-                  hasComponent(entityId: entityId, componentType: LightComponent.self) == false
-            else { continue }
-            if let marker = marker(for: entityId) {
-                result.append(marker)
+        var result: [Drawing] = []
+        for entityId in queryEntitiesWithComponentIds([storageId, transformId], in: scene).sorted() {
+            if let drawing = drawing(for: entityId) {
+                result.append(drawing)
             }
         }
         return result
     }
 
-    /// The first component on the entity that asks for a representation decides it.
-    static func marker(for entityId: EntityID) -> Marker? {
-        for component in CodeComponentSystem.shared.components(on: entityId) {
-            if case let .icon(systemImage, tint) = component.editorRepresentation {
-                return Marker(entityId: entityId, systemImage: systemImage, tint: tint)
-            }
-        }
-        return nil
+    static func drawing(for entityId: EntityID) -> Drawing? {
+        guard let plugin = ScenePluginSystem.shared.entityPlugin(on: entityId) else { return nil }
+        let representation = plugin.editorRepresentation
+        return representation.isEmpty ? nil : Drawing(entityId: entityId, representation: representation)
     }
 
-    /// Encodes one billboard per marker. The caller has set the light-visual pipeline and its
-    /// depth state; this sets the rest, as the light loop before it does.
+    /// The vertices of one polyline as the line pipeline wants them, split so each run fits
+    /// the inline vertex data limit. A closed line gets its first point again at the end, and
+    /// consecutive runs share a point so the line has no gap.
+    static func lineRuns(_ points: [SIMD3<Float>], closed: Bool, maxVerticesPerRun: Int = 250) -> [[SIMD4<Float>]] {
+        guard points.count >= 2, maxVerticesPerRun >= 2 else { return [] }
+        var vertices = points.map { SIMD4<Float>($0.x, $0.y, $0.z, 1) }
+        if closed, let first = vertices.first {
+            vertices.append(first)
+        }
+        var runs: [[SIMD4<Float>]] = []
+        var start = 0
+        while start < vertices.count - 1 {
+            let end = min(start + maxVerticesPerRun, vertices.count)
+            runs.append(Array(vertices[start ..< end]))
+            start = end - 1
+        }
+        return runs
+    }
+
+    /// Encodes every drawing. The caller has set the light-visual pipeline and its depth
+    /// state, which is what the icons need; lines and points set their own.
     static func draw(with renderEncoder: MTLRenderCommandEncoder, viewSpace: inout simd_float4x4) {
-        let markers = markers()
-        guard markers.isEmpty == false, let indexBuffer = bufferResources.quadIndexBuffer else { return }
+        let drawings = drawings()
+        guard drawings.isEmpty == false, let indexBuffer = bufferResources.quadIndexBuffer else { return }
 
-        for marker in markers {
-            guard let texture = texture(systemImage: marker.systemImage, tint: marker.tint) else { continue }
-            var space = worldSpace(of: marker.entityId)
+        var icons: [(space: simd_float4x4, texture: MTLTexture)] = []
+        var lines: [(space: simd_float4x4, runs: [[SIMD4<Float>]])] = []
+        var dots: [(center: SIMD3<Float>, texture: MTLTexture)] = []
 
+        for drawing in drawings {
+            let space = worldSpace(of: drawing.entityId)
+            for item in drawing.representation.items {
+                switch item {
+                case let .icon(systemImage, tint):
+                    if let texture = texture(systemImage: systemImage, tint: tint) {
+                        icons.append((space, texture))
+                    }
+                case let .polyline(points, closed):
+                    lines.append((space, lineRuns(points, closed: closed)))
+                case let .points(points, tint):
+                    guard let texture = dotTexture(tint: tint) else { continue }
+                    for point in points {
+                        let world = space * SIMD4<Float>(point.x, point.y, point.z, 1)
+                        dots.append((SIMD3<Float>(world.x, world.y, world.z), texture))
+                    }
+                }
+            }
+        }
+
+        func drawBillboard(space: simd_float4x4, texture: MTLTexture) {
+            var space = space
             renderEncoder.setVertexBuffer(bufferResources.quadVerticesBuffer, offset: 0, index: 0)
             renderEncoder.setVertexBuffer(bufferResources.quadTexCoordsBuffer, offset: 0, index: 1)
             renderEncoder.setVertexBytes(&viewSpace, length: MemoryLayout<matrix_float4x4>.stride, index: 2)
@@ -77,6 +112,51 @@ enum EditorRepresentationRenderer {
                 indexBufferOffset: 0
             )
         }
+
+        // Icons: the pipeline and depth test the light markers use.
+        for icon in icons {
+            drawBillboard(space: icon.space, texture: icon.texture)
+        }
+
+        // Lines: the pipeline the selection box uses, which ignores depth.
+        if lines.isEmpty == false,
+           let linePipeline = PipelineManager.shared.renderPipelinesByType[.highlight],
+           linePipeline.success, let lineState = linePipeline.pipelineState
+        {
+            renderEncoder.setRenderPipelineState(lineState)
+            renderEncoder.setDepthStencilState(linePipeline.depthState)
+            if hasLoggedLines == false {
+                hasLoggedLines = true
+                Logger.log(message: "[Components] Editor lines ready", category: "Components")
+            }
+            var scale = simd_float3(repeating: 1)
+            for line in lines {
+                var space = line.space
+                renderEncoder.setVertexBytes(&viewSpace, length: MemoryLayout<matrix_float4x4>.stride, index: 1)
+                renderEncoder.setVertexBytes(&renderInfo.perspectiveSpace, length: MemoryLayout<matrix_float4x4>.stride, index: 2)
+                renderEncoder.setVertexBytes(&space, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
+                renderEncoder.setVertexBytes(&scale, length: MemoryLayout<simd_float3>.stride, index: 4)
+                for run in line.runs {
+                    renderEncoder.setVertexBytes(run, length: MemoryLayout<SIMD4<Float>>.stride * run.count, index: 0)
+                    renderEncoder.drawPrimitives(type: .lineStrip, vertexStart: 0, vertexCount: run.count)
+                }
+            }
+        }
+
+        // Points: billboards again, over the lines and over everything else.
+        if dots.isEmpty == false,
+           let billboardPipeline = PipelineManager.shared.renderPipelinesByType[.lightVisual],
+           billboardPipeline.success, let billboardState = billboardPipeline.pipelineState,
+           let overlayDepth = overlayDepthState()
+        {
+            renderEncoder.setRenderPipelineState(billboardState)
+            renderEncoder.setDepthStencilState(overlayDepth)
+            for dot in dots {
+                var space = matrix_identity_float4x4
+                space.columns.3 = SIMD4<Float>(dot.center.x, dot.center.y, dot.center.z, 1)
+                drawBillboard(space: space, texture: dot.texture)
+            }
+        }
     }
 
     private static func worldSpace(of entityId: EntityID) -> simd_float4x4 {
@@ -86,6 +166,22 @@ enum EditorRepresentationRenderer {
             return world.space
         }
         return scene.get(component: LocalTransformComponent.self, for: entityId)?.space ?? matrix_identity_float4x4
+    }
+
+    private static var hasLoggedLines = false
+    private static var cachedOverlayDepthState: MTLDepthStencilState?
+
+    /// Passes every fragment and writes no depth: for what must show through geometry.
+    private static func overlayDepthState() -> MTLDepthStencilState? {
+        if let cachedOverlayDepthState {
+            return cachedOverlayDepthState
+        }
+        guard let device = renderInfo.device else { return nil }
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .always
+        descriptor.isDepthWriteEnabled = false
+        cachedOverlayDepthState = device.makeDepthStencilState(descriptor: descriptor)
+        return cachedOverlayDepthState
     }
 
     // MARK: Icon textures
@@ -172,7 +268,53 @@ enum EditorRepresentationRenderer {
         return drawn ? pixels : nil
     }
 
-    /// Used when a component names a symbol this macOS does not have.
+    // MARK: Point textures
+
+    private static var dotTextures: [SIMD3<Int>: MTLTexture] = [:]
+
+    /// A texture for a control point, made once per tint.
+    static func dotTexture(tint: SIMD3<Float>) -> MTLTexture? {
+        let key = SIMD3<Int>(Int((tint.x * 255).rounded()), Int((tint.y * 255).rounded()), Int((tint.z * 255).rounded()))
+        if let cached = dotTextures[key] {
+            return cached
+        }
+        guard let device = renderInfo.device,
+              let pixels = dotPixels(tint: tint, size: iconPixelSize),
+              let texture = makeTexture(pixels: pixels, size: iconPixelSize, device: device)
+        else { return nil }
+        dotTextures[key] = texture
+        Logger.log(message: "[Components] Editor point marker ready", category: "Components")
+        return texture
+    }
+
+    /// RGBA pixels, top row first: a tinted disc with a dark rim, covering less than half of
+    /// the billboard so a control point reads as a point, not as a marker.
+    static func dotPixels(tint: SIMD3<Float>, size: Int) -> [UInt8]? {
+        guard size > 0 else { return nil }
+        var pixels = [UInt8](repeating: 0, count: size * size * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: size,
+                height: size,
+                bitsPerComponent: 8,
+                bytesPerRow: size * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            let radius = CGFloat(size) * 0.22
+            let center = CGFloat(size) / 2
+            let disc = CGRect(x: center - radius, y: center - radius, width: radius * 2, height: radius * 2)
+            context.setFillColor(CGColor(red: 0.09, green: 0.10, blue: 0.12, alpha: 1))
+            context.fillEllipse(in: disc.insetBy(dx: -CGFloat(size) * 0.04, dy: -CGFloat(size) * 0.04))
+            context.setFillColor(CGColor(red: CGFloat(tint.x), green: CGFloat(tint.y), blue: CGFloat(tint.z), alpha: 1))
+            context.fillEllipse(in: disc)
+            return true
+        }
+        return drawn ? pixels : nil
+    }
+
+    /// Used when an entity names a symbol this macOS does not have.
     static let fallbackSymbol = "questionmark.circle"
 
     private static func makeTexture(pixels: [UInt8], size: Int, device: MTLDevice) -> MTLTexture? {

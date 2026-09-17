@@ -185,16 +185,16 @@ struct ComponentsPanelView: View {
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .foregroundColor(.editorTextPrimary)
                     ForEach(library.componentNames.filter(matches), id: \.self) { name in
-                        row(icon: "cube", color: .editorAccent, text: "\(name)  ·  \(instanceCount(of: name)) in scene\(attachmentNote(of: name))")
+                        row(icon: "cube", color: .editorAccent, text: "\(name)  ·  \(instanceCount(of: name)) in scene")
                     }
-                    ForEach(library.extensionNames.filter(matches), id: \.self) { name in
+                    ForEach(library.menuPluginNames.filter(matches), id: \.self) { name in
                         row(icon: "menubar.rectangle", color: .editorSecondaryAccent, text: "\(name)  ·  \(menuSummary(of: name))")
                     }
-                    ForEach(library.templateNames.filter(matches), id: \.self) { name in
-                        row(icon: "plus.square.dashed", color: .editorAccent, text: "\(name)  ·  \(templateSummary(of: name))")
+                    ForEach(library.entityPluginNames.filter(matches), id: \.self) { name in
+                        row(icon: "plus.square.dashed", color: .editorAccent, text: "\(name)  ·  \(entityPluginSummary(of: name))")
                     }
-                    if library.componentNames.isEmpty, library.extensionNames.isEmpty, library.templateNames.isEmpty {
-                        row(icon: "shippingbox", color: .editorTextTertiary, text: "Runtime library; defines no components or extensions.")
+                    if library.componentNames.isEmpty, library.menuPluginNames.isEmpty, library.entityPluginNames.isEmpty {
+                        row(icon: "shippingbox", color: .editorTextTertiary, text: "Runtime library; defines no plugins.")
                     }
                 }
             }
@@ -259,22 +259,17 @@ struct ComponentsPanelView: View {
     }
 
     private func instanceCount(of typeName: String) -> Int {
-        CodeComponentSystem.shared.entities(withComponentNamed: typeName).count
+        ScenePluginSystem.shared.entities(withComponentNamed: typeName).count
     }
 
-    /// Says why a component is missing from Add Component, for the ones that are.
-    private func attachmentNote(of componentName: String) -> String {
-        guard CodeComponentRegistry.shared.type(named: componentName)?.attachment == .entityKindOnly else { return "" }
-        return "  ·  part of an entity kind, not in Add Component"
+    private func entityPluginSummary(of typeName: String) -> String {
+        guard let type = EntityPluginRegistry.shared.type(named: typeName) else { return "not registered" }
+        let count = ScenePluginSystem.shared.entities(withEntityPluginNamed: typeName).count
+        return "\"\(type.displayName)\" on the \(type.shelf.title) shelf  ·  \(count) in scene"
     }
 
-    private func templateSummary(of templateName: String) -> String {
-        guard let type = EntityTemplateRegistry.shared.type(named: templateName) else { return "not registered" }
-        return "\"\(type.displayName)\" on the \(type.shelf.title) shelf"
-    }
-
-    private func menuSummary(of extensionName: String) -> String {
-        let identifiers = EditorExtensionHost.shared.live.first { $0.name == extensionName }?.menuIdentifiers ?? []
+    private func menuSummary(of pluginName: String) -> String {
+        let identifiers = EditorMenuPluginHost.shared.live.first { $0.name == pluginName }?.menuIdentifiers ?? []
         return identifiers.isEmpty ? "no menu items" : identifiers.joined(separator: ", ")
     }
 

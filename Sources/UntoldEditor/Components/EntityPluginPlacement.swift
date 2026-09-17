@@ -1,5 +1,5 @@
 //
-//  EntityTemplatePlacement.swift
+//  EntityPluginPlacement.swift
 //  UntoldEditor
 //
 // Copyright (C) Untold Engine Studios
@@ -18,10 +18,10 @@ import UntoldEngine
 /// What a shelf row for an entity template puts on the drag pasteboard: the template's
 /// type name. It travels as `.json` like the other row payloads, and its one required
 /// field is unlike theirs, so `loadDroppedRowPayload` can tell it apart.
-struct EntityTemplateDragPayload: Codable, Equatable, Transferable {
+struct EntityPluginDragPayload: Codable, Equatable, Transferable {
     static let contentType: UTType = .json
 
-    var entityTemplate: String
+    var entityPlugin: String
 
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: contentType)
@@ -31,13 +31,13 @@ struct EntityTemplateDragPayload: Codable, Equatable, Transferable {
         try JSONEncoder().encode(self)
     }
 
-    static func decode(_ data: Data) throws -> EntityTemplateDragPayload {
-        try JSONDecoder().decode(EntityTemplateDragPayload.self, from: data)
+    static func decode(_ data: Data) throws -> EntityPluginDragPayload {
+        try JSONDecoder().decode(EntityPluginDragPayload.self, from: data)
     }
 }
 
 /// One row of a creation shelf that loaded code contributed.
-struct EntityTemplateShelfItem: Identifiable, Equatable {
+struct EntityPluginShelfItem: Identifiable, Equatable {
     let typeName: String
     let displayName: String
     let systemImage: String
@@ -46,9 +46,9 @@ struct EntityTemplateShelfItem: Identifiable, Equatable {
         typeName
     }
 
-    static func items(on shelf: UntoldEntityShelf) -> [EntityTemplateShelfItem] {
-        EntityTemplateRegistry.shared.entries(on: shelf).map {
-            EntityTemplateShelfItem(typeName: $0.name, displayName: $0.type.displayName, systemImage: $0.type.systemImage)
+    static func items(on shelf: UntoldEntityShelf) -> [EntityPluginShelfItem] {
+        EntityPluginRegistry.shared.entries(on: shelf).map {
+            EntityPluginShelfItem(typeName: $0.name, displayName: $0.type.displayName, systemImage: $0.type.systemImage)
         }
     }
 }
@@ -57,18 +57,18 @@ struct EntityTemplateShelfItem: Identifiable, Equatable {
 /// template may have been unloaded between the drag and the drop; then nothing is created
 /// and the status message says so.
 @discardableResult
-func placeEntityTemplate(
+func placeEntityPlugin(
     _ typeName: String,
     at position: simd_float3? = nil,
     sceneGraphModel: SceneGraphModel,
     selectionManager: SelectionManager
 ) -> AssetPlacementResult? {
-    guard let type = EntityTemplateRegistry.shared.type(named: typeName) else {
+    guard let type = EntityPluginRegistry.shared.type(named: typeName) else {
         Logger.logWarning(message: "[Components] Entity template '\(typeName)' is not loaded; nothing was created.")
         return nil
     }
     let uniqueName = generateEntityName()
-    guard let entityId = EntityTemplateRegistry.shared.instantiate(typeName, at: position, entityName: uniqueName) else {
+    guard let entityId = EntityPluginRegistry.shared.instantiate(typeName, at: position, entityName: uniqueName) else {
         return nil
     }
     EditorSceneDirtyState.shared.markDirty()

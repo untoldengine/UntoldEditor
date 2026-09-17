@@ -18,7 +18,7 @@ import UntoldEngine
 extension Notification.Name {
     /// A freshly built library is waiting and play mode has to end before it can be loaded.
     /// `EditorView` answers by stopping play, which restores the pre-play scene.
-    static let codeComponentsRequestStopPlay = Notification.Name("CodeComponents.RequestStopPlay")
+    static let codeComponentsRequestStopPlay = Notification.Name("ComponentPlugins.RequestStopPlay")
 }
 
 /// Ties the pieces together: reacts to the project opening and closing, builds the project's
@@ -82,8 +82,8 @@ final class ComponentLibraryController: ObservableObject {
     func activate() {
         guard isActivated == false, EditorFeatureFlags.enableCodeComponents else { return }
         isActivated = true
-        CodeComponentSystem.install()
-        EngineExtensionRegistry.shared.register(EditorExtensionTicker())
+        ScenePluginSystem.install()
+        EngineExtensionRegistry.shared.register(EditorMenuPluginTicker())
         basePathSubscription = EditorAssetBasePath.shared.$basePath
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -122,8 +122,8 @@ final class ComponentLibraryController: ObservableObject {
         watcher?.stop()
         watcher = nil
         pendingApply = nil
-        EditorExtensionHost.shared.unloadAll()
-        CodeComponentSystem.shared.prepareForReload()
+        EditorMenuPluginHost.shared.unloadAll()
+        ScenePluginSystem.shared.prepareForReload()
         unregisterLoadedTypes()
         retiredBytes += libraries.reduce(0) { $0 + $1.byteSize }
         libraries = []
@@ -250,8 +250,8 @@ final class ComponentLibraryController: ObservableObject {
     /// The reload protocol. Runs on the main thread between frames.
     private func apply(_ requests: [ComponentCompileRequest]) {
         guard let projectKey else { return }
-        EditorExtensionHost.shared.unloadAll()
-        CodeComponentSystem.shared.prepareForReload()
+        EditorMenuPluginHost.shared.unloadAll()
+        ScenePluginSystem.shared.prepareForReload()
         unregisterLoadedTypes()
 
         var loaded: [LoadedComponentLibrary] = []
@@ -267,9 +267,9 @@ final class ComponentLibraryController: ObservableObject {
         }
 
         // Even after a load failure, bind what did register so the scene is not left bare.
-        CodeComponentSystem.shared.finishReload()
-        EditorExtensionHost.shared.load(typeNames: loaded.flatMap(\.extensionNames), projectKey: projectKey)
-        extensionIssues = EditorExtensionHost.shared.issues
+        ScenePluginSystem.shared.finishReload()
+        EditorMenuPluginHost.shared.load(typeNames: loaded.flatMap(\.menuPluginNames), projectKey: projectKey)
+        extensionIssues = EditorMenuPluginHost.shared.issues
 
         retiredBytes += libraries.reduce(0) { $0 + $1.byteSize }
         libraries = loaded
@@ -281,13 +281,13 @@ final class ComponentLibraryController: ObservableObject {
             phase = .loaded
             let components = loaded.flatMap(\.componentNames)
             Logger.log(message: "[Components] Loaded revision \(revision): \(components.isEmpty ? "no components" : components.joined(separator: ", "))", category: "Components")
-            let templates = loaded.flatMap(\.templateNames)
-            if templates.isEmpty == false {
-                Logger.log(message: "[Components] Entity templates: \(templates.joined(separator: ", "))", category: "Components")
+            let entityPlugins = loaded.flatMap(\.entityPluginNames)
+            if entityPlugins.isEmpty == false {
+                Logger.log(message: "[Components] Entity plugins: \(entityPlugins.joined(separator: ", "))", category: "Components")
             }
-            for entry in EditorExtensionHost.shared.live {
+            for entry in EditorMenuPluginHost.shared.live {
                 let items = entry.menuIdentifiers.isEmpty ? "no menu items" : entry.menuIdentifiers.joined(separator: ", ")
-                Logger.log(message: "[Components] Extension \(entry.name): \(items)", category: "Components")
+                Logger.log(message: "[Components] Menu plugin \(entry.name): \(items)", category: "Components")
             }
             for issue in extensionIssues {
                 Logger.logWarning(message: "[Components] \(issue)", category: "Components")
@@ -299,36 +299,36 @@ final class ComponentLibraryController: ObservableObject {
     /// Types from loaded libraries carry a revision above zero. They are dropped before a new
     /// revision registers, so a type that was deleted from the sources does not linger.
     private func unregisterLoadedTypes() {
-        for entry in CodeComponentRegistry.shared.entries where entry.revision > 0 {
-            CodeComponentRegistry.shared.unregister(name: entry.name)
+        for entry in ComponentPluginRegistry.shared.entries where entry.revision > 0 {
+            ComponentPluginRegistry.shared.unregister(name: entry.name)
         }
-        for entry in EditorExtensionRegistry.shared.entries where entry.revision > 0 {
-            EditorExtensionRegistry.shared.unregister(name: entry.name)
+        for entry in EditorMenuPluginRegistry.shared.entries where entry.revision > 0 {
+            EditorMenuPluginRegistry.shared.unregister(name: entry.name)
         }
-        for entry in EntityTemplateRegistry.shared.entries where entry.revision > 0 {
-            EntityTemplateRegistry.shared.unregister(name: entry.name)
+        for entry in EntityPluginRegistry.shared.entries where entry.revision > 0 {
+            EntityPluginRegistry.shared.unregister(name: entry.name)
         }
     }
 
     // MARK: Play mode
 
     func playModeDidStart() {
-        CodeComponentSystem.shared.startPlayMode()
-        EditorExtensionHost.shared.playModeDidChange(true)
+        ScenePluginSystem.shared.startPlayMode()
+        EditorMenuPluginHost.shared.playModeDidChange(true)
     }
 
     /// `restoring` is true when the editor is about to reload the pre-play snapshot; the
     /// pending library then waits for `playModeRestoreDidFinish()`.
     func playModeDidStop(restoring: Bool) {
-        CodeComponentSystem.shared.stopPlayMode()
-        EditorExtensionHost.shared.playModeDidChange(false)
+        ScenePluginSystem.shared.stopPlayMode()
+        EditorMenuPluginHost.shared.playModeDidChange(false)
         if restoring == false {
             applyPendingIfAny()
         }
     }
 
     func playModeRestoreDidFinish() {
-        CodeComponentSystem.shared.bindPending()
+        ScenePluginSystem.shared.bindPending()
         applyPendingIfAny()
     }
 

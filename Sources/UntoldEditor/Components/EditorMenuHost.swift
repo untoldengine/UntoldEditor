@@ -12,7 +12,7 @@
 import AppKit
 import UntoldComponentKit
 
-/// Builds the menu items that loaded `EditorExtension`s declare with `@UntoldMenu`, and keeps
+/// Builds the menu items that loaded `EditorMenuPlugin`s declare with `@UntoldMenu`, and keeps
 /// their checkmarks in step with the wrapped values.
 ///
 /// Items always land under one of the editor's fixed roots. `File` and `View` are the editor's
@@ -24,12 +24,12 @@ final class EditorMenuHost: NSObject, NSMenuDelegate, NSMenuItemValidation {
 
     /// What a contributed `NSMenuItem` stands for.
     final class Binding: NSObject {
-        weak var owner: EditorExtension?
+        weak var owner: EditorMenuPlugin?
         let menu: AnyUntoldMenu
         /// Set on the items of a choice submenu.
         let choiceRawValue: String?
 
-        init(owner: EditorExtension, menu: AnyUntoldMenu, choiceRawValue: String? = nil) {
+        init(owner: EditorMenuPlugin, menu: AnyUntoldMenu, choiceRawValue: String? = nil) {
             self.owner = owner
             self.menu = menu
             self.choiceRawValue = choiceRawValue
@@ -37,7 +37,7 @@ final class EditorMenuHost: NSObject, NSMenuDelegate, NSMenuItemValidation {
     }
 
     /// Called after the user changed a toggle or a choice, once the wrapper holds the new value.
-    var onValueChanged: ((EditorExtension, AnyUntoldMenu) -> Void)?
+    var onValueChanged: ((EditorMenuPlugin, AnyUntoldMenu) -> Void)?
 
     private let mainMenuProvider: () -> NSMenu?
     private var addedItems: [NSMenuItem] = []
@@ -52,7 +52,7 @@ final class EditorMenuHost: NSObject, NSMenuDelegate, NSMenuItemValidation {
 
     // MARK: Building
 
-    func install(_ entries: [(owner: EditorExtension, menu: AnyUntoldMenu)]) {
+    func install(_ entries: [(owner: EditorMenuPlugin, menu: AnyUntoldMenu)]) {
         for entry in entries {
             guard let root = rootMenu(for: entry.menu.domain) else { continue }
             let parent = submenu(for: entry.menu.submenuPath, domain: entry.menu.domain, root: root)
@@ -133,7 +133,7 @@ final class EditorMenuHost: NSObject, NSMenuDelegate, NSMenuItemValidation {
         return parent
     }
 
-    private func makeItem(owner: EditorExtension, menu: AnyUntoldMenu) -> NSMenuItem {
+    private func makeItem(owner: EditorMenuPlugin, menu: AnyUntoldMenu) -> NSMenuItem {
         switch menu.kind {
         case .toggle, .action:
             let item = NSMenuItem(title: menu.title, action: #selector(itemClicked(_:)), keyEquivalent: menu.keyEquivalent)
