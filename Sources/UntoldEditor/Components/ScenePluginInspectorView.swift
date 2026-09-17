@@ -1,5 +1,5 @@
 //
-//  CodeComponentInspectorView.swift
+//  ScenePluginInspectorView.swift
 //  UntoldEditor
 //
 // Copyright (C) Untold Engine Studios
@@ -15,102 +15,168 @@ import SwiftUI
 import UntoldComponentKit
 import UntoldEngine
 
-/// The components written in code that the entity carries, shown in the Inspector the way
-/// the engine's components are: one block each, a headline with a remove button, then a
-/// field for every `@UntoldAttribute` and a button for every action. They are added from
-/// the Inspector's one Add Component menu (`AddComponentMenu`), alongside the engine's.
+/// The component plugins the entity carries, shown in the Inspector the way the engine's
+/// components are: one block each, a headline with a remove button, then a field for every
+/// `@UntoldAttribute` and a button for every action. They are added from the Inspector's one
+/// Add Component menu (`AddComponentMenu`), alongside the engine's.
 ///
 /// Drawn by the Inspector directly rather than registered as component options, because the
 /// set of types changes whenever a library loads, and so scene-composition mode keeps them.
-struct CodeComponentInspectorView: View {
+struct ScenePluginInspectorView: View {
     let entityId: EntityID
     let refreshView: () -> Void
 
     @ObservedObject private var controller = ComponentLibraryController.shared
 
-    /// Whether the Inspector has anything to draw for `entityId`.
+    /// Whether the Inspector has any component plugin to draw for `entityId`.
     static func isAvailable(for entityId: EntityID) -> Bool {
         guard EditorFeatureFlags.enableCodeComponents, isDerivedAssetNode(entityId) == false else { return false }
-        return CodeComponentSystem.shared.slots(on: entityId).isEmpty == false
+        return ScenePluginSystem.shared.slots(on: entityId).isEmpty == false
     }
 
-    /// The loaded component types `entityId` does not carry yet, for the Add Component menu.
-    /// A component that is part of a kind of entity (`.entityKindOnly`) is never offered: a
-    /// torus's shape means nothing on a cube, and only the kind's template adds it.
-    static func addableTypes(for entityId: EntityID) -> [CodeComponentRegistry.Entry] {
+    /// The loaded component plugins `entityId` does not carry yet, for the Add Component menu.
+    /// Every one of them: a component is something any entity can have. What belongs to one
+    /// kind of entity only is a property of its `EntityPlugin`, and is never in this list.
+    static func addableTypes(for entityId: EntityID) -> [ComponentPluginRegistry.Entry] {
         guard EditorFeatureFlags.enableCodeComponents, isDerivedAssetNode(entityId) == false else { return [] }
-        let present = Set(CodeComponentSystem.shared.slots(on: entityId).map(\.typeName))
-        return CodeComponentRegistry.shared.attachableEntries
+        let present = Set(ScenePluginSystem.shared.slots(on: entityId).map(\.typeName))
+        return ComponentPluginRegistry.shared.entries
             .filter { present.contains($0.name) == false }
             .sorted { $0.type.displayName < $1.type.displayName }
     }
 
-    /// Whether the Inspector may remove the component. One that is part of its kind of entity
-    /// stays until the entity is deleted. A slot whose type is not loaded can always go, so
-    /// leftovers can be cleaned up.
-    static func canRemove(_ typeName: String, from entityId: EntityID) -> Bool {
-        guard let instance = CodeComponentSystem.shared.component(named: typeName, on: entityId) else { return true }
-        return type(of: instance).attachment == .anyEntity
-    }
-
-    /// Whether a component on the entity built its mesh in code (`setGeneratedMesh`). The mesh
-    /// is then the component's doing, and the Inspector does not remove it on its own.
-    static func generatedMeshIsOwned(on entityId: EntityID) -> Bool {
-        guard EditorFeatureFlags.enableCodeComponents else { return false }
-        return CodeComponentSystem.shared.components(on: entityId).contains { $0.ownsGeneratedMesh }
-    }
-
     /// Adds a component by type name, as the Add Component menu does.
     static func add(_ typeName: String, to entityId: EntityID) {
-        CodeComponentSystem.shared.add(typeName, to: entityId)
+        ScenePluginSystem.shared.add(typeName, to: entityId)
         EditorSceneDirtyState.shared.markDirty()
     }
 
     var body: some View {
-        let slots = CodeComponentSystem.shared.slots(on: entityId)
+        let slots = ScenePluginSystem.shared.slots(on: entityId)
 
         VStack(alignment: .leading, spacing: 8) {
             ForEach(slots, id: \.typeName) { slot in
-                slotView(slot)
+                PluginBlock(
+                    entityId: entityId,
+                    slot: slot,
+                    instance: ScenePluginSystem.shared.component(named: slot.typeName, on: entityId),
+                    title: nil,
+                    badge: "swift",
+                    badgeHelp: "\(slot.typeName), a component written in the project's code or one of its plugins",
+                    removeHelp: "Remove \(slot.typeName) and its saved values",
+                    onRemove: {
+                        ScenePluginSystem.shared.remove(slot.typeName, from: entityId)
+                        EditorSceneDirtyState.shared.markDirty()
+                        refreshView()
+                    },
+                    refreshView: refreshView
+                )
                 Divider()
             }
         }
         // A new library revision swaps every instance: rebuild the fields against the new ones.
         .id(controller.revision)
     }
+}
 
-    // MARK: One component
+/// The entity's own block, when it is a kind of entity written in code (`EntityPlugin`): its
+/// kind as the headline and a field for each of its properties. It comes before the
+/// components because it is the entity, not something added to it, so it has no remove
+/// button: deleting the entity is how it goes. The one exception is a kind whose type is no
+/// longer loaded, which can be cleared so the entity can be kept as a plain one.
+struct EntityPluginInspectorView: View {
+    let entityId: EntityID
+    let refreshView: () -> Void
 
-    @ViewBuilder
-    private func slotView(_ slot: CodeComponentSlotInfo) -> some View {
-        let instance = CodeComponentSystem.shared.component(named: slot.typeName, on: entityId)
+    @ObservedObject private var controller = ComponentLibraryController.shared
+
+    static func isAvailable(for entityId: EntityID) -> Bool {
+        guard EditorFeatureFlags.enableCodeComponents, isDerivedAssetNode(entityId) == false else { return false }
+        return ScenePluginSystem.shared.entitySlot(on: entityId) != nil
+    }
+
+    /// Whether the entity's mesh was built by its own plugin (`setGeneratedMesh`). It is then
+    /// part of the entity, and the Inspector does not remove it on its own.
+    static func generatedMeshIsOwned(on entityId: EntityID) -> Bool {
+        guard EditorFeatureFlags.enableCodeComponents else { return false }
+        return ScenePluginSystem.shared.entityPlugin(on: entityId)?.ownsGeneratedMesh ?? false
+    }
+
+    /// The headline and icon for the entity's kind: the loaded type's, or the saved type name
+    /// when the library that defined it is not loaded.
+    static func kind(of slot: ScenePluginSlotInfo) -> (title: String, systemImage: String) {
+        guard let type = EntityPluginRegistry.shared.type(named: slot.typeName) else {
+            return (slot.typeName, "questionmark.square.dashed")
+        }
+        return (type.displayName, type.systemImage)
+    }
+
+    var body: some View {
+        if let slot = ScenePluginSystem.shared.entitySlot(on: entityId) {
+            let kind = Self.kind(of: slot)
+            VStack(alignment: .leading, spacing: 8) {
+                PluginBlock(
+                    entityId: entityId,
+                    slot: slot,
+                    instance: ScenePluginSystem.shared.entityPlugin(on: entityId),
+                    title: kind.title,
+                    badge: kind.systemImage,
+                    badgeHelp: "This entity is a \(kind.title) (\(slot.typeName)), a kind of entity written in the project's code or one of its plugins. These are its own properties.",
+                    removeHelp: "Forget that this entity was a \(slot.typeName), and its saved values. The entity stays.",
+                    onRemove: slot.isBound ? nil : {
+                        ScenePluginSystem.shared.removeEntityPlugin(from: entityId)
+                        EditorSceneDirtyState.shared.markDirty()
+                        refreshView()
+                    },
+                    refreshView: refreshView
+                )
+                Divider()
+            }
+            .id(controller.revision)
+        }
+    }
+}
+
+// MARK: - One plugin
+
+/// One block of fields: the headline, then a field per attribute and a button per action, or
+/// a note when the type is not loaded. Shared by the entity's own block and its components.
+private struct PluginBlock: View {
+    let entityId: EntityID
+    let slot: ScenePluginSlotInfo
+    let instance: ScenePlugin?
+    /// The headline; `nil` takes the plugin's display name.
+    let title: String?
+    let badge: String
+    let badgeHelp: String
+    let removeHelp: String
+    /// `nil` when the block cannot be removed.
+    let onRemove: (() -> Void)?
+    let refreshView: () -> Void
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(instance.map { type(of: $0).displayName } ?? slot.typeName)
+                Text(title ?? instance.map { type(of: $0).displayName } ?? slot.typeName)
                     .font(.headline)
-                Image(systemName: "swift")
+                Image(systemName: badge)
                     .font(.system(size: 10))
                     .foregroundColor(.editorTextTertiary)
-                    .help("\(slot.typeName), written in the project's code or one of its plugins")
+                    .help(badgeHelp)
                 Spacer()
-                if Self.canRemove(slot.typeName, from: entityId) {
-                    Button(action: { remove(slot.typeName) }) {
+                if let onRemove {
+                    Button(action: onRemove) {
                         Image(systemName: "trash").foregroundColor(.editorError)
                     }
                     .buttonStyle(BorderlessButtonStyle())
-                    .help("Remove \(slot.typeName) and its saved values")
-                } else {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(.editorTextTertiary)
-                        .help("Part of this kind of entity. It cannot be added to other entities or removed from this one; delete the entity instead.")
+                    .help(removeHelp)
                 }
             }
 
             if let instance {
                 ForEach(instance.untoldAttributes(), id: \.name) { entry in
                     AttributeField(entry: entry) { newValue in
-                        write(newValue, to: entry, of: slot.typeName)
+                        write(newValue, to: entry)
                     }
                 }
                 let actions = type(of: instance).actions
@@ -118,7 +184,7 @@ struct CodeComponentInspectorView: View {
                     HStack(spacing: 6) {
                         ForEach(actions, id: \.name) { action in
                             Button(action.name) {
-                                CodeComponentSystem.shared.performAction(action.name, of: slot.typeName, on: entityId)
+                                ScenePluginSystem.shared.performAction(action.name, of: slot.typeName, on: entityId)
                                 refreshView()
                             }
                             .font(.caption)
@@ -135,21 +201,13 @@ struct CodeComponentInspectorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: Edits
-
-    private func remove(_ typeName: String) {
-        guard Self.canRemove(typeName, from: entityId) else { return }
-        CodeComponentSystem.shared.remove(typeName, from: entityId)
-        EditorSceneDirtyState.shared.markDirty()
-        refreshView()
-    }
-
-    private func write(_ newValue: UntoldAttributeValue, to entry: UntoldAttributeEntry, of typeName: String) {
+    private func write(_ newValue: UntoldAttributeValue, to entry: UntoldAttributeEntry) {
         let oldValue = entry.attribute.attributeValue
         guard oldValue != newValue else { return }
         let entity = entityId
+        let typeName = slot.typeName
         let property = entry.name
-        guard CodeComponentSystem.shared.setAttribute(property, of: typeName, on: entity, to: newValue) else { return }
+        guard ScenePluginSystem.shared.setAttribute(property, of: typeName, on: entity, to: newValue) else { return }
 
         EditorSceneDirtyState.shared.markDirty()
         EditorUndoManager.shared.registerValueChange(
@@ -157,7 +215,7 @@ struct CodeComponentInspectorView: View {
             oldValue: oldValue,
             newValue: newValue
         ) { restored in
-            CodeComponentSystem.shared.setAttribute(property, of: typeName, on: entity, to: restored)
+            ScenePluginSystem.shared.setAttribute(property, of: typeName, on: entity, to: restored)
             EditorSceneDirtyState.shared.markDirty()
             editorController?.refreshInspector()
         }

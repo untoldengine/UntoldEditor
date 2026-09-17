@@ -8,7 +8,7 @@
 #
 # Why this exists: a subclass compiled into another image copies its base class's dispatch
 # table, entries for internal members included. Debug builds export internal symbols, release
-# builds hide them, so a member of CodeComponent or EditorExtension that is neither public nor
+# builds hide them, so a member of ComponentPlugin or EditorMenuPlugin that is neither public nor
 # final breaks loading in the packaged app only. This catches it at packaging time instead of
 # on a user's machine.
 
@@ -33,7 +33,7 @@ import simd
 import UntoldComponentKit
 import UntoldEngine
 
-final class FixtureComponent: CodeComponent {
+final class FixtureComponent: ComponentPlugin {
     enum Mode: String, CaseIterable { case one, two }
 
     @UntoldAttribute("Speed", range: 0 ... 10, step: 0.5) var speed: Float = 1
@@ -48,8 +48,8 @@ final class FixtureComponent: CodeComponent {
     @UntoldAttribute var mode: Mode = .one
 
     override class var displayName: String { "Fixture" }
-    override class var actions: [ComponentAction] {
-        [ComponentAction("Poke") { ($0 as? FixtureComponent)?.count += 1 }]
+    override class var actions: [PluginAction] {
+        [PluginAction("Poke") { ($0 as? FixtureComponent)?.count += 1 }]
     }
 
     override func onAttach() { _ = transform; _ = isAttached }
@@ -61,13 +61,13 @@ final class FixtureComponent: CodeComponent {
     override func onEditorChanged(property _: String) {}
 
     func neighbours() -> [EntityID] {
-        _ = CodeComponentRegistry.component(FixtureComponent.self, on: entity)
-        _ = CodeComponentSystem.shared.components(on: entity)
-        return CodeComponentRegistry.entities(with: FixtureComponent.self)
+        _ = ComponentPluginRegistry.component(FixtureComponent.self, on: entity)
+        _ = ScenePluginSystem.shared.components(on: entity)
+        return ComponentPluginRegistry.entities(with: FixtureComponent.self)
     }
 }
 
-class FixtureBase: CodeComponent {
+class FixtureBase: ComponentPlugin {
     @UntoldAttribute var inherited: Float = 0
 }
 
@@ -75,7 +75,7 @@ final class FixtureDerived: FixtureBase {
     @UntoldAttribute var own: Float = 0
 }
 
-final class FixtureExtension: EditorExtension {
+final class FixtureExtension: EditorMenuPlugin {
     enum Level: String, CaseIterable, UntoldMenuTitled {
         case low, high
         var menuTitle: String { rawValue.capitalized }
@@ -84,7 +84,7 @@ final class FixtureExtension: EditorExtension {
     @UntoldMenu(.view, "Fixture Toggle", key: "", tooltip: "tip", persist: true, enabled: { true }) var toggle = true
     @UntoldMenu(.debug, "Fixture/Level") var level: Level = .low
     @UntoldMenu(.tools, "Fixture/Run") var run = UntoldMenuAction {}
-    @UntoldMenu(.file, "Fixture/Run With Owner") var runWithOwner = UntoldMenuAction { (_: EditorExtension) in }
+    @UntoldMenu(.file, "Fixture/Run With Owner") var runWithOwner = UntoldMenuAction { (_: EditorMenuPlugin) in }
 
     override class var displayName: String { "Fixture" }
     override func onLoad() {}
@@ -96,29 +96,45 @@ final class FixtureExtension: EditorExtension {
     override func menuDidChange(_: UntoldMenuDomain, _: String) {}
 }
 
-// A kind of entity: a template, an editor-only representation, and a mesh built in code.
-final class FixtureMarker: CodeComponent {
-    override class var attachment: ComponentAttachment { .entityKindOnly }
+// A kind of entity: its own properties, a mesh built in code, and an editor representation.
+final class FixtureEntity: EntityPlugin {
+    @UntoldAttribute("Size", range: 0 ... 10) var size: Float = 1
 
-    override var editorRepresentation: EditorRepresentation {
-        .icon(systemImage: "flag.fill", tint: SIMD3<Float>(1, 0.5, 0))
+    override class var displayName: String { "Fixture" }
+    override class var shelf: UntoldEntityShelf { .primitives }
+    override class var systemImage: String { "flag" }
+    override class var actions: [PluginAction] {
+        [PluginAction("Rebuild") { ($0 as? FixtureEntity)?.onAttach() }]
+    }
+
+    override func onCreate() {
+        add(FixtureComponent.self)
     }
 
     override func onAttach() {
         setGeneratedMesh(BasicPrimitives.createCube(), name: "Fixture")
         _ = ownsGeneratedMesh
-        _ = CodeComponentRegistry.shared.attachableEntries
     }
-}
 
-final class FixtureEntity: EntityTemplate {
-    override class var displayName: String { "Fixture" }
-    override class var shelf: UntoldEntityShelf { .primitives }
-    override class var systemImage: String { "flag" }
+    override func onEditorChanged(property _: String) {}
 
-    override func build(_ entity: EntityID) {
-        add(FixtureMarker.self, to: entity)
-        _ = EntityTemplateRegistry.shared.instantiate("FixtureEntity", at: .zero, entityName: nil)
+    override var editorRepresentation: EditorRepresentation {
+        EditorRepresentation([
+            .icon(systemImage: "flag.fill", tint: SIMD3<Float>(1, 0.5, 0)),
+            .points([.zero], tint: SIMD3<Float>(1, 1, 1)),
+            .polyline([.zero, SIMD3<Float>(size, 0, 0)], closed: true),
+        ])
+    }
+
+    func reach() {
+        _ = EntityPluginRegistry.shared.instantiate("FixtureEntity", at: .zero, entityName: nil)
+        _ = EntityPluginRegistry.shared.instantiate(FixtureEntity.self)
+        _ = EntityPluginRegistry.plugin(FixtureEntity.self, on: entity)
+        _ = EntityPluginRegistry.entities(of: FixtureEntity.self)
+        _ = ScenePluginSystem.shared.entityPlugin(on: entity)
+        _ = ComponentPluginRegistry.component(FixtureComponent.self, on: entity)
+        _ = EditorRepresentation.none.isEmpty
+        _ = EditorRepresentation.icon(systemImage: "flag")
     }
 }
 SWIFT
@@ -144,7 +160,7 @@ MISSING="$(comm -23 "$WORK/needed.txt" "$WORK/exported.txt")"
 
 if [ -n "$MISSING" ]; then
     echo "❌ Component SDK check: a loaded component library would fail to resolve these symbols."
-    echo "   Make the members public or final (see CodeComponent.swift in UntoldComponentKit):"
+    echo "   Make the members public or final (see ComponentPlugin.swift in UntoldComponentKit):"
     echo "$MISSING" | xcrun swift-demangle | sed 's/^/     /'
     exit 1
 fi

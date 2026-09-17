@@ -392,6 +392,14 @@ struct InspectorView: View {
                             AssetNodeInspectorBanner(entityId: entityId, selectionManager: selectionManager)
                         }
 
+                        // The entity's own properties, when it is a kind of entity written in code
+                        // (EntityPlugin). They are the entity, so they come before its components.
+                        if EntityPluginInspectorView.isAvailable(for: entityId) {
+                            EntityPluginInspectorView(entityId: entityId, refreshView: refreshView)
+                                .frame(minWidth: 200, maxWidth: 250)
+                                .id(entityId)
+                        }
+
                         if hasComponent(entityId: entityId, componentType: TileComponent.self) {
                             TileMeshListInspectorView(entityId: entityId)
                             Divider()
@@ -462,12 +470,12 @@ struct InspectorView: View {
                                 Divider()
                             }
 
-                            // Components written in the project's Swift sources and loaded by the
-                            // editor, one block each like the engine's above. An ad-hoc section (not a
-                            // ComponentOption_Editor) so scene-composition mode, which whitelists
+                            // Component plugins written in the project's Swift sources and loaded by
+                            // the editor, one block each like the engine's above. An ad-hoc section
+                            // (not a ComponentOption_Editor) so scene-composition mode, which whitelists
                             // registered components, keeps it.
-                            if CodeComponentInspectorView.isAvailable(for: entityId) {
-                                CodeComponentInspectorView(entityId: entityId, refreshView: refreshView)
+                            if ScenePluginInspectorView.isAvailable(for: entityId) {
+                                ScenePluginInspectorView(entityId: entityId, refreshView: refreshView)
                                     .frame(minWidth: 200, maxWidth: 250)
                                     .id(entityId)
                             }

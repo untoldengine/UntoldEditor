@@ -1,5 +1,5 @@
 //
-//  EditorExtensionHostTests.swift
+//  EditorMenuPluginHostTests.swift
 //  UntoldEditor
 //
 // Copyright (C) Untold Engine Studios
@@ -14,27 +14,27 @@ import UntoldComponentKit
 @testable import UntoldEditor
 import XCTest
 
-final class EditorExtensionHostTests: XCTestCase {
+final class EditorMenuPluginHostTests: XCTestCase {
     private var mainMenu: NSMenu!
     private var menuHost: EditorMenuHost!
     private var defaults: UserDefaults!
     private var suiteName: String!
-    private var host: EditorExtensionHost!
+    private var host: EditorMenuPluginHost!
 
     override func setUp() {
         super.setUp()
         mainMenu = makeEditorLikeMainMenu()
         menuHost = EditorMenuHost(mainMenuProvider: { [unowned self] in mainMenu })
-        suiteName = "EditorExtensionHostTests-\(UUID().uuidString)"
+        suiteName = "EditorMenuPluginHostTests-\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
-        host = EditorExtensionHost(menuHost: menuHost, defaults: defaults)
-        EditorExtensionRegistry.shared.removeAll()
-        EditorExtensionRegistry.shared.register(MenuProbeExtension.self, revision: 1)
+        host = EditorMenuPluginHost(menuHost: menuHost, defaults: defaults)
+        EditorMenuPluginRegistry.shared.removeAll()
+        EditorMenuPluginRegistry.shared.register(MenuProbeExtension.self, revision: 1)
     }
 
     override func tearDown() {
         host.unloadAll()
-        EditorExtensionRegistry.shared.removeAll()
+        EditorMenuPluginRegistry.shared.removeAll()
         defaults.removePersistentDomain(forName: suiteName)
         super.tearDown()
     }
@@ -89,7 +89,7 @@ final class EditorExtensionHostTests: XCTestCase {
     }
 
     func test_clashesAndEmptyPathsAreRefusedAndReported() {
-        EditorExtensionRegistry.shared.register(ClashingExtension.self, revision: 1)
+        EditorMenuPluginRegistry.shared.register(ClashingExtension.self, revision: 1)
 
         host.load(typeNames: ["MenuProbeExtension", "ClashingExtension"], projectKey: "project")
 

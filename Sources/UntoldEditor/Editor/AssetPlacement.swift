@@ -175,7 +175,7 @@ enum DroppedRowPayload {
     case asset(AssetDragPayload)
     case light(LightDragPayload)
     case primitive(PrimitiveDragPayload)
-    case template(EntityTemplateDragPayload)
+    case entityPlugin(EntityPluginDragPayload)
 }
 
 /// Decodes whichever payload `providers` carries and hands it to `completion` on the
@@ -199,8 +199,8 @@ func loadDroppedRowPayload(from providers: [NSItemProvider], completion: @escapi
             DispatchQueue.main.async { completion(.light(light)) }
         } else if let primitive = try? PrimitiveDragPayload.decode(data) {
             DispatchQueue.main.async { completion(.primitive(primitive)) }
-        } else if let template = try? EntityTemplateDragPayload.decode(data) {
-            DispatchQueue.main.async { completion(.template(template)) }
+        } else if let entityPlugin = try? EntityPluginDragPayload.decode(data) {
+            DispatchQueue.main.async { completion(.entityPlugin(entityPlugin)) }
         } else if let asset = try? AssetDragPayload.decode(data) {
             DispatchQueue.main.async { completion(.asset(asset)) }
         } else {

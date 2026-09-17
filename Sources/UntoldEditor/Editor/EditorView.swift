@@ -602,21 +602,21 @@ public struct EditorView: View {
             editor_placeDroppedLight(lightPayload, parent: parent, at: position)
         case let .primitive(primitivePayload):
             editor_placeDroppedPrimitive(primitivePayload, parent: parent, at: position)
-        case let .template(templatePayload):
-            editor_placeDroppedTemplate(templatePayload, parent: parent, at: position)
+        case let .entityPlugin(pluginPayload):
+            editor_placeDroppedEntityPlugin(pluginPayload, parent: parent, at: position)
         }
     }
 
     /// Places a dropped entity template row (a kind of entity that loaded code added),
     /// parenting it under `parent` for a hierarchy drop, same as `editor_placeDroppedAsset`.
-    private func editor_placeDroppedTemplate(_ payload: EntityTemplateDragPayload, parent: EntityID?, at position: simd_float3? = nil) {
-        guard let placement = placeEntityTemplate(
-            payload.entityTemplate,
+    private func editor_placeDroppedEntityPlugin(_ payload: EntityPluginDragPayload, parent: EntityID?, at position: simd_float3? = nil) {
+        guard let placement = placeEntityPlugin(
+            payload.entityPlugin,
             at: position,
             sceneGraphModel: sceneGraphModel,
             selectionManager: selectionManager
         ) else {
-            showDropStatus("'\(payload.entityTemplate)' is no longer loaded.", isError: true)
+            showDropStatus("'\(payload.entityPlugin)' is no longer loaded.", isError: true)
             return
         }
         if let parent {
@@ -1511,7 +1511,7 @@ public struct EditorView: View {
             EditorComponentsState.shared.clear()
             EditorGaussianAssetState.shared.clear()
             EditorUndoManager.shared.clear()
-            EditorExtensionHost.shared.sceneDidReset()
+            EditorMenuPluginHost.shared.sceneDidReset()
             EditorSceneDirtyState.shared.clear()
             sceneAuthoredGameCamera = nil
             deserializeScene(sceneData: sceneData, onGaussianEntityRestored: restoreEditorGaussianState)
@@ -1541,7 +1541,7 @@ public struct EditorView: View {
         EditorComponentsState.shared.clear()
         EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
-        EditorExtensionHost.shared.sceneDidReset()
+        EditorMenuPluginHost.shared.sceneDidReset()
         EditorSceneDirtyState.shared.clear()
         sceneAuthoredGameCamera = nil
 
@@ -1644,7 +1644,7 @@ public struct EditorView: View {
         EditorComponentsState.shared.clear()
         EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
-        EditorExtensionHost.shared.sceneDidReset()
+        EditorMenuPluginHost.shared.sceneDidReset()
         sceneAuthoredGameCamera = nil
 
         let light = createEntity()

@@ -25,17 +25,17 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        CodeComponentRegistry.shared.removeAll()
-        EditorExtensionRegistry.shared.removeAll()
-        EntityTemplateRegistry.shared.removeAll()
-        CodeComponentSystem.install()
+        ComponentPluginRegistry.shared.removeAll()
+        EditorMenuPluginRegistry.shared.removeAll()
+        EntityPluginRegistry.shared.removeAll()
+        ScenePluginSystem.install()
     }
 
     override func tearDown() {
-        CodeComponentSystem.shared.prepareForReload()
-        CodeComponentRegistry.shared.removeAll()
-        EditorExtensionRegistry.shared.removeAll()
-        EntityTemplateRegistry.shared.removeAll()
+        ScenePluginSystem.shared.prepareForReload()
+        ComponentPluginRegistry.shared.removeAll()
+        EditorMenuPluginRegistry.shared.removeAll()
+        EntityPluginRegistry.shared.removeAll()
         super.tearDown()
     }
 
@@ -67,25 +67,32 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
 
         let library = try ComponentLibraryLoader.load(request).get()
         XCTAssertEqual(library.componentNames, ["Orbiter"])
-        XCTAssertEqual(library.extensionNames, ["SampleTools"])
-        XCTAssertEqual(library.templateNames, ["OrbiterEntity"])
+        XCTAssertEqual(library.menuPluginNames, ["SampleTools"])
+        XCTAssertEqual(library.entityPluginNames, ["OrbiterEntity"])
         XCTAssertEqual(library.moduleName, "SampleComponents_r\(Self.revision)")
         XCTAssertGreaterThan(library.byteSize, 0)
 
         // The loaded component runs against this process's engine.
         let entity = createEntity()
-        let orbiter = try XCTUnwrap(CodeComponentSystem.shared.add("Orbiter", to: entity))
+        let orbiter = try XCTUnwrap(ScenePluginSystem.shared.add("Orbiter", to: entity))
         XCTAssertEqual(getEntityName(entityId: entity), "orbiting")
         XCTAssertEqual(orbiter.untoldAttributes().map(\.displayLabel), ["Radius", "Clockwise"])
 
         // And the loaded extension declares menus the host can build.
-        let extensionType = try XCTUnwrap(EditorExtensionRegistry.shared.type(named: "SampleTools"))
+        let extensionType = try XCTUnwrap(EditorMenuPluginRegistry.shared.type(named: "SampleTools"))
         XCTAssertEqual(extensionType.init().untoldMenuItems().map(\.menu.identifier), ["debug/Sample/Verbose", "tools/Sample/Reset"])
 
-        // And the loaded template is on its shelf and builds an entity with the loaded component.
-        XCTAssertEqual(EntityTemplateShelfItem.items(on: .primitives).map(\.displayName), ["Orbiter"])
-        let placed = try XCTUnwrap(EntityTemplateRegistry.shared.instantiate("OrbiterEntity", at: SIMD3<Float>(0, 1, 0)))
-        XCTAssertEqual(CodeComponentSystem.shared.slots(on: placed).map(\.typeName), ["Orbiter"])
+        // And the loaded kind of entity is on its shelf, and a new one starts with the loaded component.
+        XCTAssertEqual(EntityPluginShelfItem.items(on: .primitives).map(\.displayName), ["Orbiter"])
+        let placed = try XCTUnwrap(EntityPluginRegistry.shared.instantiate("OrbiterEntity", at: SIMD3<Float>(0, 1, 0)))
+        let kind = try XCTUnwrap(ScenePluginSystem.shared.entityPlugin(on: placed))
+        XCTAssertEqual(kind.untoldAttributes().map(\.displayLabel), ["Orbit Height"], "the loaded kind's own properties")
+        XCTAssertEqual(
+            EditorRepresentationRenderer.drawing(for: placed)?.representation.items,
+            [.points([SIMD3<Float>(0, 1.5, 0)], tint: SIMD3<Float>(1, 1, 1))],
+            "and its editor representation, read from the loaded library"
+        )
+        XCTAssertEqual(ScenePluginSystem.shared.slots(on: placed).map(\.typeName), ["Orbiter"])
         XCTAssertEqual(getLocalPosition(entityId: placed), SIMD3<Float>(0, 1, 0))
 
         destroyEntity(entityId: entity)
@@ -99,7 +106,7 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
         let file = try scratch.write("""
         import UntoldComponentKit
 
-        final class Broken: CodeComponent {
+        final class Broken: ComponentPlugin {
             @UntoldAttribute var speed: Float = 1
             override func onStart() { speeed = 2 }
         }
@@ -130,7 +137,7 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
     import UntoldComponentKit
     import UntoldEngine
 
-    final class Orbiter: CodeComponent {
+    final class Orbiter: ComponentPlugin {
         @UntoldAttribute(range: 0 ... 50) var radius: Float = 3
         @UntoldAttribute var clockwise = true
 
@@ -139,11 +146,17 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
         }
     }
 
-    final class OrbiterEntity: EntityTemplate {
+    final class OrbiterEntity: EntityPlugin {
+        @UntoldAttribute("Orbit Height", range: 0 ... 10) var height: Float = 1.5
+
         override class var shelf: UntoldEntityShelf { .primitives }
 
-        override func build(_ entity: EntityID) {
-            add(Orbiter.self, to: entity)
+        override func onCreate() {
+            add(Orbiter.self)
+        }
+
+        override var editorRepresentation: EditorRepresentation {
+            EditorRepresentation([.points([SIMD3<Float>(0, height, 0)], tint: SIMD3<Float>(1, 1, 1))])
         }
     }
     """
@@ -152,7 +165,7 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
     #if UNTOLD_EDITOR
     import UntoldComponentKit
 
-    final class SampleTools: EditorExtension {
+    final class SampleTools: EditorMenuPlugin {
         @UntoldMenu(.debug, "Sample/Verbose") var verbose = false
         @UntoldMenu(.tools, "Sample/Reset") var reset = UntoldMenuAction {}
     }

@@ -27,7 +27,7 @@ final class EditorMenuHostTests: XCTestCase {
     }
 
     private func install() {
-        host.install(probe.untoldMenuItems().map { (owner: probe as EditorExtension, menu: $0.menu) })
+        host.install(probe.untoldMenuItems().map { (owner: probe as EditorMenuPlugin, menu: $0.menu) })
     }
 
     private func root(_ title: String) -> NSMenu? {

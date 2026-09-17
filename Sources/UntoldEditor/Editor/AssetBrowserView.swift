@@ -849,7 +849,7 @@ struct AssetBrowserView: View {
             ForEach(PlaceableLightType.allCases, id: \.self) { kind in
                 lightRow(kind)
             }
-            entityTemplateRows(on: .lights)
+            entityPluginRows(on: .lights)
         }
     }
 
@@ -915,14 +915,14 @@ struct AssetBrowserView: View {
             ForEach(PlaceablePrimitiveType.allCases, id: \.self) { kind in
                 primitiveRow(kind)
             }
-            entityTemplateRows(on: .primitives)
+            entityPluginRows(on: .primitives)
         }
     }
 
-    /// The kinds of entity loaded code added to `shelf` (see `EntityTemplate` in the component
+    /// The kinds of entity loaded code added to `shelf` (see `EntityPlugin` in the component
     /// kit). They sit under the built-in rows and work the same way.
-    private func entityTemplateRows(on shelf: UntoldEntityShelf) -> some View {
-        EntityTemplateShelfRows(
+    private func entityPluginRows(on shelf: UntoldEntityShelf) -> some View {
+        EntityPluginShelfRows(
             shelf: shelf,
             sceneGraphModel: sceneGraphModel,
             selectionManager: selectionManager,
@@ -933,7 +933,7 @@ struct AssetBrowserView: View {
     /// Left-tree entry for the Entities shelf, mirroring `lightsCategoryRow`. Hidden until
     /// loaded code adds an entity kind that belongs there.
     private var entitiesCategoryRow: some View {
-        EntityTemplatesCategoryRow(isSelected: navigation.entitiesSelected) {
+        EntityPluginsCategoryRow(isSelected: navigation.entitiesSelected) {
             navigation.entitiesSelected = true
             navigation.lightsSelected = false
             navigation.primitivesSelected = false
@@ -947,7 +947,7 @@ struct AssetBrowserView: View {
 
     private var entitiesShelfView: some View {
         VStack(alignment: .leading, spacing: 4) {
-            entityTemplateRows(on: .entities)
+            entityPluginRows(on: .entities)
         }
     }
 

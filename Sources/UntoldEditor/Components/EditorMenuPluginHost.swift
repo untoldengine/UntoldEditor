@@ -1,5 +1,5 @@
 //
-//  EditorExtensionHost.swift
+//  EditorMenuPluginHost.swift
 //  UntoldEditor
 //
 // Copyright (C) Untold Engine Studios
@@ -13,14 +13,14 @@ import Foundation
 import UntoldComponentKit
 import UntoldEngine
 
-/// Owns the live `EditorExtension` instances of the loaded libraries: creates them, restores
+/// Owns the live `EditorMenuPlugin` instances of the loaded libraries: creates them, restores
 /// and saves their menu values per project, builds their menus, and forwards editor events.
-final class EditorExtensionHost {
-    static let shared = EditorExtensionHost()
+final class EditorMenuPluginHost {
+    static let shared = EditorMenuPluginHost()
 
     struct LiveExtension {
         let name: String
-        let instance: EditorExtension
+        let instance: EditorMenuPlugin
         let menuIdentifiers: [String]
     }
 
@@ -51,10 +51,10 @@ final class EditorExtensionHost {
         }
 
         var claimed: Set<String> = []
-        var accepted: [(owner: EditorExtension, menu: AnyUntoldMenu)] = []
+        var accepted: [(owner: EditorMenuPlugin, menu: AnyUntoldMenu)] = []
 
         for name in typeNames.sorted() {
-            guard let type = EditorExtensionRegistry.shared.type(named: name) else { continue }
+            guard let type = EditorMenuPluginRegistry.shared.type(named: name) else { continue }
             let instance = type.init()
             var identifiers: [String] = []
             for entry in instance.untoldMenuItems() {
@@ -142,12 +142,12 @@ final class EditorExtensionHost {
 }
 
 /// Gives extensions their edit-mode frame callback.
-final class EditorExtensionTicker: EngineExtension, @unchecked Sendable {
+final class EditorMenuPluginTicker: EngineExtension, @unchecked Sendable {
     static let extensionID = "com.untoldengine.editor.extension-host"
-    let id = EditorExtensionTicker.extensionID
+    let id = EditorMenuPluginTicker.extensionID
 
     func update(deltaTime: Float, context _: EngineExtensionUpdateContext) {
         guard gameMode == false else { return }
-        EditorExtensionHost.shared.editorUpdate(deltaTime: deltaTime)
+        EditorMenuPluginHost.shared.editorUpdate(deltaTime: deltaTime)
     }
 }
