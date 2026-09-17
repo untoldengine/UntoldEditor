@@ -138,5 +138,13 @@ func canRemoveComponentFromInspector(componentType: Any.Type, from entityId: Ent
         return false
     }
 
+    // A mesh that a code component built (a torus's ring) is part of that kind of entity:
+    // it goes when the entity does, not on its own.
+    if ObjectIdentifier(componentType) == ObjectIdentifier(RenderComponent.self),
+       CodeComponentInspectorView.generatedMeshIsOwned(on: entityId)
+    {
+        return false
+    }
+
     return canShowComponentInInspector(componentType: componentType, for: entityId)
 }

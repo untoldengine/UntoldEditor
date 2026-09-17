@@ -10,7 +10,7 @@
 //
 
 import simd
-import UntoldComponentKit
+@testable import UntoldComponentKit
 @testable import UntoldEditor
 @testable import UntoldEngine
 import XCTest
@@ -29,6 +29,25 @@ final class ProbeMarker: CodeComponent {
 /// No representation.
 final class ProbeRules: CodeComponent {
     @UntoldAttribute var limit: Int = 3
+}
+
+/// Part of the Probe Ring kind: never offered for another entity, never removed from its own.
+final class ProbeRingShape: CodeComponent {
+    @UntoldAttribute var radius: Float = 1
+
+    override class var attachment: ComponentAttachment {
+        .entityKindOnly
+    }
+}
+
+final class ProbeRingEntity: EntityTemplate {
+    override class var shelf: UntoldEntityShelf {
+        .primitives
+    }
+
+    override func build(_ entity: EntityID) {
+        add(ProbeRingShape.self, to: entity)
+    }
 }
 
 final class ProbeMarkerEntity: EntityTemplate {
@@ -162,6 +181,59 @@ final class EntityTemplateEditorTests: XCTestCase {
         XCTAssertEqual(CodeComponentInspectorView.addableTypes(for: entity).map(\.name), ["ProbeMarker"])
         XCTAssertTrue(CodeComponentInspectorView.isAvailable(for: entity))
         XCTAssertEqual(AddComponentMenu.codeSectionTitle, "From Code")
+    }
+
+    // MARK: Components that belong to their kind of entity
+
+    func test_aKindOnlyComponentIsNeverOfferedForAnotherEntity() throws {
+        CodeComponentRegistry.shared.register(ProbeRules.self)
+        CodeComponentRegistry.shared.register(ProbeRingShape.self)
+        let cube = createEntity()
+
+        XCTAssertEqual(
+            CodeComponentInspectorView.addableTypes(for: cube).map(\.name), ["ProbeRules"],
+            "a ring's shape means nothing on another entity, so Add Component leaves it out"
+        )
+
+        // The kind's own template is how it gets onto an entity.
+        EntityTemplateRegistry.shared.register(ProbeRingEntity.self)
+        let ring = try XCTUnwrap(EntityTemplateRegistry.shared.instantiate("ProbeRingEntity"))
+        XCTAssertEqual(CodeComponentSystem.shared.slots(on: ring).map(\.typeName), ["ProbeRingShape"])
+        XCTAssertEqual(CodeComponentInspectorView.addableTypes(for: ring).map(\.name), ["ProbeRules"], "a ring still takes ordinary components")
+    }
+
+    func test_aKindOnlyComponentCannotBeRemovedButALeftoverSlotCan() throws {
+        EntityTemplateRegistry.shared.register(ProbeRingEntity.self)
+        let ring = try XCTUnwrap(EntityTemplateRegistry.shared.instantiate("ProbeRingEntity"))
+        CodeComponentRegistry.shared.register(ProbeRules.self)
+        CodeComponentInspectorView.add("ProbeRules", to: ring)
+
+        XCTAssertFalse(CodeComponentInspectorView.canRemove("ProbeRingShape", from: ring), "it goes when the entity does")
+        XCTAssertTrue(CodeComponentInspectorView.canRemove("ProbeRules", from: ring))
+
+        // A slot whose type is no longer loaded has no rule to read; it can be cleaned up.
+        CodeComponentSystem.shared.add("TypeFromAnUnloadedLibrary", to: ring)
+        XCTAssertTrue(CodeComponentInspectorView.canRemove("TypeFromAnUnloadedLibrary", from: ring))
+    }
+
+    func test_aMeshBuiltByAComponentIsNotRemovedOnItsOwn() throws {
+        EntityTemplateRegistry.shared.register(ProbeRingEntity.self)
+        let ring = try XCTUnwrap(EntityTemplateRegistry.shared.instantiate("ProbeRingEntity"))
+        registerComponent(entityId: ring, componentType: RenderComponent.self)
+        let plain = createEntity()
+        registerComponent(entityId: plain, componentType: RenderComponent.self)
+
+        XCTAssertFalse(CodeComponentInspectorView.generatedMeshIsOwned(on: ring))
+
+        // What setGeneratedMesh records once the component has built the entity's mesh.
+        let shape = try XCTUnwrap(CodeComponentRegistry.component(ProbeRingShape.self, on: ring))
+        shape.ownsGeneratedMesh = true
+
+        XCTAssertTrue(CodeComponentInspectorView.generatedMeshIsOwned(on: ring))
+        XCTAssertFalse(CodeComponentInspectorView.generatedMeshIsOwned(on: plain), "other entities are unaffected")
+        // Holds in either authoring mode; scene-composition mode, the shipping default, already
+        // refuses every engine component removal.
+        XCTAssertFalse(canRemoveComponentFromInspector(componentType: RenderComponent.self, from: ring), "the ring is the component's doing")
     }
 
     // MARK: Editor-only representation

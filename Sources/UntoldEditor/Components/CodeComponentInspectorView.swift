@@ -35,12 +35,29 @@ struct CodeComponentInspectorView: View {
     }
 
     /// The loaded component types `entityId` does not carry yet, for the Add Component menu.
+    /// A component that is part of a kind of entity (`.entityKindOnly`) is never offered: a
+    /// torus's shape means nothing on a cube, and only the kind's template adds it.
     static func addableTypes(for entityId: EntityID) -> [CodeComponentRegistry.Entry] {
         guard EditorFeatureFlags.enableCodeComponents, isDerivedAssetNode(entityId) == false else { return [] }
         let present = Set(CodeComponentSystem.shared.slots(on: entityId).map(\.typeName))
-        return CodeComponentRegistry.shared.entries
+        return CodeComponentRegistry.shared.attachableEntries
             .filter { present.contains($0.name) == false }
             .sorted { $0.type.displayName < $1.type.displayName }
+    }
+
+    /// Whether the Inspector may remove the component. One that is part of its kind of entity
+    /// stays until the entity is deleted. A slot whose type is not loaded can always go, so
+    /// leftovers can be cleaned up.
+    static func canRemove(_ typeName: String, from entityId: EntityID) -> Bool {
+        guard let instance = CodeComponentSystem.shared.component(named: typeName, on: entityId) else { return true }
+        return type(of: instance).attachment == .anyEntity
+    }
+
+    /// Whether a component on the entity built its mesh in code (`setGeneratedMesh`). The mesh
+    /// is then the component's doing, and the Inspector does not remove it on its own.
+    static func generatedMeshIsOwned(on entityId: EntityID) -> Bool {
+        guard EditorFeatureFlags.enableCodeComponents else { return false }
+        return CodeComponentSystem.shared.components(on: entityId).contains { $0.ownsGeneratedMesh }
     }
 
     /// Adds a component by type name, as the Add Component menu does.
@@ -76,11 +93,18 @@ struct CodeComponentInspectorView: View {
                     .foregroundColor(.editorTextTertiary)
                     .help("\(slot.typeName), written in the project's code or one of its plugins")
                 Spacer()
-                Button(action: { remove(slot.typeName) }) {
-                    Image(systemName: "trash").foregroundColor(.editorError)
+                if Self.canRemove(slot.typeName, from: entityId) {
+                    Button(action: { remove(slot.typeName) }) {
+                        Image(systemName: "trash").foregroundColor(.editorError)
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
+                    .help("Remove \(slot.typeName) and its saved values")
+                } else {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.editorTextTertiary)
+                        .help("Part of this kind of entity. It cannot be added to other entities or removed from this one; delete the entity instead.")
                 }
-                .buttonStyle(BorderlessButtonStyle())
-                .help("Remove \(slot.typeName) and its saved values")
             }
 
             if let instance {
@@ -114,6 +138,7 @@ struct CodeComponentInspectorView: View {
     // MARK: Edits
 
     private func remove(_ typeName: String) {
+        guard Self.canRemove(typeName, from: entityId) else { return }
         CodeComponentSystem.shared.remove(typeName, from: entityId)
         EditorSceneDirtyState.shared.markDirty()
         refreshView()
