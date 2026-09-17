@@ -123,7 +123,7 @@ enum ComponentCompiler {
             "-o", request.libraryURL.path,
             "-module-name", request.moduleName,
         ]
-        if request.unit.role == .pluginRuntime {
+        if request.unit.role == .packageRuntime {
             // Later units import this one, so they need its module next to the library.
             arguments += ["-emit-module", "-emit-module-path", request.swiftModuleURL.path]
         }

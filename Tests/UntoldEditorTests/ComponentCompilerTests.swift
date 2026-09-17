@@ -28,12 +28,12 @@ final class ComponentCompilerTests: XCTestCase {
     }
 
     func test_projectUnit_exactArguments() {
-        let arguments = ComponentCompiler.arguments(for: request(role: .project, module: "SplatTwinComponents"))
+        let arguments = ComponentCompiler.arguments(for: request(role: .project, module: "SplatTwinPlugins"))
 
         XCTAssertEqual(arguments, [
             "-emit-library", "-parse-as-library",
-            "-o", "/cache/SplatTwinComponents_r7.dylib",
-            "-module-name", "SplatTwinComponents_r7",
+            "-o", "/cache/SplatTwinPlugins_r7.dylib",
+            "-module-name", "SplatTwinPlugins_r7",
             "-swift-version", "5", "-Onone", "-g",
             "-D", "UNTOLD_EDITOR",
             "-target", "arm64-apple-macosx14.0",
@@ -41,8 +41,8 @@ final class ComponentCompilerTests: XCTestCase {
             "-I", "/sdk/Modules",
             "-Xcc", "-fmodule-map-file=/sdk/CShaderTypes/module.modulemap",
             "-Xlinker", "-undefined", "-Xlinker", "dynamic_lookup",
-            "/project/Sources/SplatTwinComponents/A.swift",
-            "/project/Sources/SplatTwinComponents/B.swift",
+            "/project/Sources/SplatTwinPlugins/A.swift",
+            "/project/Sources/SplatTwinPlugins/B.swift",
         ])
     }
 
@@ -52,7 +52,7 @@ final class ComponentCompilerTests: XCTestCase {
     }
 
     func test_pluginRuntime_emitsItsModuleSoLaterUnitsCanImportIt() {
-        let arguments = ComponentCompiler.arguments(for: request(role: .pluginRuntime, module: "Twins"))
+        let arguments = ComponentCompiler.arguments(for: request(role: .packageRuntime, module: "Twins"))
 
         let emitIndex = try? XCTUnwrap(arguments.firstIndex(of: "-emit-module-path"))
         XCTAssertTrue(arguments.contains("-emit-module"))

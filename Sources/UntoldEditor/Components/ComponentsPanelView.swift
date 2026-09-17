@@ -49,13 +49,13 @@ struct ComponentsPanelView: View {
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
                 .disabled(controller.layout == nil)
-                .help("Recompile and reload when a Swift file in the components folder or a plugin's editor sources changes.")
+                .help("Recompile and reload when a Swift file in the plugins folder or a plugin package's editor sources changes.")
             panelButton("Build", icon: "hammer") { controller.buildAndLoad() }
                 .disabled(controller.layout == nil || controller.phase == .building)
             panelButton("Open in Xcode", icon: "chevron.left.forwardslash.chevron.right") { openProjectInXcode() }
                 .disabled(controller.layout == nil)
             panelButton("Reveal", icon: "folder") { revealComponentsFolder() }
-                .disabled(controller.layout?.componentsDirectoryExists != true)
+                .disabled(controller.layout?.pluginsDirectoryExists != true)
         }
     }
 
@@ -94,7 +94,7 @@ struct ComponentsPanelView: View {
     @ViewBuilder
     private var content: some View {
         if let layout = controller.layout {
-            if layout.componentsDirectoryExists == false, layout.units.isEmpty {
+            if layout.pluginsDirectoryExists == false, layout.units.isEmpty {
                 emptyProject(layout)
             }
             ForEach(layout.problems, id: \.self) { problem in
@@ -115,19 +115,19 @@ struct ComponentsPanelView: View {
 
     private func emptyProject(_ layout: ComponentProjectLayout) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("This project has no components folder yet.")
+            Text("This project has no plugins folder yet.")
                 .font(.system(size: 12))
                 .foregroundColor(.editorTextPrimary)
-            Text("Components are Swift classes in \(layout.componentsDirectory.lastPathComponent). The editor compiles them, shows their @UntoldAttribute properties in the Inspector, and reloads them when you save.")
+            Text("Plugins are Swift classes in \(layout.pluginsDirectory.lastPathComponent): components, kinds of entity and menu items. The editor compiles them, shows their @UntoldAttribute properties in the Inspector, and reloads them when you save.")
                 .font(.system(size: 11))
                 .foregroundColor(.editorTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            panelButton("Create component package", icon: "plus.circle") {
+            panelButton("Create plugins folder", icon: "plus.circle") {
                 do {
                     creationError = nil
-                    try controller.createComponentPackage()
+                    try controller.createPluginsFolder()
                 } catch {
-                    creationError = "The components folder could not be created: \(error.localizedDescription)"
+                    creationError = "The plugins folder could not be created: \(error.localizedDescription)"
                 }
             }
         }
@@ -284,7 +284,7 @@ struct ComponentsPanelView: View {
         let candidates = [
             layout.projectRoot.appendingPathComponent("\(layout.projectName).xcodeproj"),
             layout.projectRoot.appendingPathComponent("Package.swift"),
-            layout.componentsDirectory,
+            layout.pluginsDirectory,
         ]
         if let target = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
             NSWorkspace.shared.open(target)
@@ -293,6 +293,6 @@ struct ComponentsPanelView: View {
 
     private func revealComponentsFolder() {
         guard let layout = controller.layout else { return }
-        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: layout.componentsDirectory.path)
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: layout.pluginsDirectory.path)
     }
 }

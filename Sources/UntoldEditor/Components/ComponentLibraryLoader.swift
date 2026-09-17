@@ -36,7 +36,7 @@ enum ComponentLibraryLoader {
     /// Nothing is ever unloaded: Swift images cannot be.
     static func load(_ request: ComponentCompileRequest) -> Result<LoadedComponentLibrary, ComponentBuildError> {
         let path = request.libraryURL.path
-        let scope = request.unit.role == .pluginRuntime ? RTLD_GLOBAL : RTLD_LOCAL
+        let scope = request.unit.role == .packageRuntime ? RTLD_GLOBAL : RTLD_LOCAL
         guard dlopen(path, RTLD_NOW | scope) != nil else {
             let detail = dlerror().map { String(cString: $0) } ?? "unknown loader error"
             return .failure(.loadFailed(detail))

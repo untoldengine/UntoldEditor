@@ -20,7 +20,7 @@ import UntoldEngine
 enum EditorEnginePackage {
     /// A packaged editor reads it from its Component SDK; an editor run from source finds the
     /// `Package.resolved` of its own checkout above the executable. `nil` when neither exists,
-    /// in which case new projects keep the engine's default reference and get no components.
+    /// in which case new projects keep the engine's default reference and get no plugins folder.
     static func resolve(
         sdk: ComponentSDK? = ComponentSDK.resolve(),
         executableURL: URL? = Bundle.main.executableURL

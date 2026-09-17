@@ -10,42 +10,90 @@
 //
 
 import Foundation
+import UntoldEngine
 
-/// `<ProjectRoot>/UntoldEditor.json`. Optional: without it the editor compiles
-/// `Sources/<Project>Components` and no plugins.
+/// `<ProjectRoot>/UntoldEditor.json`. Optional: without it the editor compiles the project's
+/// plugins folder, `Sources/<Project>Plugins`, and no plugin packages.
+///
+/// Two places hold plugins, and the words are kept apart on purpose. The *plugins folder* is
+/// the project's own: part of the app, like an application-local extension. A *plugin package*
+/// is a Swift package of its own that several projects share, listed here so the editor
+/// compiles and loads it too. Either can hold component, entity and editor menu plugins.
 struct EditorProjectManifest: Codable, Equatable {
     static let fileName = "UntoldEditor.json"
 
-    struct Plugin: Codable, Equatable {
+    struct PluginPackage: Codable, Equatable {
         /// Path to the plugin package, absolute or relative to the project root.
         var path: String
     }
 
-    /// Components folder, relative to the project root.
-    var components: String?
-    var plugins: [Plugin]?
+    /// The project's plugins folder, relative to the project root, when it is not the default.
+    var pluginsFolder: String?
+    /// The plugin packages the project uses.
+    var pluginPackages: [PluginPackage]?
+    /// Keys from before the rename that the file still uses. They are honored, and reported
+    /// so the file gets updated.
+    var legacyKeys: [String] = []
+
+    init(pluginsFolder: String? = nil, pluginPackages: [PluginPackage]? = nil) {
+        self.pluginsFolder = pluginsFolder
+        self.pluginPackages = pluginPackages
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case pluginsFolder
+        case pluginPackages
+        // Before the rename.
+        case components
+        case plugins
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pluginsFolder = try container.decodeIfPresent(String.self, forKey: .pluginsFolder)
+        pluginPackages = try container.decodeIfPresent([PluginPackage].self, forKey: .pluginPackages)
+        if pluginsFolder == nil, let legacy = try container.decodeIfPresent(String.self, forKey: .components) {
+            pluginsFolder = legacy
+            legacyKeys.append("\"components\" is now \"pluginsFolder\"")
+        }
+        if pluginPackages == nil, let legacy = try container.decodeIfPresent([PluginPackage].self, forKey: .plugins) {
+            pluginPackages = legacy
+            legacyKeys.append("\"plugins\" is now \"pluginPackages\"")
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(pluginsFolder, forKey: .pluginsFolder)
+        try container.encodeIfPresent(pluginPackages, forKey: .pluginPackages)
+    }
 }
 
-/// `<PluginRoot>/untold-plugin.json`.
-struct PluginManifest: Codable, Equatable {
-    static let fileName = "untold-plugin.json"
+/// `<PackageRoot>/untold-package.json`: what the editor needs to know about a plugin package.
+/// `Package.swift`, next to it, is what games depend on.
+struct PluginPackageManifest: Codable, Equatable {
+    static let fileName = "untold-package.json"
+    /// What the file was called before the rename; still read, and reported.
+    static let legacyFileName = "untold-plugin.json"
 
     var id: String
     /// The module name games import, e.g. `UntoldGaussianTwins`.
     var module: String
-    /// The plugin's runtime sources, relative to the plugin root. Compiled by the editor only
+    /// The package's runtime sources, relative to the package root. Compiled by the editor only
     /// when the editor does not already link `module`.
     var runtimeSources: String?
-    /// Editor-only sources (extensions, menus), relative to the plugin root.
+    /// Editor-only sources (menu plugins), relative to the package root.
     var editorSources: String?
 }
 
 /// One folder of Swift sources compiled into one library.
 struct ComponentSourceUnit: Equatable {
     enum Role: String, Equatable {
-        /// A plugin's runtime, loaded globally so later units resolve its symbols.
-        case pluginRuntime
-        case pluginEditor
+        /// A plugin package's runtime, loaded globally so later units resolve its symbols.
+        case packageRuntime
+        /// A plugin package's editor-only sources.
+        case packageEditor
+        /// The project's own plugins folder.
         case project
     }
 
@@ -54,7 +102,7 @@ struct ComponentSourceUnit: Equatable {
     let moduleBaseName: String
     let directory: URL
     let sources: [URL]
-    /// Plugin runtime modules built in the same pass that this unit may `import` by their
+    /// Plugin package runtimes built in the same pass that this unit may `import` by their
     /// stable names; each is mapped to its revisioned module with `-module-alias`.
     let reloadableImports: [String]
 }
@@ -62,20 +110,21 @@ struct ComponentSourceUnit: Equatable {
 struct ComponentProjectLayout: Equatable {
     let projectRoot: URL
     let projectName: String
-    let componentsDirectory: URL
-    /// In build order: plugin runtimes, plugin editor sources, then the project.
+    /// The project's own plugins folder.
+    let pluginsDirectory: URL
+    /// In build order: package runtimes, package editor sources, then the project's folder.
     let units: [ComponentSourceUnit]
-    /// Manifest and plugin problems, shown in the Components panel.
+    /// Manifest and plugin package problems, shown in the Plugins panel.
     let problems: [String]
 
-    var componentsDirectoryExists: Bool {
-        FileManager.default.fileExists(atPath: componentsDirectory.path)
+    var pluginsDirectoryExists: Bool {
+        FileManager.default.fileExists(atPath: pluginsDirectory.path)
     }
 
     var watchedDirectories: [URL] {
         var directories = units.map(\.directory)
-        if directories.contains(componentsDirectory) == false {
-            directories.append(componentsDirectory)
+        if directories.contains(pluginsDirectory) == false {
+            directories.append(pluginsDirectory)
         }
         return directories
     }
@@ -106,22 +155,42 @@ enum ComponentSourceLocator {
             }
         }
 
-        let componentsDirectory: URL
-        if let custom = manifest?.components, custom.isEmpty == false {
-            componentsDirectory = resolve(custom, relativeTo: root)
+        for legacyKey in manifest?.legacyKeys ?? [] {
+            problems.append("\(EditorProjectManifest.fileName) uses an old key: \(legacyKey).")
+        }
+
+        let pluginsDirectory: URL
+        if let custom = manifest?.pluginsFolder, custom.isEmpty == false {
+            pluginsDirectory = resolve(custom, relativeTo: root)
         } else {
-            componentsDirectory = root.appendingPathComponent("Sources/\(projectName)Components", isDirectory: true)
+            let current = root.appendingPathComponent("Sources/\(BuildSystem.pluginsFolderName(forProject: projectName))", isDirectory: true)
+            let legacyName = BuildSystem.legacyPluginsFolderName(forProject: projectName)
+            let legacy = root.appendingPathComponent("Sources/\(legacyName)", isDirectory: true)
+            // A project made before the folder was renamed keeps working, and says so.
+            if fileManager.fileExists(atPath: current.path) == false, fileManager.fileExists(atPath: legacy.path) {
+                pluginsDirectory = legacy
+                problems.append("The plugins folder is still called \(legacyName). Rename it to \(current.lastPathComponent), in project.yml too if it is listed there.")
+            } else {
+                pluginsDirectory = current
+            }
         }
 
         var runtimeUnits: [ComponentSourceUnit] = []
         var editorUnits: [ComponentSourceUnit] = []
-        for plugin in manifest?.plugins ?? [] {
-            let pluginRoot = resolve(plugin.path, relativeTo: root)
-            let pluginManifestURL = pluginRoot.appendingPathComponent(PluginManifest.fileName)
+        for package in manifest?.pluginPackages ?? [] {
+            let pluginRoot = resolve(package.path, relativeTo: root)
+            var pluginManifestURL = pluginRoot.appendingPathComponent(PluginPackageManifest.fileName)
+            if fileManager.fileExists(atPath: pluginManifestURL.path) == false {
+                let legacyURL = pluginRoot.appendingPathComponent(PluginPackageManifest.legacyFileName)
+                if fileManager.fileExists(atPath: legacyURL.path) {
+                    pluginManifestURL = legacyURL
+                    problems.append("Plugin package at \(package.path): \(PluginPackageManifest.legacyFileName) is now \(PluginPackageManifest.fileName).")
+                }
+            }
             guard let data = try? Data(contentsOf: pluginManifestURL),
-                  let pluginManifest = try? JSONDecoder().decode(PluginManifest.self, from: data)
+                  let pluginManifest = try? JSONDecoder().decode(PluginPackageManifest.self, from: data)
             else {
-                problems.append("Plugin at \(plugin.path): no readable \(PluginManifest.fileName).")
+                problems.append("Plugin package at \(package.path): no readable \(PluginPackageManifest.fileName).")
                 continue
             }
 
@@ -133,9 +202,9 @@ enum ComponentSourceLocator {
                 let directory = resolve(runtimePath, relativeTo: pluginRoot)
                 let sources = swiftSources(in: directory, fileManager: fileManager)
                 if sources.isEmpty {
-                    problems.append("Plugin \(pluginManifest.module): no Swift sources in \(runtimePath).")
+                    problems.append("Plugin package \(pluginManifest.module): no Swift sources in \(runtimePath).")
                 } else {
-                    runtimeUnits.append(ComponentSourceUnit(role: .pluginRuntime, moduleBaseName: module, directory: directory, sources: sources, reloadableImports: []))
+                    runtimeUnits.append(ComponentSourceUnit(role: .packageRuntime, moduleBaseName: module, directory: directory, sources: sources, reloadableImports: []))
                     reloadableRuntime = [module]
                 }
             }
@@ -144,18 +213,18 @@ enum ComponentSourceLocator {
                 let directory = resolve(editorPath, relativeTo: pluginRoot)
                 let sources = swiftSources(in: directory, fileManager: fileManager)
                 if sources.isEmpty == false {
-                    editorUnits.append(ComponentSourceUnit(role: .pluginEditor, moduleBaseName: module + "Editor", directory: directory, sources: sources, reloadableImports: reloadableRuntime))
+                    editorUnits.append(ComponentSourceUnit(role: .packageEditor, moduleBaseName: module + "Editor", directory: directory, sources: sources, reloadableImports: reloadableRuntime))
                 }
             }
         }
 
         var units = runtimeUnits + editorUnits
-        let projectSources = swiftSources(in: componentsDirectory, fileManager: fileManager)
+        let projectSources = swiftSources(in: pluginsDirectory, fileManager: fileManager)
         if projectSources.isEmpty == false {
             units.append(ComponentSourceUnit(
                 role: .project,
-                moduleBaseName: moduleIdentifier(from: componentsDirectory.lastPathComponent),
-                directory: componentsDirectory,
+                moduleBaseName: moduleIdentifier(from: pluginsDirectory.lastPathComponent),
+                directory: pluginsDirectory,
                 sources: projectSources,
                 reloadableImports: runtimeUnits.map(\.moduleBaseName)
             ))
@@ -164,7 +233,7 @@ enum ComponentSourceLocator {
         return ComponentProjectLayout(
             projectRoot: root,
             projectName: projectName,
-            componentsDirectory: componentsDirectory,
+            pluginsDirectory: pluginsDirectory,
             units: units,
             problems: problems
         )
@@ -182,13 +251,13 @@ enum ComponentSourceLocator {
         return sources.sorted { $0.path < $1.path }
     }
 
-    /// `My Game-Components` → `My_Game_Components`; a leading digit gets an underscore.
+    /// `My Game-Plugins` → `My_Game_Plugins`; a leading digit gets an underscore.
     static func moduleIdentifier(from name: String) -> String {
         var identifier = String(name.unicodeScalars.map { scalar -> Character in
             CharacterSet.alphanumerics.contains(scalar) && scalar.isASCII ? Character(scalar) : "_"
         })
         if identifier.isEmpty {
-            identifier = "Components"
+            identifier = "Plugins"
         }
         if let first = identifier.first, first.isNumber {
             identifier = "_" + identifier

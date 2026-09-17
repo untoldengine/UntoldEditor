@@ -903,7 +903,7 @@ public struct EditorView: View {
             panelTabButton(.console, title: "Console", icon: "terminal")
             panelTabButton(.tasks, title: "Tasks", icon: "list.bullet.rectangle")
             if EditorFeatureFlags.enableCodeComponents {
-                panelTabButton(.components, title: "Components", icon: "puzzlepiece.extension")
+                panelTabButton(.components, title: "Plugins", icon: "puzzlepiece.extension")
             }
         }
         .padding(3)

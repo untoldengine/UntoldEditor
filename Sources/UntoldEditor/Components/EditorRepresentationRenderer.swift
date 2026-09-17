@@ -127,7 +127,7 @@ enum EditorRepresentationRenderer {
             renderEncoder.setDepthStencilState(linePipeline.depthState)
             if hasLoggedLines == false {
                 hasLoggedLines = true
-                Logger.log(message: "[Components] Editor lines ready", category: "Components")
+                Logger.log(message: "[Plugins] Editor lines ready", category: "Plugins")
             }
             var scale = simd_float3(repeating: 1)
             for line in lines {
@@ -207,11 +207,11 @@ enum EditorRepresentationRenderer {
               let texture = makeTexture(pixels: pixels, size: iconPixelSize, device: device)
         else {
             failedKeys.insert(key)
-            Logger.logWarning(message: "[Components] No editor icon could be made for the symbol '\(systemImage)'.")
+            Logger.logWarning(message: "[Plugins] No editor icon could be made for the symbol '\(systemImage)'.")
             return nil
         }
         textures[key] = texture
-        Logger.log(message: "[Components] Editor icon ready: \(systemImage)", category: "Components")
+        Logger.log(message: "[Plugins] Editor icon ready: \(systemImage)", category: "Plugins")
         return texture
     }
 
@@ -283,7 +283,7 @@ enum EditorRepresentationRenderer {
               let texture = makeTexture(pixels: pixels, size: iconPixelSize, device: device)
         else { return nil }
         dotTextures[key] = texture
-        Logger.log(message: "[Components] Editor point marker ready", category: "Components")
+        Logger.log(message: "[Plugins] Editor point marker ready", category: "Plugins")
         return texture
     }
 

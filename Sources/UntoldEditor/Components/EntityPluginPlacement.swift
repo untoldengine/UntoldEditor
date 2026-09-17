@@ -64,7 +64,7 @@ func placeEntityPlugin(
     selectionManager: SelectionManager
 ) -> AssetPlacementResult? {
     guard let type = EntityPluginRegistry.shared.type(named: typeName) else {
-        Logger.logWarning(message: "[Components] Entity template '\(typeName)' is not loaded; nothing was created.")
+        Logger.logWarning(message: "[Plugins] Entity plugin '\(typeName)' is not loaded; nothing was created.")
         return nil
     }
     let uniqueName = generateEntityName()
