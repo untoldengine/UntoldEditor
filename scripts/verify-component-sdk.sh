@@ -95,6 +95,28 @@ final class FixtureExtension: EditorExtension {
     override func menuWillOpen() {}
     override func menuDidChange(_: UntoldMenuDomain, _: String) {}
 }
+
+// A kind of entity: a template, an editor-only representation, and a mesh built in code.
+final class FixtureMarker: CodeComponent {
+    override var editorRepresentation: EditorRepresentation {
+        .icon(systemImage: "flag.fill", tint: SIMD3<Float>(1, 0.5, 0))
+    }
+
+    override func onAttach() {
+        setGeneratedMesh(BasicPrimitives.createCube(), name: "Fixture")
+    }
+}
+
+final class FixtureEntity: EntityTemplate {
+    override class var displayName: String { "Fixture" }
+    override class var shelf: UntoldEntityShelf { .primitives }
+    override class var systemImage: String { "flag" }
+
+    override func build(_ entity: EntityID) {
+        add(FixtureMarker.self, to: entity)
+        _ = EntityTemplateRegistry.shared.instantiate("FixtureEntity", at: .zero, entityName: nil)
+    }
+}
 SWIFT
 
 TARGET="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["target"])' "$SDK/sdk.json")"
