@@ -18,24 +18,58 @@ import SwiftUI
 import XCTest
 
 final class CreateProjectViewTests: XCTestCase {
+    // MARK: - Helper for reading @State defaults
+
+    /// Reads the initial value of one of the view's `@State` properties using reflection.
+    ///
+    /// How SwiftUI stores `@State var name` is an implementation detail that differs between SDKs:
+    /// - up to the Xcode 26 SDK, the property wrapper stores `_name: State<Value>` and keeps the
+    ///   initial value in `_value`;
+    /// - from the Xcode 27 SDK, the `@State` macro stores `__name: LazyState<Value>`, whose
+    ///   `_storage` holds either `.value(Value)` or `.thunk(() -> Value)`.
+    ///
+    /// Fails the calling test when the storage is missing or cannot be read as `Value`, so a test
+    /// can never pass without asserting anything.
+    private func initialState<Value>(
+        _ name: String,
+        in view: CreateProjectView,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> Value {
+        let mirror = Mirror(reflecting: view)
+        let storage = try XCTUnwrap(
+            mirror.descendant("_\(name)") ?? mirror.descendant("__\(name)"),
+            "CreateProjectView should have a '\(name)' state variable",
+            file: file, line: line
+        )
+
+        let storageMirror = Mirror(reflecting: storage)
+        var initialValue = storageMirror.descendant("_value") ?? storageMirror.descendant("_storage", "value")
+        if let thunk = storageMirror.descendant("_storage", "thunk") as? () -> Value {
+            initialValue = thunk()
+        }
+
+        // The exact type check keeps a nil optional from passing as any other optional type.
+        return try XCTUnwrap(
+            initialValue.flatMap { type(of: $0) == Value.self ? $0 as? Value : nil },
+            "Should read '\(name)' as \(Value.self) from its \(type(of: storage)) storage",
+            file: file, line: line
+        )
+    }
+
     // MARK: - Helper for extracting build settings
 
     /// Extract BuildSettings from CreateProjectView using reflection
-    private func extractBuildSettings(from view: CreateProjectView) -> BuildSettings? {
-        let mirror = Mirror(reflecting: view)
-
+    private func extractBuildSettings(from view: CreateProjectView) throws -> BuildSettings {
         // Extract state values
-        guard let projectName = mirror.descendant("_projectName", "wrappedValue") as? String,
-              let bundleIdentifier = mirror.descendant("_bundleIdentifier", "wrappedValue") as? String,
-              let selectedTarget = mirror.descendant("_selectedTarget", "wrappedValue") as? Int,
-              let macOSVersion = mirror.descendant("_macOSVersion", "wrappedValue") as? Int,
-              let includeDebugInfo = mirror.descendant("_includeDebugInfo", "wrappedValue") as? Bool,
-              let optimizationLevel = mirror.descendant("_optimizationLevel", "wrappedValue") as? Int,
-              let teamID = mirror.descendant("_teamID", "wrappedValue") as? String,
-              let outputPath = mirror.descendant("_outputPath", "wrappedValue") as? String
-        else {
-            return nil
-        }
+        let projectName: String = try initialState("projectName", in: view)
+        let bundleIdentifier: String = try initialState("bundleIdentifier", in: view)
+        let selectedTarget: Int = try initialState("selectedTarget", in: view)
+        let macOSVersion: Int = try initialState("macOSVersion", in: view)
+        let includeDebugInfo: Bool = try initialState("includeDebugInfo", in: view)
+        let optimizationLevel: Int = try initialState("optimizationLevel", in: view)
+        let teamID: String = try initialState("teamID", in: view)
+        let outputPath: String = try initialState("outputPath", in: view)
 
         // Recreate the build settings logic from the view
         let target: BuildTarget
@@ -93,103 +127,85 @@ final class CreateProjectViewTests: XCTestCase {
 
     // MARK: - Default State Tests
 
-    func test_createProjectView_hasDefaultProjectName() {
+    func test_createProjectView_hasDefaultProjectName() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let projectName = mirror.descendant("_projectName", "wrappedValue") as? String {
-            XCTAssertEqual(projectName, "MyGame", "Default project name should be 'MyGame'")
-        }
+        let projectName: String = try initialState("projectName", in: view)
+        XCTAssertEqual(projectName, "MyGame", "Default project name should be 'MyGame'")
     }
 
-    func test_createProjectView_hasDefaultBundleIdentifier() {
+    func test_createProjectView_hasDefaultBundleIdentifier() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let bundleIdentifier = mirror.descendant("_bundleIdentifier", "wrappedValue") as? String {
-            XCTAssertEqual(bundleIdentifier, "com.yourcompany.mygame", "Default bundle identifier should be set")
-        }
+        let bundleIdentifier: String = try initialState("bundleIdentifier", in: view)
+        XCTAssertEqual(bundleIdentifier, "com.yourcompany.mygame", "Default bundle identifier should be set")
     }
 
-    func test_createProjectView_defaultTargetIsMacOS() {
+    func test_createProjectView_defaultTargetIsMacOS() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let selectedTarget = mirror.descendant("_selectedTarget", "wrappedValue") as? Int {
-            XCTAssertEqual(selectedTarget, 0, "Default target should be macOS (index 0)")
-        }
+        let selectedTarget: Int = try initialState("selectedTarget", in: view)
+        XCTAssertEqual(selectedTarget, 0, "Default target should be macOS (index 0)")
     }
 
-    func test_createProjectView_defaultMacOSVersion() {
+    func test_createProjectView_defaultMacOSVersion() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let macOSVersion = mirror.descendant("_macOSVersion", "wrappedValue") as? Int {
-            XCTAssertEqual(macOSVersion, 2, "Default macOS version should be index 2 (v15)")
-        }
+        let macOSVersion: Int = try initialState("macOSVersion", in: view)
+        XCTAssertEqual(macOSVersion, 2, "Default macOS version should be index 2 (v15)")
     }
 
-    func test_createProjectView_debugInfoEnabledByDefault() {
+    func test_createProjectView_debugInfoEnabledByDefault() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let includeDebugInfo = mirror.descendant("_includeDebugInfo", "wrappedValue") as? Bool {
-            XCTAssertTrue(includeDebugInfo, "Debug info should be enabled by default")
-        }
+        let includeDebugInfo: Bool = try initialState("includeDebugInfo", in: view)
+        XCTAssertTrue(includeDebugInfo, "Debug info should be enabled by default")
     }
 
-    func test_createProjectView_optimizationLevelNoneByDefault() {
+    func test_createProjectView_optimizationLevelNoneByDefault() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let optimizationLevel = mirror.descendant("_optimizationLevel", "wrappedValue") as? Int {
-            XCTAssertEqual(optimizationLevel, 0, "Default optimization should be none (index 0)")
-        }
+        let optimizationLevel: Int = try initialState("optimizationLevel", in: view)
+        XCTAssertEqual(optimizationLevel, 0, "Default optimization should be none (index 0)")
     }
 
-    func test_createProjectView_emptyTeamIDByDefault() {
+    func test_createProjectView_emptyTeamIDByDefault() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let teamID = mirror.descendant("_teamID", "wrappedValue") as? String {
-            XCTAssertTrue(teamID.isEmpty, "Team ID should be empty by default")
-        }
+        let teamID: String = try initialState("teamID", in: view)
+        XCTAssertTrue(teamID.isEmpty, "Team ID should be empty by default")
     }
 
-    func test_createProjectView_notBuildingByDefault() {
+    func test_createProjectView_notBuildingByDefault() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let isBuilding = mirror.descendant("_isBuilding", "wrappedValue") as? Bool {
-            XCTAssertFalse(isBuilding, "Should not be building by default")
-        }
+        let isBuilding: Bool = try initialState("isBuilding", in: view)
+        XCTAssertFalse(isBuilding, "Should not be building by default")
     }
 
-    func test_createProjectView_buildResultNotShownByDefault() {
+    func test_createProjectView_buildResultNotShownByDefault() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let showBuildResult = mirror.descendant("_showBuildResult", "wrappedValue") as? Bool {
-            XCTAssertFalse(showBuildResult, "Build result should not be shown by default")
-        }
+        let showBuildResult: Bool = try initialState("showBuildResult", in: view)
+        XCTAssertFalse(showBuildResult, "Build result should not be shown by default")
     }
 
     // MARK: - Build Settings Tests - macOS
@@ -453,50 +469,40 @@ final class CreateProjectViewTests: XCTestCase {
 
     // MARK: - State Management Tests
 
-    func test_createProjectView_initialBuildProgressIsEmpty() {
+    func test_createProjectView_initialBuildProgressIsEmpty() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let buildProgress = mirror.descendant("_buildProgress", "wrappedValue") as? String {
-            XCTAssertTrue(buildProgress.isEmpty, "Build progress should be empty initially")
-        }
+        let buildProgress: String = try initialState("buildProgress", in: view)
+        XCTAssertTrue(buildProgress.isEmpty, "Build progress should be empty initially")
     }
 
-    func test_createProjectView_initialBuildResultMessageIsEmpty() {
+    func test_createProjectView_initialBuildResultMessageIsEmpty() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let buildResultMessage = mirror.descendant("_buildResultMessage", "wrappedValue") as? String {
-            XCTAssertTrue(buildResultMessage.isEmpty, "Build result message should be empty initially")
-        }
+        let buildResultMessage: String = try initialState("buildResultMessage", in: view)
+        XCTAssertTrue(buildResultMessage.isEmpty, "Build result message should be empty initially")
     }
 
-    func test_createProjectView_buildNotSucceededByDefault() {
+    func test_createProjectView_buildNotSucceededByDefault() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let buildSucceeded = mirror.descendant("_buildSucceeded", "wrappedValue") as? Bool {
-            XCTAssertFalse(buildSucceeded, "Build should not be succeeded by default")
-        }
+        let buildSucceeded: Bool = try initialState("buildSucceeded", in: view)
+        XCTAssertFalse(buildSucceeded, "Build should not be succeeded by default")
     }
 
-    func test_createProjectView_resultProjectPathIsNilByDefault() {
+    func test_createProjectView_resultProjectPathIsNilByDefault() throws {
         // Act
         let view = CreateProjectView()
 
-        // Assert
-        let mirror = Mirror(reflecting: view)
-        // Check if resultProjectPath exists and is nil
-        let hasResultProjectPath = mirror.children.contains { child in
-            child.label == "_resultProjectPath"
-        }
-        XCTAssertTrue(hasResultProjectPath, "Should have resultProjectPath state variable")
+        // Assert: resultProjectPath exists and is nil
+        let resultProjectPath: URL? = try initialState("resultProjectPath", in: view)
+        XCTAssertNil(resultProjectPath, "Result project path should be nil by default")
     }
 
     // MARK: - Target Switch Logic Tests
@@ -622,14 +628,12 @@ final class CreateProjectViewTests: XCTestCase {
 
     // MARK: - Output Path Tests
 
-    func test_outputPath_emptyByDefault() {
+    func test_outputPath_emptyByDefault() throws {
         // Act
         let view = CreateProjectView()
 
         // Assert
-        let mirror = Mirror(reflecting: view)
-        if let outputPath = mirror.descendant("_outputPath", "wrappedValue") as? String {
-            XCTAssertEqual(outputPath, "", "Output path should be empty initially (set in onAppear)")
-        }
+        let outputPath: String = try initialState("outputPath", in: view)
+        XCTAssertEqual(outputPath, "", "Output path should be empty initially (set in onAppear)")
     }
 }
