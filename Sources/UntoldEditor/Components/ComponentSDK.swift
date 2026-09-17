@@ -21,6 +21,8 @@ struct ComponentSDK: Equatable {
     /// `sdk.json` of a packaged SDK.
     struct Manifest: Codable, Equatable {
         var swiftCompilerVersion: String
+        /// Where the engine package lives; with `engineRevision`, what new projects pin.
+        var engineURL: String?
         var engineRevision: String?
         var target: String
         var languageMode: String
@@ -38,6 +40,7 @@ struct ComponentSDK: Equatable {
     /// The compiler that built the editor. `nil` for a source build, where the same toolchain
     /// builds both and the check is moot.
     let recordedCompilerVersion: String?
+    let engineURL: String?
     let engineRevision: String?
     let isBundled: Bool
 
@@ -81,6 +84,7 @@ struct ComponentSDK: Equatable {
             providedModules: manifest.providedModules,
             targetTriple: manifest.target,
             recordedCompilerVersion: manifest.swiftCompilerVersion,
+            engineURL: manifest.engineURL,
             engineRevision: manifest.engineRevision,
             isBundled: true
         )
@@ -105,6 +109,7 @@ struct ComponentSDK: Equatable {
             providedModules: moduleNames(in: modules, fileManager: fileManager),
             targetTriple: defaultTargetTriple,
             recordedCompilerVersion: nil,
+            engineURL: nil,
             engineRevision: nil,
             isBundled: false
         )

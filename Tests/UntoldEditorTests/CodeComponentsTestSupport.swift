@@ -52,6 +52,7 @@ func makeTestSDK(providedModules: [String] = ["UntoldComponentKit", "UntoldEngin
         providedModules: providedModules,
         targetTriple: "arm64-apple-macosx14.0",
         recordedCompilerVersion: nil,
+        engineURL: nil,
         engineRevision: nil,
         isBundled: false
     )
