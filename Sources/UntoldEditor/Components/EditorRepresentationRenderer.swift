@@ -92,6 +92,13 @@ enum EditorRepresentationRenderer {
                         let world = space * SIMD4<Float>(point.x, point.y, point.z, 1)
                         dots.append((SIMD3<Float>(world.x, world.y, world.z), texture))
                     }
+                case .handles:
+                    let selected = EditorRepresentationHandles.active
+                    for placed in EditorRepresentationHandles.placed(in: EditorRepresentation([item]), on: drawing.entityId) {
+                        let tint = placed.handle == selected ? SIMD3<Float>(1, 1, 1) : placed.tint
+                        guard let texture = dotTexture(tint: tint) else { continue }
+                        dots.append((placed.worldPosition, texture))
+                    }
                 }
             }
         }

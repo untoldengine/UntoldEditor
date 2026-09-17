@@ -99,6 +99,7 @@ final class FixtureExtension: EditorMenuPlugin {
 // A kind of entity: its own properties, a mesh built in code, and an editor representation.
 final class FixtureEntity: EntityPlugin {
     @UntoldAttribute("Size", range: 0 ... 10) var size: Float = 1
+    @UntoldAttribute var anchor: SIMD3<Float> = .zero
 
     override class var displayName: String { "Fixture" }
     override class var shelf: UntoldEntityShelf { .primitives }
@@ -123,6 +124,7 @@ final class FixtureEntity: EntityPlugin {
             .icon(systemImage: "flag.fill", tint: SIMD3<Float>(1, 0.5, 0)),
             .points([.zero], tint: SIMD3<Float>(1, 1, 1)),
             .polyline([.zero, SIMD3<Float>(size, 0, 0)], closed: true),
+            .handles(properties: ["anchor"], tint: SIMD3<Float>(1, 1, 1)),
         ])
     }
 
