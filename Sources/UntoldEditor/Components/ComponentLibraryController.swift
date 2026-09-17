@@ -333,40 +333,26 @@ final class ComponentLibraryController: ObservableObject {
 
     // MARK: Creating the components folder
 
-    /// Creates the project's components folder with a starter component and builds it.
+    /// Gives the open project a components folder with a starter component, links the kit in
+    /// its `project.yml`, regenerates the Xcode project, and builds. What is left for the
+    /// developer (the registration calls in the game) is written to the console.
     func createComponentPackage() throws {
         guard let layout else { return }
-        let directory = layout.componentsDirectory
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let starter = directory.appendingPathComponent("Spinner.swift")
-        if FileManager.default.fileExists(atPath: starter.path) == false {
-            try Self.starterComponentSource.write(to: starter, atomically: true, encoding: .utf8)
+        let result = try BuildSystem.shared.addCodeComponents(toProjectAt: layout.projectRoot, projectName: layout.projectName)
+        var summary = "[Components] Components folder: \(result.componentsDirectory.path)."
+        if result.updatedProjectSpec {
+            summary += " project.yml now links UntoldComponentKit."
         }
-        Logger.log(message: "[Components] Created \(directory.path). To use these components in the game as well, add the UntoldComponentKit product to the app target and call CodeComponentRegistry.shared.discoverInMainExecutable() and CodeComponentSystem.install() at startup.", category: "Components")
+        if result.regeneratedXcodeProject {
+            summary += " The Xcode project was regenerated."
+        }
+        Logger.log(message: summary, category: "Components")
+        for note in result.notes {
+            Logger.log(message: "[Components] \(note)", category: "Components")
+        }
         restartWatcher()
         buildAndLoad()
     }
-
-    static let starterComponentSource = """
-    import simd
-    import UntoldComponentKit
-    import UntoldEngine
-
-    /// Spins its entity while the scene is playing.
-    ///
-    /// Add it to an entity from the Inspector, press Play, then change `speed` here and save:
-    /// with "Rebuild on save" on, the editor picks the change up without restarting.
-    final class Spinner: CodeComponent {
-        @UntoldAttribute("Degrees per second", range: -360 ... 360) var speed: Float = 90
-        @UntoldAttribute var axis: SIMD3<Float> = [0, 1, 0]
-
-        override func onUpdate(deltaTime: Float) {
-            guard simd_length(axis) > 0 else { return }
-            rotateBy(entityId: entity, angle: speed * deltaTime, axis: simd_normalize(axis))
-        }
-    }
-
-    """
 
     // MARK: Watching
 

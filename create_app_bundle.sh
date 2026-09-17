@@ -142,15 +142,17 @@ SWIFT_COMPILER_VERSION="$(swift --version 2>&1 | head -1)"
 python3 - "$SDK_DIR/sdk.json" "$SWIFT_COMPILER_VERSION" "${PROVIDED_MODULES[@]}" << 'SDKJSON'
 import json, sys
 path, compiler, *modules = sys.argv[1:]
-revision = None
+engine_url = revision = None
 try:
     pins = json.load(open("Package.resolved"))["pins"]
-    revision = next(pin["state"]["revision"] for pin in pins if pin["identity"] == "untoldengine")
+    engine = next(pin for pin in pins if pin["identity"] == "untoldengine")
+    engine_url, revision = engine["location"], engine["state"]["revision"]
 except Exception:
     pass
 with open(path, "w") as handle:
     json.dump({
         "swiftCompilerVersion": compiler,
+        "engineURL": engine_url,
         "engineRevision": revision,
         "target": "arm64-apple-macosx14.0",
         "languageMode": "5",

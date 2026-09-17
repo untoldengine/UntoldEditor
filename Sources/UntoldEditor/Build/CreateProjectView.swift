@@ -317,6 +317,11 @@ struct CreateProjectView: View {
         default: optimization = .none
         }
 
+        // New projects pin the engine this editor was built with, so the components the editor
+        // compiles and the game Xcode builds see the same engine API. Without a known engine
+        // the project keeps the default reference, which may not ship the kit, so it gets none.
+        let enginePackage = EditorFeatureFlags.enableCodeComponents ? EditorEnginePackage.resolve() : nil
+
         return BuildSettings(
             projectName: projectName,
             bundleIdentifier: bundleIdentifier,
@@ -326,7 +331,9 @@ struct CreateProjectView: View {
             includeDebugInfo: includeDebugInfo,
             optimizationLevel: optimization,
             teamID: teamID.isEmpty ? nil : teamID,
-            isIOSAR: isIOSAR
+            isIOSAR: isIOSAR,
+            enginePackage: enginePackage,
+            includesCodeComponents: enginePackage != nil
         )
     }
 

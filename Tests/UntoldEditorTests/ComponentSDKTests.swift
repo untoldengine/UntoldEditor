@@ -69,6 +69,7 @@ final class ComponentSDKTests: XCTestCase {
         try scratch.write("module CShaderTypes {}", to: "App.app/Contents/Resources/ComponentSDK/CShaderTypes/module.modulemap")
         let manifest = ComponentSDK.Manifest(
             swiftCompilerVersion: "Apple Swift version 6.4",
+            engineURL: "https://github.com/miolabs/UntoldEngine.git",
             engineRevision: "abc123",
             target: "arm64-apple-macosx14.0",
             languageMode: "5",
@@ -81,6 +82,7 @@ final class ComponentSDKTests: XCTestCase {
         XCTAssertTrue(sdk.isBundled)
         XCTAssertEqual(sdk.recordedCompilerVersion, "Apple Swift version 6.4")
         XCTAssertEqual(sdk.engineRevision, "abc123")
+        XCTAssertEqual(sdk.engineURL, "https://github.com/miolabs/UntoldEngine.git")
         XCTAssertEqual(sdk.providedModules, ["UntoldComponentKit", "UntoldEngine"])
     }
 
