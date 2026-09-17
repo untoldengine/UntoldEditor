@@ -29,4 +29,7 @@ final class AssetBrowserNavigationState: ObservableObject {
     @Published var lightsSelected: Bool = false
     /// Same as `lightsSelected`, for the Primitives shelf (Cube/Sphere/Plane).
     @Published var primitivesSelected: Bool = false
+    /// Same again, for the Entities shelf: kinds of entity added by loaded code that are
+    /// neither primitives nor lights.
+    @Published var entitiesSelected: Bool = false
 }

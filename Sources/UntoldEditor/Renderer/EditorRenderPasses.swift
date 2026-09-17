@@ -500,6 +500,10 @@ extension RenderPasses {
                                                 indexBufferOffset: 0)
         }
 
+        // Entities that loaded code marks with an editor-only representation (a spawn point,
+        // a trigger) get a billboard here too, next to the light markers.
+        EditorRepresentationRenderer.draw(with: renderEncoder, viewSpace: &cameraComponent.viewSpace)
+
         renderEncoder.updateFence(renderInfo.fence, after: .fragment)
     }
 

@@ -190,7 +190,10 @@ struct ComponentsPanelView: View {
                     ForEach(library.extensionNames.filter(matches), id: \.self) { name in
                         row(icon: "menubar.rectangle", color: .editorSecondaryAccent, text: "\(name)  ·  \(menuSummary(of: name))")
                     }
-                    if library.componentNames.isEmpty, library.extensionNames.isEmpty {
+                    ForEach(library.templateNames.filter(matches), id: \.self) { name in
+                        row(icon: "plus.square.dashed", color: .editorAccent, text: "\(name)  ·  \(templateSummary(of: name))")
+                    }
+                    if library.componentNames.isEmpty, library.extensionNames.isEmpty, library.templateNames.isEmpty {
                         row(icon: "shippingbox", color: .editorTextTertiary, text: "Runtime library; defines no components or extensions.")
                     }
                 }
@@ -257,6 +260,11 @@ struct ComponentsPanelView: View {
 
     private func instanceCount(of typeName: String) -> Int {
         CodeComponentSystem.shared.entities(withComponentNamed: typeName).count
+    }
+
+    private func templateSummary(of templateName: String) -> String {
+        guard let type = EntityTemplateRegistry.shared.type(named: templateName) else { return "not registered" }
+        return "\"\(type.displayName)\" on the \(type.shelf.title) shelf"
     }
 
     private func menuSummary(of extensionName: String) -> String {

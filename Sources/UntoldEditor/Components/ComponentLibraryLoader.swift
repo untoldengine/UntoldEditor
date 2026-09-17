@@ -19,6 +19,8 @@ struct LoadedComponentLibrary: Equatable, Identifiable {
     let revision: Int
     let componentNames: [String]
     let extensionNames: [String]
+    /// Kinds of entity the library adds to the creation shelves.
+    var templateNames: [String] = []
     let byteSize: Int
 
     var id: String {
@@ -42,6 +44,7 @@ enum ComponentLibraryLoader {
 
         let components = CodeComponentRegistry.shared.discover(imagePath: path, revision: request.revision, policy: .replace)
         let extensions = EditorExtensionRegistry.shared.discover(imagePath: path, revision: request.revision, replaceExisting: true)
+        let templates = EntityTemplateRegistry.shared.discover(imagePath: path, revision: request.revision, replaceExisting: true)
         let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
 
         return .success(LoadedComponentLibrary(
@@ -51,6 +54,7 @@ enum ComponentLibraryLoader {
             revision: request.revision,
             componentNames: (components.registered + components.replaced).sorted(),
             extensionNames: extensions.sorted(),
+            templateNames: templates.sorted(),
             byteSize: size
         ))
     }
