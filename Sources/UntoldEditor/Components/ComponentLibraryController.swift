@@ -281,6 +281,10 @@ final class ComponentLibraryController: ObservableObject {
             phase = .loaded
             let components = loaded.flatMap(\.componentNames)
             Logger.log(message: "[Components] Loaded revision \(revision): \(components.isEmpty ? "no components" : components.joined(separator: ", "))", category: "Components")
+            let templates = loaded.flatMap(\.templateNames)
+            if templates.isEmpty == false {
+                Logger.log(message: "[Components] Entity templates: \(templates.joined(separator: ", "))", category: "Components")
+            }
             for entry in EditorExtensionHost.shared.live {
                 let items = entry.menuIdentifiers.isEmpty ? "no menu items" : entry.menuIdentifiers.joined(separator: ", ")
                 Logger.log(message: "[Components] Extension \(entry.name): \(items)", category: "Components")
@@ -300,6 +304,9 @@ final class ComponentLibraryController: ObservableObject {
         }
         for entry in EditorExtensionRegistry.shared.entries where entry.revision > 0 {
             EditorExtensionRegistry.shared.unregister(name: entry.name)
+        }
+        for entry in EntityTemplateRegistry.shared.entries where entry.revision > 0 {
+            EntityTemplateRegistry.shared.unregister(name: entry.name)
         }
     }
 

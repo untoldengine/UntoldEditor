@@ -462,39 +462,24 @@ struct InspectorView: View {
                                 Divider()
                             }
 
-                            // Code Components: components written in the project's Swift sources
-                            // and loaded by the editor. An ad-hoc section (not a ComponentOption_Editor)
-                            // so scene-composition mode, which whitelists registered components, keeps it.
+                            // Components written in the project's Swift sources and loaded by the
+                            // editor, one block each like the engine's above. An ad-hoc section (not a
+                            // ComponentOption_Editor) so scene-composition mode, which whitelists
+                            // registered components, keeps it.
                             if CodeComponentInspectorView.isAvailable(for: entityId) {
                                 CodeComponentInspectorView(entityId: entityId, refreshView: refreshView)
                                     .frame(minWidth: 200, maxWidth: 250)
                                     .id(entityId)
-                                Divider()
                             }
 
-                            let addableComponents = availableComponentsWithFlags()
-                            if addableComponents.isEmpty == false {
-                                Menu {
-                                    ForEach(addableComponents, id: \.id) { component in
-                                        Button(component.name) {
-                                            addComponentToEntity_Editor(componentType: component.type)
-                                        }
-                                    }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "plus.circle.fill")
-                                        Text("Add Component")
-                                            .fontWeight(.regular)
-                                    }
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 10)
-                                    .background(Color.accentColor)
-                                    .foregroundColor(.editorTextPrimary)
-                                    .cornerRadius(6)
-                                }
-                                .menuStyle(.borderlessButton)
-                                .padding(.top, 8)
-                            }
+                            // One menu for everything that can be added: the engine's components
+                            // and the ones the loaded code defines.
+                            AddComponentMenu(
+                                entityId: entityId,
+                                engineComponents: availableComponentsWithFlags(),
+                                addEngineComponent: { addComponentToEntity_Editor(componentType: $0) },
+                                refreshView: refreshView
+                            )
 
                         } else {
                             Text("No entity selected").foregroundColor(.editorTextTertiary)

@@ -10,6 +10,7 @@
 //
 import SwiftUI
 import UniformTypeIdentifiers
+import UntoldComponentKit
 import UntoldEngine
 
 let runtimeAssetExtension = "untold"
@@ -719,6 +720,7 @@ struct AssetBrowserView: View {
     private func selectDirectory(url: URL, category: String) {
         navigation.lightsSelected = false
         navigation.primitivesSelected = false
+        navigation.entitiesSelected = false
         selectedDirURL = nil
         selectedCategory = category
         selectedAsset = nil
@@ -811,6 +813,7 @@ struct AssetBrowserView: View {
         .onTapGesture {
             navigation.lightsSelected = true
             navigation.primitivesSelected = false
+            navigation.entitiesSelected = false
             selectedDirURL = nil
             selectedCategory = nil
             folderPathStack = []
@@ -846,6 +849,7 @@ struct AssetBrowserView: View {
             ForEach(PlaceableLightType.allCases, id: \.self) { kind in
                 lightRow(kind)
             }
+            entityTemplateRows(on: .lights)
         }
     }
 
@@ -875,6 +879,7 @@ struct AssetBrowserView: View {
         .onTapGesture {
             navigation.primitivesSelected = true
             navigation.lightsSelected = false
+            navigation.entitiesSelected = false
             selectedDirURL = nil
             selectedCategory = nil
             folderPathStack = []
@@ -910,6 +915,39 @@ struct AssetBrowserView: View {
             ForEach(PlaceablePrimitiveType.allCases, id: \.self) { kind in
                 primitiveRow(kind)
             }
+            entityTemplateRows(on: .primitives)
+        }
+    }
+
+    /// The kinds of entity loaded code added to `shelf` (see `EntityTemplate` in the component
+    /// kit). They sit under the built-in rows and work the same way.
+    private func entityTemplateRows(on shelf: UntoldEntityShelf) -> some View {
+        EntityTemplateShelfRows(
+            shelf: shelf,
+            sceneGraphModel: sceneGraphModel,
+            selectionManager: selectionManager,
+            showStatus: { message, isError in showStatus(message, isError: isError) }
+        )
+    }
+
+    /// Left-tree entry for the Entities shelf, mirroring `lightsCategoryRow`. Hidden until
+    /// loaded code adds an entity kind that belongs there.
+    private var entitiesCategoryRow: some View {
+        EntityTemplatesCategoryRow(isSelected: navigation.entitiesSelected) {
+            navigation.entitiesSelected = true
+            navigation.lightsSelected = false
+            navigation.primitivesSelected = false
+            selectedDirURL = nil
+            selectedCategory = nil
+            folderPathStack = []
+            selectedAsset = nil
+            selectedAssetName = nil
+        }
+    }
+
+    private var entitiesShelfView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            entityTemplateRows(on: .entities)
         }
     }
 
@@ -969,6 +1007,7 @@ struct AssetBrowserView: View {
                 .onTapGesture {
                     navigation.lightsSelected = false
                     navigation.primitivesSelected = false
+                    navigation.entitiesSelected = false
                     if isGeneric {
                         if let url {
                             selectedDirURL = url
@@ -1036,6 +1075,7 @@ struct AssetBrowserView: View {
             if let root {
                 navigation.lightsSelected = false
                 navigation.primitivesSelected = false
+                navigation.entitiesSelected = false
                 selectedDirURL = root
                 selectedCategory = nil
                 folderPathStack = []
@@ -1058,6 +1098,8 @@ struct AssetBrowserView: View {
             lightsShelfView
         } else if navigation.primitivesSelected {
             primitivesShelfView
+        } else if navigation.entitiesSelected {
+            entitiesShelfView
         } else if let selectedDirURL {
             folderContentsView(for: selectedDirURL, selectionManager: selectionManager)
         } else if let selectedCategory {
@@ -1113,6 +1155,7 @@ struct AssetBrowserView: View {
                             if rootExpanded {
                                 primitivesCategoryRow
                                 lightsCategoryRow
+                                entitiesCategoryRow
 
                                 ForEach(AssetCategory.allCases, id: \.self) { category in
                                     directoryNode(
@@ -2767,6 +2810,7 @@ struct AssetBrowserView: View {
             )
             navigation.lightsSelected = false
             navigation.primitivesSelected = false
+            navigation.entitiesSelected = false
             selectedCategory = AssetCategory.streamModels.rawValue
             folderPathStack = []
             if loadImmediately {

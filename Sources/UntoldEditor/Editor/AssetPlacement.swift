@@ -169,11 +169,13 @@ struct PrimitiveDragPayload: Codable, Equatable, Transferable {
 }
 
 /// Either shape a dropped row can carry: a file-backed asset browser row, a Lights
-/// shelf row naming a light type, or a Primitives shelf row naming a primitive.
+/// shelf row naming a light type, a Primitives shelf row naming a primitive, or a row
+/// naming an entity template that loaded code contributed.
 enum DroppedRowPayload {
     case asset(AssetDragPayload)
     case light(LightDragPayload)
     case primitive(PrimitiveDragPayload)
+    case template(EntityTemplateDragPayload)
 }
 
 /// Decodes whichever payload `providers` carries and hands it to `completion` on the
@@ -197,6 +199,8 @@ func loadDroppedRowPayload(from providers: [NSItemProvider], completion: @escapi
             DispatchQueue.main.async { completion(.light(light)) }
         } else if let primitive = try? PrimitiveDragPayload.decode(data) {
             DispatchQueue.main.async { completion(.primitive(primitive)) }
+        } else if let template = try? EntityTemplateDragPayload.decode(data) {
+            DispatchQueue.main.async { completion(.template(template)) }
         } else if let asset = try? AssetDragPayload.decode(data) {
             DispatchQueue.main.async { completion(.asset(asset)) }
         } else {

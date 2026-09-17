@@ -15,57 +15,47 @@ import SwiftUI
 import UntoldComponentKit
 import UntoldEngine
 
-/// The Inspector's Code Components section: one block per component on the entity, with a
-/// field for every `@UntoldAttribute`, a button for every action, and a menu to add more.
+/// The components written in code that the entity carries, shown in the Inspector the way
+/// the engine's components are: one block each, a headline with a remove button, then a
+/// field for every `@UntoldAttribute` and a button for every action. They are added from
+/// the Inspector's one Add Component menu (`AddComponentMenu`), alongside the engine's.
 ///
-/// An ad-hoc section like Splat Twin rather than a registered component option, so
-/// scene-composition mode keeps it and the generic add/remove buttons stay out of its way.
+/// Drawn by the Inspector directly rather than registered as component options, because the
+/// set of types changes whenever a library loads, and so scene-composition mode keeps them.
 struct CodeComponentInspectorView: View {
     let entityId: EntityID
     let refreshView: () -> Void
 
     @ObservedObject private var controller = ComponentLibraryController.shared
 
+    /// Whether the Inspector has anything to draw for `entityId`.
     static func isAvailable(for entityId: EntityID) -> Bool {
         guard EditorFeatureFlags.enableCodeComponents, isDerivedAssetNode(entityId) == false else { return false }
         return CodeComponentSystem.shared.slots(on: entityId).isEmpty == false
-            || CodeComponentRegistry.shared.entries.isEmpty == false
+    }
+
+    /// The loaded component types `entityId` does not carry yet, for the Add Component menu.
+    static func addableTypes(for entityId: EntityID) -> [CodeComponentRegistry.Entry] {
+        guard EditorFeatureFlags.enableCodeComponents, isDerivedAssetNode(entityId) == false else { return [] }
+        let present = Set(CodeComponentSystem.shared.slots(on: entityId).map(\.typeName))
+        return CodeComponentRegistry.shared.entries
+            .filter { present.contains($0.name) == false }
+            .sorted { $0.type.displayName < $1.type.displayName }
+    }
+
+    /// Adds a component by type name, as the Add Component menu does.
+    static func add(_ typeName: String, to entityId: EntityID) {
+        CodeComponentSystem.shared.add(typeName, to: entityId)
+        EditorSceneDirtyState.shared.markDirty()
     }
 
     var body: some View {
         let slots = CodeComponentSystem.shared.slots(on: entityId)
-        let addable = CodeComponentRegistry.shared.entries
-            .filter { entry in slots.contains { $0.typeName == entry.name } == false }
 
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Code Components")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if slots.isEmpty {
-                Text("None on this entity.")
-                    .font(.caption)
-                    .foregroundColor(.editorTextSecondary)
-            }
-
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(slots, id: \.typeName) { slot in
                 slotView(slot)
-            }
-
-            if addable.isEmpty == false {
-                Menu {
-                    ForEach(addable, id: \.name) { entry in
-                        Button(entry.type.displayName) { add(entry.name) }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle")
-                        Text("Add Code Component")
-                    }
-                    .font(.caption)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                Divider()
             }
         }
         // A new library revision swaps every instance: rebuild the fields against the new ones.
@@ -77,11 +67,14 @@ struct CodeComponentInspectorView: View {
     @ViewBuilder
     private func slotView(_ slot: CodeComponentSlotInfo) -> some View {
         let instance = CodeComponentSystem.shared.component(named: slot.typeName, on: entityId)
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(instance.map { type(of: $0).displayName } ?? slot.typeName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.editorTextPrimary)
+                    .font(.headline)
+                Image(systemName: "swift")
+                    .font(.system(size: 10))
+                    .foregroundColor(.editorTextTertiary)
+                    .help("\(slot.typeName), written in the project's code or one of its plugins")
                 Spacer()
                 Button(action: { remove(slot.typeName) }) {
                     Image(systemName: "trash").foregroundColor(.editorError)
@@ -115,19 +108,10 @@ struct CodeComponentInspectorView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.editorFillSubtle)
-        .cornerRadius(6)
     }
 
     // MARK: Edits
-
-    private func add(_ typeName: String) {
-        CodeComponentSystem.shared.add(typeName, to: entityId)
-        EditorSceneDirtyState.shared.markDirty()
-        refreshView()
-    }
 
     private func remove(_ typeName: String) {
         CodeComponentSystem.shared.remove(typeName, from: entityId)

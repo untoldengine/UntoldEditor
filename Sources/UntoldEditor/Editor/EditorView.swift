@@ -202,14 +202,7 @@ public struct EditorView: View {
                                         onUnparentEntity: editor_unparentEntity,
                                         onDeleteEntity: editor_removeEntity(_:),
                                         onDropRow: { payload, parent in
-                                            switch payload {
-                                            case let .asset(assetPayload):
-                                                editor_placeDroppedAsset(assetPayload, parent: parent)
-                                            case let .light(lightPayload):
-                                                editor_placeDroppedLight(lightPayload, parent: parent)
-                                            case let .primitive(primitivePayload):
-                                                editor_placeDroppedPrimitive(primitivePayload, parent: parent)
-                                            }
+                                            editor_placeDroppedRow(payload, parent: parent)
                                         }
                                     )
                                 }
@@ -595,15 +588,42 @@ public struct EditorView: View {
         let viewportSize = renderer?.metalView.bounds.size ?? .zero
         return loadDroppedRowPayload(from: providers) { payload in
             let position = sceneCameraGroundPlaneHit(atViewportLocation: location, viewportSize: viewportSize)
-            switch payload {
-            case let .asset(assetPayload):
-                editor_placeDroppedAsset(assetPayload, parent: nil, at: position)
-            case let .light(lightPayload):
-                editor_placeDroppedLight(lightPayload, parent: nil, at: position)
-            case let .primitive(primitivePayload):
-                editor_placeDroppedPrimitive(primitivePayload, parent: nil, at: position)
-            }
+            editor_placeDroppedRow(payload, parent: nil, at: position)
         }
+    }
+
+    /// Places whatever a dropped row carries. One place for the hierarchy drop and the
+    /// viewport drop, and out of `body`, which is at the type checker's limit.
+    private func editor_placeDroppedRow(_ payload: DroppedRowPayload, parent: EntityID?, at position: simd_float3? = nil) {
+        switch payload {
+        case let .asset(assetPayload):
+            editor_placeDroppedAsset(assetPayload, parent: parent, at: position)
+        case let .light(lightPayload):
+            editor_placeDroppedLight(lightPayload, parent: parent, at: position)
+        case let .primitive(primitivePayload):
+            editor_placeDroppedPrimitive(primitivePayload, parent: parent, at: position)
+        case let .template(templatePayload):
+            editor_placeDroppedTemplate(templatePayload, parent: parent, at: position)
+        }
+    }
+
+    /// Places a dropped entity template row (a kind of entity that loaded code added),
+    /// parenting it under `parent` for a hierarchy drop, same as `editor_placeDroppedAsset`.
+    private func editor_placeDroppedTemplate(_ payload: EntityTemplateDragPayload, parent: EntityID?, at position: simd_float3? = nil) {
+        guard let placement = placeEntityTemplate(
+            payload.entityTemplate,
+            at: position,
+            sceneGraphModel: sceneGraphModel,
+            selectionManager: selectionManager
+        ) else {
+            showDropStatus("'\(payload.entityTemplate)' is no longer loaded.", isError: true)
+            return
+        }
+        if let parent {
+            editor_parentEntity(childId: placement.entityId, parentId: parent)
+        }
+        editor_entities = getAllGameEntities()
+        showDropStatus(placement.statusMessage, isError: placement.isError)
     }
 
     /// Places a dropped asset browser row, parenting it under `parent` for a

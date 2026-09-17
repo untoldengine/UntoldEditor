@@ -27,6 +27,7 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
         super.setUp()
         CodeComponentRegistry.shared.removeAll()
         EditorExtensionRegistry.shared.removeAll()
+        EntityTemplateRegistry.shared.removeAll()
         CodeComponentSystem.install()
     }
 
@@ -34,6 +35,7 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
         CodeComponentSystem.shared.prepareForReload()
         CodeComponentRegistry.shared.removeAll()
         EditorExtensionRegistry.shared.removeAll()
+        EntityTemplateRegistry.shared.removeAll()
         super.tearDown()
     }
 
@@ -66,6 +68,7 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
         let library = try ComponentLibraryLoader.load(request).get()
         XCTAssertEqual(library.componentNames, ["Orbiter"])
         XCTAssertEqual(library.extensionNames, ["SampleTools"])
+        XCTAssertEqual(library.templateNames, ["OrbiterEntity"])
         XCTAssertEqual(library.moduleName, "SampleComponents_r\(Self.revision)")
         XCTAssertGreaterThan(library.byteSize, 0)
 
@@ -79,7 +82,14 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
         let extensionType = try XCTUnwrap(EditorExtensionRegistry.shared.type(named: "SampleTools"))
         XCTAssertEqual(extensionType.init().untoldMenuItems().map(\.menu.identifier), ["debug/Sample/Verbose", "tools/Sample/Reset"])
 
+        // And the loaded template is on its shelf and builds an entity with the loaded component.
+        XCTAssertEqual(EntityTemplateShelfItem.items(on: .primitives).map(\.displayName), ["Orbiter"])
+        let placed = try XCTUnwrap(EntityTemplateRegistry.shared.instantiate("OrbiterEntity", at: SIMD3<Float>(0, 1, 0)))
+        XCTAssertEqual(CodeComponentSystem.shared.slots(on: placed).map(\.typeName), ["Orbiter"])
+        XCTAssertEqual(getLocalPosition(entityId: placed), SIMD3<Float>(0, 1, 0))
+
         destroyEntity(entityId: entity)
+        destroyEntity(entityId: placed)
     }
 
     func test_aCompileErrorComesBackAsADiagnosticWithFileAndLine() throws {
@@ -126,6 +136,14 @@ final class ComponentLibraryIntegrationTests: XCTestCase {
 
         override func onAttach() {
             setEntityName(entityId: entity, name: "orbiting")
+        }
+    }
+
+    final class OrbiterEntity: EntityTemplate {
+        override class var shelf: UntoldEntityShelf { .primitives }
+
+        override func build(_ entity: EntityID) {
+            add(Orbiter.self, to: entity)
         }
     }
     """
