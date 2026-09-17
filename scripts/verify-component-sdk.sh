@@ -98,12 +98,16 @@ final class FixtureExtension: EditorExtension {
 
 // A kind of entity: a template, an editor-only representation, and a mesh built in code.
 final class FixtureMarker: CodeComponent {
+    override class var attachment: ComponentAttachment { .entityKindOnly }
+
     override var editorRepresentation: EditorRepresentation {
         .icon(systemImage: "flag.fill", tint: SIMD3<Float>(1, 0.5, 0))
     }
 
     override func onAttach() {
         setGeneratedMesh(BasicPrimitives.createCube(), name: "Fixture")
+        _ = ownsGeneratedMesh
+        _ = CodeComponentRegistry.shared.attachableEntries
     }
 }
 

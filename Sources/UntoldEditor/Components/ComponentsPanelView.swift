@@ -185,7 +185,7 @@ struct ComponentsPanelView: View {
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .foregroundColor(.editorTextPrimary)
                     ForEach(library.componentNames.filter(matches), id: \.self) { name in
-                        row(icon: "cube", color: .editorAccent, text: "\(name)  ·  \(instanceCount(of: name)) in scene")
+                        row(icon: "cube", color: .editorAccent, text: "\(name)  ·  \(instanceCount(of: name)) in scene\(attachmentNote(of: name))")
                     }
                     ForEach(library.extensionNames.filter(matches), id: \.self) { name in
                         row(icon: "menubar.rectangle", color: .editorSecondaryAccent, text: "\(name)  ·  \(menuSummary(of: name))")
@@ -260,6 +260,12 @@ struct ComponentsPanelView: View {
 
     private func instanceCount(of typeName: String) -> Int {
         CodeComponentSystem.shared.entities(withComponentNamed: typeName).count
+    }
+
+    /// Says why a component is missing from Add Component, for the ones that are.
+    private func attachmentNote(of componentName: String) -> String {
+        guard CodeComponentRegistry.shared.type(named: componentName)?.attachment == .entityKindOnly else { return "" }
+        return "  ·  part of an entity kind, not in Add Component"
     }
 
     private func templateSummary(of templateName: String) -> String {
