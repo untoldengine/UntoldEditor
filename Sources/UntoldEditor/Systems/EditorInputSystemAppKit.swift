@@ -586,6 +586,20 @@
             editorController?.activeAxis = .none
             activeHitGizmoEntity = .invalid
 
+            // A handle of an entity written in code (a spline's control point) is drawn over
+            // everything, so it takes the click before whatever mesh lies under it. Selecting it
+            // selects its entity and puts the move gizmo on the point.
+            if let rayContext,
+               let handle = EditorRepresentationHandles.pick(rayOrigin: rayContext.rayOrigin, rayDirection: rayContext.rayDirection)
+            {
+                EditorRepresentationHandles.select(handle)
+                activeEntity = handle.entityId
+                selectionDelegate?.didSelectEntity(handle.entityId)
+                selectionDelegate?.resetActiveAxis()
+                return
+            }
+            EditorRepresentationHandles.select(nil)
+
             if hit {
                 if hasComponent(entityId: entityId, componentType: GizmoComponent.self) {
                     activeEntity = selectableTransformEntity(for: entityId)
@@ -636,6 +650,12 @@
             guard hit == false else {
                 return
             }
+            // A handle of an entity written in code has no mesh, but it is not empty space.
+            if let rayContext = raycastContext(currentLocation: currentLocation, view: view),
+               EditorRepresentationHandles.pick(rayOrigin: rayContext.rayOrigin, rayDirection: rayContext.rayDirection) != nil
+            {
+                return
+            }
 
             gizmoActive = false
             editorController?.activeMode = .none
@@ -648,6 +668,7 @@
         /// selection (Inspector, hierarchy highlight) follows.
         func clearViewportSelection() {
             activeEntity = .invalid
+            EditorRepresentationHandles.select(nil)
             removeGizmo()
             selectionDelegate?.didClearSelection()
         }
@@ -713,6 +734,7 @@
                         if activeEntity != .invalid {
                             EditorUndoManager.shared.beginTransformEdit(entityId: activeEntity)
                         }
+                        EditorRepresentationHandles.dragDidBegin()
                     } else {
                         activeHitGizmoEntity = .invalid
                         editorController?.activeMode = .none
@@ -789,6 +811,7 @@
                    activeEntity != .invalid
                 {
                     EditorUndoManager.shared.commitTransformEdit(entityId: activeEntity)
+                    EditorRepresentationHandles.dragDidEnd()
                 }
 
                 // Reset

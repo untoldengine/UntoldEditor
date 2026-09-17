@@ -204,8 +204,11 @@ class SelectionManager: ObservableObject {
             return
         }
 
-        // Check if entity or any of its children have a render component
+        // Check if entity or any of its children have a render component. An entity written in
+        // code that shows itself only through its editor representation (a spawn point's flag)
+        // counts too: it is visible, so it can be moved.
         let hasRenderCapability = entityOrChildrenHaveRenderComponent(entityId: entityId)
+            || EditorRepresentationRenderer.drawing(for: entityId) != nil
 
         if hasRenderCapability, hasComponent(entityId: entityId, componentType: LocalTransformComponent.self) {
             activeEntity = entityId

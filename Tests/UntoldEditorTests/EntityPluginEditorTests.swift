@@ -62,6 +62,26 @@ final class ProbeRingEntity: EntityPlugin {
 /// A kind of entity with nothing to show.
 final class ProbePlainEntity: EntityPlugin {}
 
+/// A kind of entity with draggable control points, like the spline in the example.
+final class ProbePathEntity: EntityPlugin {
+    @UntoldAttribute("Start") var start: SIMD3<Float> = [-1, 0, 0]
+    @UntoldAttribute("End") var end: SIMD3<Float> = [1, 0, 0]
+    @UntoldAttribute var thickness: Float = 0.1
+
+    var edits: [String] = []
+
+    override func onEditorChanged(property: String) {
+        edits.append(property)
+    }
+
+    override var editorRepresentation: EditorRepresentation {
+        EditorRepresentation([
+            .polyline([start, end], closed: false),
+            .handles(properties: ["start", "end", "thickness", "missing"], tint: SIMD3<Float>(1, 0.5, 0)),
+        ])
+    }
+}
+
 // MARK: - Tests
 
 final class EntityPluginEditorTests: XCTestCase {
@@ -79,6 +99,9 @@ final class EntityPluginEditorTests: XCTestCase {
     }
 
     override func tearDown() {
+        EditorRepresentationHandles.select(nil)
+        activeEntity = .invalid
+        EditorUndoManager.shared.clear()
         ComponentPluginRegistry.shared.removeAll()
         EntityPluginRegistry.shared.removeAll()
         sceneGraphModel = nil
@@ -246,6 +269,111 @@ final class EntityPluginEditorTests: XCTestCase {
         let items = try XCTUnwrap(EditorRepresentationRenderer.drawing(for: ring.entity)).representation.items
         let corners = [SIMD3<Float>(2, 0, 0), SIMD3<Float>(0, 0, 2), SIMD3<Float>(-2, 0, 0)]
         XCTAssertEqual(items, [.polyline(corners, closed: true), .points(corners, tint: SIMD3<Float>(1, 1, 0))], "geometry in the game, control points in the editor")
+    }
+
+    // MARK: Handles
+
+    func test_handlesAreTheEntitysVectorPropertiesInWorldSpace() throws {
+        let path = try XCTUnwrap(EntityPluginRegistry.shared.instantiate(ProbePathEntity.self, at: SIMD3<Float>(10, 0, 0)))
+        // The transform the editor computes each frame; set it as a rendered frame would.
+        registerComponent(entityId: path.entity, componentType: WorldTransformComponent.self)
+        scene.get(component: WorldTransformComponent.self, for: path.entity)?.space = matrix4x4Translation(10, 0, 0)
+
+        let placed = EditorRepresentationHandles.placed()
+        XCTAssertEqual(placed.map(\.handle.property), ["start", "end"], "a Float and a name that is no property are skipped")
+        XCTAssertEqual(placed.map(\.worldPosition), [SIMD3<Float>(9, 0, 0), SIMD3<Float>(11, 0, 0)])
+        XCTAssertEqual(placed.first?.tint, SIMD3<Float>(1, 0.5, 0))
+        XCTAssertEqual(EditorRepresentationHandles.worldPosition(of: EditorRepresentationHandles.Handle(entityId: path.entity, property: "end")), SIMD3<Float>(11, 0, 0))
+        XCTAssertNil(EditorRepresentationHandles.worldPosition(of: EditorRepresentationHandles.Handle(entityId: path.entity, property: "thickness")))
+    }
+
+    func test_pickTakesTheHandleNearestTheRayWithinItsScreenRadius() {
+        let near = EditorRepresentationHandles.Handle(entityId: 1, property: "a")
+        let far = EditorRepresentationHandles.Handle(entityId: 1, property: "b")
+        let candidates = [
+            EditorRepresentationHandles.Placed(handle: near, worldPosition: SIMD3<Float>(0.02, 0, -5), tint: .one),
+            EditorRepresentationHandles.Placed(handle: far, worldPosition: SIMD3<Float>(0, 0.01, -20), tint: .one),
+        ]
+        let fieldOfView: Float = .pi / 2
+
+        // Straight down -Z: both are close to the ray; the far one is nearer relative to its radius.
+        XCTAssertEqual(
+            EditorRepresentationHandles.pick(among: candidates, rayOrigin: .zero, rayDirection: SIMD3<Float>(0, 0, -1), viewportHeight: 1000, fieldOfView: fieldOfView),
+            far,
+            "0.01 at depth 20 is a smaller fraction of the pick radius than 0.02 at depth 5"
+        )
+        XCTAssertEqual(
+            EditorRepresentationHandles.pick(among: [candidates[0]], rayOrigin: .zero, rayDirection: SIMD3<Float>(0, 0, -1), viewportHeight: 1000, fieldOfView: fieldOfView),
+            near
+        )
+        XCTAssertNil(
+            EditorRepresentationHandles.pick(among: candidates, rayOrigin: .zero, rayDirection: SIMD3<Float>(1, 0, 0), viewportHeight: 1000, fieldOfView: fieldOfView),
+            "a ray that misses both"
+        )
+        XCTAssertNil(
+            EditorRepresentationHandles.pick(among: candidates, rayOrigin: .zero, rayDirection: SIMD3<Float>(0, 0, 1), viewportHeight: 1000, fieldOfView: fieldOfView),
+            "handles behind the camera are never picked"
+        )
+        XCTAssertNil(EditorRepresentationHandles.pick(among: candidates, rayOrigin: .zero, rayDirection: .zero, viewportHeight: 1000, fieldOfView: fieldOfView))
+    }
+
+    func test_movingAHandleWritesThePropertyInTheEntitysLocalSpace() throws {
+        let path = try XCTUnwrap(EntityPluginRegistry.shared.instantiate(ProbePathEntity.self))
+        registerComponent(entityId: path.entity, componentType: WorldTransformComponent.self)
+        // The entity sits at x = 10, turned a quarter turn about Y: local +X points to world -Z.
+        scene.get(component: WorldTransformComponent.self, for: path.entity)?.space =
+            matrix4x4Translation(10, 0, 0) * matrix4x4Rotation(radians: .pi / 2, axis: SIMD3<Float>(0, 1, 0))
+        let handle = EditorRepresentationHandles.Handle(entityId: path.entity, property: "end")
+
+        XCTAssertTrue(EditorRepresentationHandles.move(handle, toWorld: SIMD3<Float>(10, 2, -3)))
+
+        XCTAssertEqual(path.end.x, 3, accuracy: 1e-4)
+        XCTAssertEqual(path.end.y, 2, accuracy: 1e-4)
+        XCTAssertEqual(path.end.z, 0, accuracy: 1e-4)
+        XCTAssertEqual(path.edits, ["end"], "the entity is told, as after an Inspector edit, so it rebuilds")
+        XCTAssertFalse(EditorRepresentationHandles.move(EditorRepresentationHandles.Handle(entityId: path.entity, property: "thickness"), toWorld: .zero), "not a vector")
+        XCTAssertFalse(EditorRepresentationHandles.move(EditorRepresentationHandles.Handle(entityId: 999_999, property: "end"), toWorld: .zero), "no such entity")
+    }
+
+    func test_theSelectedHandleHoldsOnlyWhileItsEntityIsActive() throws {
+        let path = try XCTUnwrap(EntityPluginRegistry.shared.instantiate(ProbePathEntity.self))
+        let handle = EditorRepresentationHandles.Handle(entityId: path.entity, property: "start")
+
+        EditorRepresentationHandles.select(handle)
+        activeEntity = path.entity
+        XCTAssertEqual(EditorRepresentationHandles.active, handle)
+
+        activeEntity = createEntity()
+        XCTAssertNil(EditorRepresentationHandles.active, "another entity took the selection")
+
+        activeEntity = path.entity
+        XCTAssertEqual(EditorRepresentationHandles.active, handle, "back on the entity, the handle is still the one selected")
+        EditorRepresentationHandles.select(nil)
+        XCTAssertNil(EditorRepresentationHandles.active)
+    }
+
+    func test_aHandleDragIsOneUndoStep() throws {
+        let path = try XCTUnwrap(EntityPluginRegistry.shared.instantiate(ProbePathEntity.self))
+        let handle = EditorRepresentationHandles.Handle(entityId: path.entity, property: "end")
+        EditorRepresentationHandles.select(handle)
+        activeEntity = path.entity
+        EditorUndoManager.shared.clear()
+
+        EditorRepresentationHandles.dragDidBegin()
+        EditorRepresentationHandles.move(handle, toWorld: SIMD3<Float>(2, 0, 0))
+        EditorRepresentationHandles.move(handle, toWorld: SIMD3<Float>(3, 0, 0))
+        EditorRepresentationHandles.dragDidEnd()
+
+        XCTAssertEqual(path.end, SIMD3<Float>(3, 0, 0))
+        XCTAssertTrue(EditorUndoManager.shared.canUndo, "the whole drag is one step")
+        EditorUndoManager.shared.undo()
+        XCTAssertEqual(path.end, SIMD3<Float>(1, 0, 0), "back to where the drag started, not one move back")
+        XCTAssertFalse(EditorUndoManager.shared.canUndo)
+
+        // A drag that ends where it began registers nothing.
+        EditorRepresentationHandles.dragDidBegin()
+        EditorRepresentationHandles.dragDidEnd()
+        XCTAssertFalse(EditorUndoManager.shared.canUndo)
     }
 
     func test_lineRunsCloseTheLoopAndNeverLeaveAGap() {

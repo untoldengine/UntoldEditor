@@ -74,6 +74,9 @@ private struct GizmoDragState {
     let startAxisParameter: Float
     let startActiveLocalPosition: simd_float3
     let startGizmoWorldPosition: simd_float3
+    /// When the gizmo sits on a handle of an entity written in code, the drag moves the
+    /// handle (writes its property) instead of the entity.
+    let handle: EditorRepresentationHandles.Handle?
     var appliedAxisAmount: Float = 0.0
 
     var isAxisDriven: Bool {
@@ -163,7 +166,8 @@ func beginGizmoDrag(ray: GizmoDragRay) {
         axisWorldDirection: axisDirection,
         startAxisParameter: startParameter,
         startActiveLocalPosition: getLocalPosition(entityId: activeEntity),
-        startGizmoWorldPosition: gizmoRootWorldPosition()
+        startGizmoWorldPosition: gizmoRootWorldPosition(),
+        handle: handleComponent.mode == .translate ? EditorRepresentationHandles.active : nil
     )
 }
 
@@ -193,7 +197,11 @@ func updateGizmoDrag(ray: GizmoDragRay) {
     switch state.mode {
     case .translate:
         let translation = state.axisWorldDirection * axisAmount
-        translateTo(entityId: activeEntity, position: state.startActiveLocalPosition + translation)
+        if let handle = state.handle {
+            EditorRepresentationHandles.move(handle, toWorld: state.startGizmoWorldPosition + translation)
+        } else {
+            translateTo(entityId: activeEntity, position: state.startActiveLocalPosition + translation)
+        }
         translateTo(entityId: parentEntityIdGizmo, position: state.startGizmoWorldPosition + translation)
 
     case .scale:
@@ -868,6 +876,11 @@ func createGizmo(mode: GizmoMode) {
         return
     }
 
+    // Only the move gizmo can sit on a handle; asking for another mode goes back to the entity.
+    if mode != .translate {
+        EditorRepresentationHandles.select(nil)
+    }
+
     // create parent gizmo entity
     parentEntityIdGizmo = createEntity()
 
@@ -875,7 +888,8 @@ func createGizmo(mode: GizmoMode) {
     registerSceneGraphComponent(entityId: parentEntityIdGizmo)
     registerComponent(entityId: parentEntityIdGizmo, componentType: GizmoComponent.self)
 
-    translateTo(entityId: parentEntityIdGizmo, position: gizmoAnchorWorldPosition(entityId: activeEntity))
+    let anchor = EditorRepresentationHandles.active.flatMap(EditorRepresentationHandles.worldPosition) ?? gizmoAnchorWorldPosition(entityId: activeEntity)
+    translateTo(entityId: parentEntityIdGizmo, position: anchor)
 
     switch mode {
     case .translate:
