@@ -151,6 +151,13 @@ final class ComponentProjectTests: XCTestCase {
         XCTAssertTrue(layout.problems.contains { $0.contains("untold-plugin.json is now untold-package.json") })
     }
 
+    func test_theEditorSideLibraryIsNamedAfterItsFolder() {
+        XCTAssertEqual(ComponentSourceLocator.editorModuleName(folder: "SampleEditorPluginPackage", runtimeModule: "SamplePluginPackage"), "SampleEditorPluginPackage")
+        XCTAssertEqual(ComponentSourceLocator.editorModuleName(folder: "Editor", runtimeModule: "Twins"), "TwinsEditor", "a folder that is just Editor would clash between packages")
+        XCTAssertEqual(ComponentSourceLocator.editorModuleName(folder: "Twins", runtimeModule: "Twins"), "TwinsEditor", "and one named like the runtime would clash with it")
+        XCTAssertEqual(ComponentSourceLocator.editorModuleName(folder: "Twins Editor", runtimeModule: "Twins"), "Twins_Editor")
+    }
+
     func test_moduleIdentifiersAreValidSwiftIdentifiers() {
         XCTAssertEqual(ComponentSourceLocator.moduleIdentifier(from: "SplatTwinPlugins"), "SplatTwinPlugins")
         XCTAssertEqual(ComponentSourceLocator.moduleIdentifier(from: "My Game-Components"), "My_Game_Components")

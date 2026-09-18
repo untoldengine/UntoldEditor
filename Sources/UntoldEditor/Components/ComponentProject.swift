@@ -213,7 +213,13 @@ enum ComponentSourceLocator {
                 let directory = resolve(editorPath, relativeTo: pluginRoot)
                 let sources = swiftSources(in: directory, fileManager: fileManager)
                 if sources.isEmpty == false {
-                    editorUnits.append(ComponentSourceUnit(role: .packageEditor, moduleBaseName: module + "Editor", directory: directory, sources: sources, reloadableImports: reloadableRuntime))
+                    editorUnits.append(ComponentSourceUnit(
+                        role: .packageEditor,
+                        moduleBaseName: editorModuleName(folder: directory.lastPathComponent, runtimeModule: module),
+                        directory: directory,
+                        sources: sources,
+                        reloadableImports: reloadableRuntime
+                    ))
                 }
             }
         }
@@ -237,6 +243,17 @@ enum ComponentSourceLocator {
             units: units,
             problems: problems
         )
+    }
+
+    /// The editor-side library of a plugin package is named after its folder, like the project's
+    /// plugins folder is, so the Plugins tab shows the names one sees on disk. A folder that is
+    /// just "Editor", or that shares the runtime module's name, gets `<Module>Editor` instead.
+    static func editorModuleName(folder: String, runtimeModule: String) -> String {
+        let candidate = moduleIdentifier(from: folder)
+        if candidate == runtimeModule || candidate.lowercased() == "editor" || candidate.lowercased() == "editorsources" {
+            return runtimeModule + "Editor"
+        }
+        return candidate
     }
 
     /// Every `.swift` file under `directory`, sorted so the compiler invocation is stable.
