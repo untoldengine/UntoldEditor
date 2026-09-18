@@ -158,6 +158,8 @@ public struct EditorView: View {
         registerEditorRenderExtension()
         // Compiles and loads the open project's code components and editor extensions.
         ComponentLibraryController.shared.activate()
+        // The working set the frame draws from (View > Splat Debug > Working Set).
+        EditorGaussianRuntimeSettings.shared.activate()
 
         if let r = renderer, let v = renderer?.metalView {
             r.setupCallbacks(gameUpdate: { _ in }, handleInput: r.handleSceneInput)
