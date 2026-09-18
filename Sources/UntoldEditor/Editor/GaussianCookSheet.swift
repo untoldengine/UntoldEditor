@@ -8,7 +8,9 @@
 //  to the source file. Runs in-process through the engine, no CLI needed. `.spz`
 //  support is limited to legacy gzip versions 2-3, matching the engine's SPZReader.
 //  `cookGaussianPLYTracked` is the entry point the browser uses: it queues the bake
-//  off the main thread and reports it as a job in the Tasks panel.
+//  off the main thread and reports it as a job in the Tasks panel, with the engine's
+//  phase and fraction on the row and the cancel button wired to the engine's
+//  cancellation, so a running cook stops within a moment and leaves nothing behind.
 //
 
 import simd
@@ -42,6 +44,10 @@ struct GaussianCookSettings: Equatable {
     /// training run left it. The cook reads the source bounds first to compute it.
     var recenter: Bool = false
     var recenterMode: GaussianRecenterMode = .baseOnGround
+    /// Per-chunk coarse levels (`UntoldGSCookOptions.coarseLevels`): merged splats a far or
+    /// not-yet-paged chunk draws instead of its fine records. Auto bakes two levels for assets
+    /// of at least `UntoldGSFormat.coarseLevelsAutomaticMinimumChunks` chunks.
+    var coarseLevels: GaussianCoarseLevelChoice = .automatic
 
     /// Options without recentering: the up-axis rotation and scale only.
     var cookOptions: UntoldGSCookOptions {
@@ -57,6 +63,7 @@ struct GaussianCookSettings: Equatable {
         options.shDegree = shDegree.map { UInt8($0) }
         options.minimumOpacity = minimumOpacity
         options.maxSplatCount = splatBudget == .custom ? max(1, customSplatBudget) : splatBudget.maxSplatCount
+        options.coarseLevels = coarseLevels.policy
         var transform = UntoldGSCookOptions.transform(upAxis: upAxis, scale: scale)
         if recenter, let bounds {
             let translation = gaussianRecenterTranslation(
@@ -91,6 +98,44 @@ enum GaussianRecenterMode: String, CaseIterable, Identifiable {
         case .centreAtOrigin: "Centre at the origin"
         }
     }
+}
+
+/// The cook sheet's "Coarse levels" choices, mapped to `UntoldGSCoarseLevelPolicy`.
+enum GaussianCoarseLevelChoice: String, CaseIterable, Identifiable {
+    /// Two levels for assets of at least `UntoldGSFormat.coarseLevelsAutomaticMinimumChunks`
+    /// chunks, none for smaller ones: the engine's default.
+    case automatic
+    /// No coarse section, whatever the size.
+    case off
+    /// One level (1/8 of the fine splats per chunk), whatever the size.
+    case one
+    /// Two levels (1/8 and 1/64), whatever the size.
+    case two
+
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        switch self {
+        case .automatic: "Auto"
+        case .off: "Off"
+        case .one: "1"
+        case .two: "2"
+        }
+    }
+
+    var policy: UntoldGSCoarseLevelPolicy {
+        switch self {
+        case .automatic: .automatic
+        case .off: .off
+        case .one: .levels(count: 1)
+        case .two: .levels(count: 2)
+        }
+    }
+
+    /// The tooltip of the row: what the levels are for and what Auto does.
+    static let summary = "Far chunks draw merged splats instead of their fine records, and a paged chunk draws them until its pages arrive. Auto bakes two levels for captures of at least \(UntoldGSFormat.coarseLevelsAutomaticMinimumChunks) chunks."
 }
 
 /// Splat budget presets: the per-entity caps the engine runtime enforces per platform
@@ -150,6 +195,114 @@ func gaussianBudgetCaption(sourceCount: Int?, maxSplatCount: Int?) -> String {
     return "\(source) splats in the source; the budget keeps the \(GaussianSplatBudget.formatted(maxSplatCount)) most important."
 }
 
+/// What the sheet knows about a source before it cooks: enough for the captions. A `.ply`
+/// gives it up from the header alone, without reading the body. A `.spz` has no header-only
+/// path — its count and degree sit inside the gzip payload — so it is decoded whole, as the
+/// bake decodes it again.
+struct GaussianCookSourceInfo: Equatable {
+    var splatCount: Int
+    /// Spherical-harmonics degree the file stores (0 when it has no `f_rest_*` properties).
+    var shDegree: Int
+
+    /// For a `.ply`, a header-only read: the splat count through the engine's reader and the
+    /// degree from the `f_rest_N` property count of the first 100 KB (3 × ((d + 1)² − 1)
+    /// coefficients). For a `.spz`, the engine's whole decode (`SPZReader.readGaussianAsset`):
+    /// the count is of the splats the reader keeps, past its negligible-opacity cull, and the
+    /// degree is the payload's.
+    static func read(from url: URL) throws -> GaussianCookSourceInfo {
+        if url.pathExtension.lowercased() == "spz" {
+            let asset = try SPZReader.readGaussianAsset(from: url)
+            return GaussianCookSourceInfo(splatCount: asset.splats.count, shDegree: asset.sphericalHarmonics?.degree ?? 0)
+        }
+        let splatCount = try PLYReader.readGaussianSplatCount(from: url)
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let prefix = try handle.read(upToCount: 100_000) ?? Data()
+        return GaussianCookSourceInfo(splatCount: splatCount, shDegree: shDegree(fromHeaderPrefix: prefix))
+    }
+
+    static func shDegree(fromHeaderPrefix prefix: Data) -> Int {
+        guard let text = String(data: prefix, encoding: .ascii) ?? String(data: prefix, encoding: .isoLatin1) else { return 0 }
+        let header = text.components(separatedBy: "end_header").first ?? text
+        let rest = header.components(separatedBy: .newlines).filter { line in
+            let fields = line.split(separator: " ")
+            return fields.count == 3 && fields[0] == "property" && fields[2].hasPrefix("f_rest_")
+        }.count
+        switch rest {
+        case 45...: return 3
+        case 24...: return 2
+        case 9...: return 1
+        default: return 0
+        }
+    }
+}
+
+/// Bytes per splat of the engine's compact cook store (`UntoldGSSplatStore`): the floats of
+/// position, scale, rotation, colour and opacity, 56 bytes, plus the spherical harmonics
+/// already quantised to the target degree.
+let gaussianCookStoreBytesPerSplat = 56
+
+/// Process memory a cook of `splatCount` splats at `shDegree` peaks at, in bytes. The engine
+/// streams the source in windows and cooks it into one compact store, so the store is what
+/// the cook holds — about 100 bytes per splat at degree 3 — plus the windows in flight, the
+/// ranking and the chunk encode, about half as much again: a 10 M-splat degree-3 capture
+/// (a 2.25 GiB `.ply`) peaks at about 1.4 GB. The budget compacts the store in place, so the
+/// source count is what counts, not the kept count. A `.spz` is decoded whole before the cook
+/// (its reader is not streamed), so the decoded asset sits beside the store through the read;
+/// the estimate is a floor there.
+func gaussianCookEstimatedPeakBytes(splatCount: Int, shDegree: Int) -> Int {
+    let shBytes = shDegree > 0 ? UntoldGSFormat.shCoefficientCount(degree: UInt8(min(shDegree, Int(UntoldGSFormat.maxSHDegree)))) : 0
+    return splatCount * (gaussianCookStoreBytesPerSplat + shBytes) * 3 / 2
+}
+
+/// Caption under the source row: what the cook costs in memory, and a warning when the
+/// estimate does not fit the machine. Nil for an empty or unreadable source.
+func gaussianCookMemoryCaption(splatCount: Int, shDegree: Int, physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> String? {
+    guard splatCount > 0 else { return nil }
+    let peak = gaussianCookEstimatedPeakBytes(splatCount: splatCount, shDegree: shDegree)
+    let text = "The cook needs about \(gaussianCookFormatGiB(peak)) of memory (this Mac has \(gaussianCookFormatGiB(Int(physicalMemory))))"
+    if Double(peak) > Double(physicalMemory) * 0.75 {
+        return text + "; expect heavy swapping — close other apps or cook on a Mac with more memory."
+    }
+    return text + "."
+}
+
+/// Bytes as a short gibibyte figure for the captions ("9.4 GB", "512 MB").
+func gaussianCookFormatGiB(_ bytes: Int) -> String {
+    let value = Double(bytes)
+    if bytes >= 1 << 30 {
+        return String(format: "%.1f GB", value / Double(1 << 30))
+    }
+    return String(format: "%.0f MB", value / Double(1 << 20))
+}
+
+/// Caption under the budget row: what the cooked file costs at runtime on this Mac — the
+/// packed records (16 bytes plus the SH block per kept splat) against the engine's paging
+/// threshold, so the user knows whether the file loads whole or pages from disk, and the
+/// working set the frame draws from.
+func gaussianCookRuntimeCaption(
+    keptSplatCount: Int,
+    shDegree: Int,
+    residencyBudgetBytes: Int = GaussianPagingPolicy.residencyBudgetBytes(),
+    pagePoolMaxBytes: Int = GaussianPagingPolicy.pagePoolMaxBytes,
+    workingSetSplats: Int = GaussianRuntimeLimits.workingSetSplatsOverride ?? GaussianRuntimeLimits.workingSetSplats
+) -> String {
+    let shBytes = shDegree > 0 ? UntoldGSFormat.shCoefficientCount(degree: UInt8(min(shDegree, Int(UntoldGSFormat.maxSHDegree)))) : 0
+    let packed = GaussianPagingPolicy.assetBytes(splatCount: keptSplatCount, shBytesPerSplat: shBytes)
+    let threshold = GaussianPagingPolicy.pagingThresholdBytes(residencyBudgetBytes: residencyBudgetBytes)
+    var caption = "About \(gaussianCookFormatGiB(packed)) of packed splats at runtime: "
+    if packed > threshold {
+        let pool = min(packed, residencyBudgetBytes, pagePoolMaxBytes)
+        // A zero threshold is the View > Splat Debug > Force Splat Paging switch.
+        let reason = threshold == 0 ? "Force Splat Paging is on" : "above \(gaussianCookFormatGiB(threshold))"
+        caption += "pages from disk (\(reason)) through a \(gaussianCookFormatGiB(pool)) pool"
+    } else {
+        caption += "loads whole (below \(gaussianCookFormatGiB(threshold)))"
+    }
+    caption += "; the frame draws at most \(GaussianSplatBudget.formatted(workingSetSplats)) splats."
+    return caption
+}
+
 /// Translation that moves a capture's bounding box, after `transform` has been applied to
 /// it, where `mode` says. The box is transformed corner by corner so a flip or scale is
 /// accounted for before the offset is measured.
@@ -181,33 +334,49 @@ func gaussianRecenterTranslation(
     }
 }
 
-/// Bounds of the splat centres in a source `.ply` or `.spz`, in capture space. Reads the
-/// whole file, so a recentred cook parses the source twice (once here, once in the baker).
+/// Bounds of the splat centres in a source `.ply` or `.spz`, in capture space. A `.ply` is
+/// measured in one streamed pass over the positions (`PLYReader.readGaussianCenterBounds`)
+/// with nothing resident but the running box, so a recentred cook of a multi-gigabyte capture
+/// costs a second read of the file and no memory. A `.spz` has no streamed reader: it is
+/// decoded whole (`SPZReader.readGaussianAsset`, as the bake decodes it again) and the box
+/// is taken over the decoded centres. The bake's own `centerBounds` cannot serve either way:
+/// they are of the cooked splats, and the recenter translation has to be in the transform
+/// before the cook.
 func gaussianSourceBounds(plyURL: URL) throws -> (min: simd_float3, max: simd_float3) {
-    let splats = plyURL.pathExtension.lowercased() == "spz"
-        ? try SPZReader.readGaussianAsset(from: plyURL).splats
-        : try PLYReader.readGaussianSplats(from: plyURL)
-    guard let first = splats.first else {
-        throw UntoldGSError.sizeMismatch("source contains no splats")
+    if plyURL.pathExtension.lowercased() == "spz" {
+        let splats = try SPZReader.readGaussianAsset(from: plyURL).splats
+        guard let first = splats.first else {
+            throw UntoldGSError.sizeMismatch("source .spz contains no splats")
+        }
+        var boundsMin = simd_float3(first.center.x, first.center.y, first.center.z)
+        var boundsMax = boundsMin
+        for splat in splats.dropFirst() {
+            let centre = simd_float3(splat.center.x, splat.center.y, splat.center.z)
+            boundsMin = simd_min(boundsMin, centre)
+            boundsMax = simd_max(boundsMax, centre)
+        }
+        return (boundsMin, boundsMax)
     }
-    var boundsMin = simd_float3(first.center.x, first.center.y, first.center.z)
-    var boundsMax = boundsMin
-    for splat in splats.dropFirst() {
-        let centre = simd_float3(splat.center.x, splat.center.y, splat.center.z)
-        boundsMin = simd_min(boundsMin, centre)
-        boundsMax = simd_max(boundsMax, centre)
+    guard let bounds = try PLYReader.readGaussianCenterBounds(from: plyURL) else {
+        throw UntoldGSError.sizeMismatch("source .ply contains no splats")
     }
-    return (boundsMin, boundsMax)
+    return bounds
 }
 
 /// Writes `<name>.untoldgs` (or `<name>_lodN.untoldgs` tiers) beside `plyURL` (a `.ply` or
 /// `.spz` source), or inside `outputDirectory` when the editor is organizing the asset as a
 /// folder package. A recentred cook reads the source bounds first and bakes the offset into
-/// the transform.
+/// the transform. `control` follows and stops the bake (`UntoldGSCookControl`): it is
+/// polled before and after the bounds read, then the engine reports its phase and fraction
+/// through it and polls its cancellation between windows and chunk batches (a `.spz` is
+/// decoded whole, so its read reports once and the polling starts with the cook); a
+/// cancelled bake throws `UntoldGSCookError.cancelled` with nothing written, its tiers
+/// staged in temporary files until the last one is complete.
 func cookGaussianPLY(
     plyURL: URL,
     settings: GaussianCookSettings,
-    outputDirectory: URL? = nil
+    outputDirectory: URL? = nil,
+    control: UntoldGSCookControl? = nil
 ) throws -> GaussianProgressiveBakeResult {
     if let outputDirectory {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
@@ -216,7 +385,12 @@ func cookGaussianPLY(
         .appendingPathComponent(plyURL.deletingPathExtension().lastPathComponent)
         .appendingPathExtension("untoldgs")
         ?? plyURL.deletingPathExtension().appendingPathExtension("untoldgs")
+    try control?.checkCancelled()
     let bounds = settings.recenter ? try gaussianSourceBounds(plyURL: plyURL) : nil
+    // The bounds pass is the whole streamed `.ply` (or a whole `.spz` decode) with no poll of
+    // its own, and the engine's first poll comes with its first report -- past a second whole
+    // decode for a `.spz`. A cancel that arrived meanwhile stops here instead.
+    try control?.checkCancelled()
     let cookOptions = settings.cookOptions(recenteringBounds: bounds)
     let levelCount = max(1, settings.levelCount)
     if plyURL.pathExtension.lowercased() == "spz" {
@@ -224,14 +398,16 @@ func cookGaussianPLY(
             spzURL: plyURL,
             outputBaseURL: outputBaseURL,
             levelCount: levelCount,
-            cookOptions: cookOptions
+            cookOptions: cookOptions,
+            control: control
         )
     }
     return try bakeGaussianSplatProgressiveTiers(
         plyURL: plyURL,
         outputBaseURL: outputBaseURL,
         levelCount: levelCount,
-        cookOptions: cookOptions
+        cookOptions: cookOptions,
+        control: control
     )
 }
 
@@ -369,10 +545,17 @@ func gaussianCookSourceCaption(sourceURLs: [URL], sourceSplatCount: Int?, maxSpl
     return gaussianBudgetCaption(sourceCount: sourceSplatCount, maxSplatCount: maxSplatCount)
 }
 
-/// Tasks panel detail while a cook runs. The baker reports no progress, so this is all
-/// the row shows next to its spinner.
+/// What a cook's task row says about its settings: the tiers, then `gaussianCookTaskDetailSuffix`.
 func gaussianCookTaskDetail(settings: GaussianCookSettings) -> String {
-    var detail = settings.levelCount > 1 ? "\(settings.levelCount) progressive tiers → .untoldgs" : "→ .untoldgs"
+    let tiers = settings.levelCount > 1 ? "\(settings.levelCount) progressive tiers " : ""
+    return tiers + gaussianCookTaskDetailSuffix(settings: settings)
+}
+
+/// The tail of a cook's task row — "→ .untoldgs" and the settings that depart from the
+/// defaults — shared by the queued, running and per-phase details, which each put their own
+/// words in front of it.
+func gaussianCookTaskDetailSuffix(settings: GaussianCookSettings) -> String {
+    var detail = "→ .untoldgs"
     if settings.recenter {
         detail += ", recentred"
     }
@@ -383,16 +566,51 @@ func gaussianCookTaskDetail(settings: GaussianCookSettings) -> String {
     } else if settings.splatBudget == .unlimited {
         detail += ", no budget"
     }
+    // Auto is the default; only a forced choice is named.
+    switch settings.coarseLevels {
+    case .automatic: break
+    case .off: detail += ", no coarse levels"
+    case .one: detail += ", 1 coarse level"
+    case .two: detail += ", 2 coarse levels"
+    }
     return detail
 }
 
-/// Tasks panel detail once a cook succeeded.
-func gaussianCookSummary(_ report: UntoldGSCookReport) -> String {
+/// Tasks panel detail once a cook succeeded: what the cook kept, and the coarse levels the
+/// tiers carry (`GaussianLODTier.coarseReport`; the tiers of a progressive bake each resolve
+/// the policy on their own, so the levels are counted per tier that got some). A bake
+/// without a section keeps the short row.
+func gaussianCookSummary(_ report: UntoldGSCookReport, coarse: [UntoldGSCoarseLevelReport?] = []) -> String {
     var summary = "Kept \(report.keptSplatCount) of \(report.inputSplatCount) splats"
     if report.prunedByBudget > 0 {
         summary += " (\(report.prunedByBudget) over the budget dropped)"
     }
+    let levelled = coarse.compactMap { $0 }
+    if let first = levelled.first {
+        let bytes = levelled.reduce(0) { $0 + $1.bytes }
+        let levels = "\(first.levelCount) coarse level\(first.levelCount == 1 ? "" : "s")"
+        let tiers = coarse.count > 1 ? " on \(levelled.count) of \(coarse.count) tiers" : ""
+        summary += "; \(levels)\(tiers) (\(gaussianCookFormatBytes(bytes)))"
+    }
     return summary
+}
+
+/// The summary of a whole bake: the cook report plus every tier's coarse section.
+func gaussianCookSummary(_ bake: GaussianProgressiveBakeResult) -> String {
+    gaussianCookSummary(bake.cookReport, coarse: bake.tiers.map(\.coarseReport))
+}
+
+/// Bytes as the engine's profile lines print them: MiB above a mebibyte, KiB above a
+/// kibibyte, bytes below.
+func gaussianCookFormatBytes(_ bytes: Int) -> String {
+    let value = Double(bytes)
+    if bytes >= 1024 * 1024 {
+        return String(format: "%.2f MiB", value / 1_048_576)
+    }
+    if bytes >= 1024 {
+        return String(format: "%.2f KiB", value / 1024)
+    }
+    return "\(bytes) B"
 }
 
 /// Tasks panel detail for a failed cook. The engine's own errors carry a readable
@@ -400,34 +618,192 @@ func gaussianCookSummary(_ report: UntoldGSCookReport) -> String {
 /// the other way round.
 func gaussianCookFailureDetail(_ error: Error) -> String {
     switch error {
+    case let cancelled as GaussianCookCancelledError:
+        switch cancelled.stage {
+        case .queued: "Cancelled before it started"
+        case .running: "Cancelled; nothing was written"
+        }
     case let cook as UntoldGSCookError: cook.description
     case let format as UntoldGSError: format.description
     default: error.localizedDescription
     }
 }
 
+/// The result of a tracked cook the user cancelled from the Tasks panel. Nothing was written
+/// at either stage: a queued cook never started, and a running one stops at the engine's
+/// next poll with its tiers still in temporary files, which it removes.
+struct GaussianCookCancelledError: Error, Equatable {
+    enum Stage: Equatable {
+        /// Still waiting for the serial cook queue (an import batch).
+        case queued
+        /// The engine's bake was under way (`UntoldGSCookError.cancelled`).
+        case running
+    }
+
+    var stage: Stage
+}
+
+/// Tasks panel detail from the bake's start until the engine's first report: the size of
+/// the cook and its settings. A recentred cook measures the source bounds in this time.
+func gaussianCookRunningDetail(settings: GaussianCookSettings, sourceSplatCount: Int?) -> String {
+    var detail = "Cooking"
+    if let sourceSplatCount {
+        detail += " \(GaussianSplatBudget.formatted(sourceSplatCount)) splats"
+    }
+    return detail + " \(gaussianCookTaskDetail(settings: settings))"
+}
+
+/// Tasks panel detail while the bake waits for the serial cook queue (an import batch cooks
+/// its files one after the other); the row is cancellable until then.
+func gaussianCookQueuedDetail(settings: GaussianCookSettings) -> String {
+    "Waiting for the cook queue \(gaussianCookTaskDetail(settings: settings))"
+}
+
+/// Tasks panel detail for one of the engine's reports: the phase in the user's words —
+/// reading and cooking name the source's splats, chunking, coarsening and writing name the
+/// tier of a progressive bake — in front of the settings tail. The fraction is the row's
+/// bar, so the text carries none.
+func gaussianCookProgressDetail(_ progress: UntoldGSCookProgress, settings: GaussianCookSettings, sourceSplatCount: Int?) -> String {
+    let splats = sourceSplatCount.map { " \(GaussianSplatBudget.formatted($0)) splats" } ?? ""
+    let tier = progress.tierCount > 1 ? " tier \(progress.tierIndex + 1) of \(progress.tierCount)" : ""
+    let phase = switch progress.phase {
+    case .read: "Reading\(splats)"
+    case .cook: "Cooking\(splats)"
+    case .chunk: "Chunking\(tier)"
+    case .coarsen: "Coarsening\(tier)"
+    case .write: "Writing\(tier)"
+    }
+    return "\(phase) \(gaussianCookTaskDetailSuffix(settings: settings))"
+}
+
+/// Feeds the engine's cook reports to a Tasks-panel row at the rate the row can use. The
+/// engine reports after every source window and chunk batch — thousands of times for a large
+/// capture — where the panel redraws a few times a second: a change of phase or tier goes
+/// through at once, so does the end of a phase (fraction 1), and the reports between them at
+/// most every `minimumInterval`. The fraction shown never goes back: the engine's `overall`
+/// is monotonic by construction, and the row keeps the highest value it was given regardless.
+final class GaussianCookProgressReporter: @unchecked Sendable {
+    /// About 10 Hz: as often as a progress bar is worth redrawing.
+    static let minimumInterval: TimeInterval = 0.1
+
+    private let lock = NSLock()
+    private let now: () -> TimeInterval
+    private let detail: (UntoldGSCookProgress) -> String
+    private let deliver: (_ fraction: Double, _ detail: String) -> Void
+    private var lastPhase: UntoldGSCookPhase?
+    private var lastTierIndex = -1
+    private var lastDeliveredAt: TimeInterval = -.infinity
+    private var lastFraction: Double = 0
+
+    /// - Parameters:
+    ///   - now: The clock, in seconds; tests pass their own.
+    ///   - detail: The row's text for a report (`gaussianCookProgressDetail`).
+    ///   - deliver: Receives the fraction and the text of every report let through, on the
+    ///     cooking thread.
+    init(
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        detail: @escaping (UntoldGSCookProgress) -> String,
+        deliver: @escaping (_ fraction: Double, _ detail: String) -> Void
+    ) {
+        self.now = now
+        self.detail = detail
+        self.deliver = deliver
+    }
+
+    /// The fraction last delivered.
+    var fraction: Double {
+        lock.lock(); defer { lock.unlock() }
+        return lastFraction
+    }
+
+    /// Passes `progress` on when the row should see it; returns whether it did.
+    @discardableResult
+    func report(_ progress: UntoldGSCookProgress) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let time = now()
+        let phaseChanged = progress.phase != lastPhase || progress.tierIndex != lastTierIndex
+        guard phaseChanged || progress.fraction >= 1 || time - lastDeliveredAt >= Self.minimumInterval else {
+            return false
+        }
+        lastPhase = progress.phase
+        lastTierIndex = progress.tierIndex
+        lastDeliveredAt = time
+        lastFraction = max(lastFraction, Double(progress.overall))
+        deliver(lastFraction, detail(progress))
+        return true
+    }
+}
+
 /// Cooks `plyURL` (a `.ply` or `.spz` source) as a job in the Tasks panel. The bake runs on
-/// `queue` (the shared serial cook queue by default) so the UI never blocks; the task is
-/// indeterminate and finishes with the kept/pruned summary or the error's description. The
-/// source file is never modified, so a failed cook leaves it in place to re-cook from the
-/// context menu. `completion` runs on the main queue after the task is finished.
+/// `queue` (the shared serial cook queue by default) so the UI never blocks. The row can be
+/// cancelled while the cook waits its turn on the queue (a batch of imports) and while the
+/// engine bakes: the engine polls the request between source windows and chunk batches,
+/// stops within a moment and removes the tiers it had staged, so nothing is written. The
+/// row's bar follows the engine's reports (`GaussianCookProgressReporter`), its text names
+/// the phase, and it finishes with the kept/pruned/levels summary or the error's description.
+/// The source file is never modified, so a failed or cancelled cook leaves it in place to
+/// re-cook from the context menu. `completion` runs on the main queue after the task is
+/// finished; a cancelled cook completes with `GaussianCookCancelledError` at either stage. A
+/// caller's own `control` — a test's, a script's — sees every report unthrottled and can stop
+/// the cook too.
 @discardableResult
 func cookGaussianPLYTracked(
     plyURL: URL,
     settings: GaussianCookSettings,
     outputDirectory: URL? = nil,
     queue: DispatchQueue = gaussianCookQueue,
+    control: UntoldGSCookControl? = nil,
     completion: @escaping (Result<GaussianProgressiveBakeResult, Error>) -> Void
 ) -> EditorTaskHandle {
     let task = TaskCenter.begin(
         "Cooking \(plyURL.lastPathComponent)",
-        detail: gaussianCookTaskDetail(settings: settings)
+        detail: gaussianCookQueuedDetail(settings: settings),
+        // The hook itself does nothing: the queued block reads `isCancelRequested` when its
+        // turn comes, and the engine polls it while the bake runs. Its presence gives the
+        // row its cancel button.
+        onCancel: {}
     )
     queue.async {
-        let result = Result { try cookGaussianPLY(plyURL: plyURL, settings: settings, outputDirectory: outputDirectory) }
+        if task.isCancelRequested {
+            let cancelled = GaussianCookCancelledError(stage: .queued)
+            task.markCancelled(gaussianCookFailureDetail(cancelled))
+            DispatchQueue.main.async { completion(.failure(cancelled)) }
+            return
+        }
+        // The count on the row: a header read for a `.ply`. A `.spz` keeps its count inside
+        // the gzip payload, and a whole decode ahead of the bake's own is not worth the
+        // number, so its row goes without one; the engine's reports name the phase either way.
+        let sourceSplatCount = plyURL.pathExtension.lowercased() == "spz"
+            ? nil
+            : try? PLYReader.readGaussianSplatCount(from: plyURL)
+        task.setDetail(gaussianCookRunningDetail(settings: settings, sourceSplatCount: sourceSplatCount))
+        task.setProgress(0)
+        let reporter = GaussianCookProgressReporter(
+            detail: { gaussianCookProgressDetail($0, settings: settings, sourceSplatCount: sourceSplatCount) },
+            deliver: { fraction, detail in
+                // The row says "Cancelling…" from the request until the engine stops; a
+                // report in between must not overwrite it.
+                guard !task.isCancelRequested else { return }
+                task.setProgress(fraction)
+                task.setDetail(detail)
+            }
+        )
+        let panelControl = UntoldGSCookControl(
+            progress: { progress in
+                control?.progress?(progress)
+                reporter.report(progress)
+            },
+            isCancelled: { task.isCancelRequested || control?.isCancelled?() == true }
+        )
+        let result = Result { try cookGaussianPLY(plyURL: plyURL, settings: settings, outputDirectory: outputDirectory, control: panelControl) }
+            .mapError { error -> Error in
+                (error as? UntoldGSCookError) == .cancelled ? GaussianCookCancelledError(stage: .running) : error
+            }
         switch result {
         case let .success(bake):
-            task.succeed(gaussianCookSummary(bake.cookReport))
+            task.succeed(gaussianCookSummary(bake))
+        case let .failure(error) where error is GaussianCookCancelledError:
+            task.markCancelled(gaussianCookFailureDetail(error))
         case let .failure(error):
             task.fail(gaussianCookFailureDetail(error))
         }
@@ -602,8 +978,14 @@ func loadEditorGaussianAuto(
         )
     }
 
+    // A whole-resident load of a large file takes seconds with nothing on screen: the Tasks
+    // panel shows it, with what the engine is about to do with the file.
+    let task = TaskCenter.begin("Loading \(url.lastPathComponent)", detail: "Reading \(url.lastPathComponent)")
+
     switch plan {
     case let .progressive(baseFilename, levelCount, maxDistances):
+        // The engine has no asynchronous progressive loader: the tiers read on the main thread.
+        task.setDetail("\(levelCount) progressive tiers, resident")
         removeEntityGaussian(entityId: entityId)
         scene.remove(component: StreamingComponent.self, from: entityId)
         setEntityGaussian(
@@ -623,13 +1005,23 @@ func loadEditorGaussianAuto(
             ),
             for: entityId
         )
+        task.succeed()
         completion?(true)
         return true
 
     case let .single(filename, withExtension):
         Task {
+            // The index read (header, chunk table, tree) is bounded; the payload comes through
+            // the engine's loader below, off the main thread.
+            let detail = await Task.detached { gaussianPlacementDetail(for: url) }.value
+            task.setDetail(detail)
             let success = await setEntityGaussianAsync(entityId: entityId, url: url)
             DispatchQueue.main.async {
+                if success {
+                    task.succeed(detail)
+                } else {
+                    task.fail("The engine declined \(url.lastPathComponent) (see Console)")
+                }
                 if success {
                     EditorGaussianAssetState.shared.setMetadata(
                         EditorGaussianAssetMetadata(
@@ -804,7 +1196,11 @@ struct GaussianCookSheet: View {
     @Binding var settings: GaussianCookSettings
     var onCook: () -> Void
     var onCancel: () -> Void
-    @State private var sourceSplatCount: Int?
+    @State private var sourceInfo: GaussianCookSourceInfo?
+
+    private var sourceSplatCount: Int? {
+        sourceInfo?.splatCount
+    }
 
     private let shDegreeChoices: [(label: String, value: Int?)] = [
         ("Source", nil), ("0 (none)", 0), ("1", 1), ("2", 2), ("3", 3),
@@ -838,6 +1234,18 @@ struct GaussianCookSheet: View {
                         Text("4096 (environment)").tag(4096)
                     }
                     .labelsHidden()
+                }
+                GridRow {
+                    Text("Coarse levels")
+                    Picker("", selection: $settings.coarseLevels) {
+                        ForEach(GaussianCoarseLevelChoice.allCases) { choice in
+                            Text(choice.label).tag(choice)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 200)
+                    .help(GaussianCoarseLevelChoice.summary)
                 }
                 GridRow {
                     Text("Up axis")
@@ -875,9 +1283,25 @@ struct GaussianCookSheet: View {
                 }
                 GridRow {
                     Text("")
-                    Text(gaussianCookSourceCaption(sourceURLs: sourceURLs, sourceSplatCount: sourceSplatCount, maxSplatCount: settings.cookOptions.maxSplatCount))
-                        .font(.caption)
-                        .foregroundColor(.editorTextSecondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(gaussianCookSourceCaption(sourceURLs: sourceURLs, sourceSplatCount: sourceSplatCount, maxSplatCount: settings.cookOptions.maxSplatCount))
+                        if let sourceInfo {
+                            // The runtime cost of the kept splats, so the paging threshold and
+                            // the working set are no surprise once the file is placed.
+                            Text(gaussianCookRuntimeCaption(
+                                keptSplatCount: min(sourceInfo.splatCount, settings.cookOptions.maxSplatCount ?? sourceInfo.splatCount),
+                                shDegree: settings.shDegree ?? sourceInfo.shDegree
+                            ))
+                            // The cook's own footprint: the compact store at the degree it
+                            // keeps, over every source splat.
+                            if let memory = gaussianCookMemoryCaption(splatCount: sourceInfo.splatCount, shDegree: min(settings.shDegree ?? sourceInfo.shDegree, sourceInfo.shDegree)) {
+                                Text(memory)
+                            }
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundColor(.editorTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 GridRow {
                     Text("Recenter")
@@ -913,14 +1337,18 @@ struct GaussianCookSheet: View {
         .task(id: sourceURLs) {
             // .ply: a header-only read, cheap however large the capture. .spz has no
             // header-only count (the point count lives inside the gzip payload), so this
-            // decodes the whole file -- batches show no count either way.
+            // decodes the whole file -- batches show no count either way. The read runs off
+            // the main actor so a large .spz never freezes the sheet; the guard drops the
+            // result once the selection has moved on and a newer task owns `sourceInfo`.
             guard sourceURLs.count == 1, let url = sourceURLs.first else {
-                sourceSplatCount = nil
+                sourceInfo = nil
                 return
             }
-            sourceSplatCount = url.pathExtension.lowercased() == "spz"
-                ? try? SPZReader.readGaussianAsset(from: url).splats.count
-                : try? PLYReader.readGaussianSplatCount(from: url)
+            let info = await Task.detached(priority: .userInitiated) {
+                try? GaussianCookSourceInfo.read(from: url)
+            }.value
+            guard !Task.isCancelled else { return }
+            sourceInfo = info
         }
     }
 }

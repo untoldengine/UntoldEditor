@@ -328,9 +328,7 @@ func placeAsset(
             }
             sceneGraphModel.refreshHierarchy()
         }
-        statusMessage = accepted
-            ? "Queued Gaussian import: \(uniqueName) (see Console)"
-            : "Unsupported Gaussian asset: \(url.lastPathComponent)"
+        statusMessage = gaussianPlacementStatusMessage(url: url, entityName: uniqueName, accepted: accepted)
         isError = !accepted
     }
 
