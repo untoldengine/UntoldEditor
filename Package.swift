@@ -11,12 +11,9 @@ let package = Package(
     ],
     dependencies: [
         // Use a branch during active development:
-        // .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
+        .package(url: "https://github.com/untoldengine/UntoldEngine.git", branch: "develop"),
         // Or pin to a release:
         // .package(url: "https://github.com/untoldengine/UntoldEngine.git", exact: "0.19.1"),
-        // Until the engine pull request that adds UntoldComponentKit is merged, the editor follows
-        // that branch: upstream develop plus the kit. Point back at develop afterwards.
-        .package(url: "https://github.com/miolabs/UntoldEngine.git", branch: "feature/component_kit-upstream"),
     ],
     targets: [
         .executableTarget(
