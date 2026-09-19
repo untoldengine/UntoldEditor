@@ -38,8 +38,12 @@ enum InspectorSectionModel {
     }
 
     /// Copy and Paste carry a component's values to another entity: the
-    /// transform, for now; the material follows with its section.
+    /// transform, and the material of a mesh renderer.
     static func supportsClipboard(_ type: Any.Type) -> Bool {
-        ObjectIdentifier(type) == ObjectIdentifier(LocalTransformComponent.self)
+        ObjectIdentifier(type) == ObjectIdentifier(LocalTransformComponent.self) || isMeshRenderer(type)
+    }
+
+    static func isMeshRenderer(_ type: Any.Type) -> Bool {
+        ObjectIdentifier(type) == ObjectIdentifier(RenderComponent.self)
     }
 }

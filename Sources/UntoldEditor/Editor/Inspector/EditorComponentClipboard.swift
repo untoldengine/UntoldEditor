@@ -11,12 +11,13 @@
 import Combine
 import UntoldEngine
 
-/// Component values copied from one entity's section, to paste into another's.
-/// The transform for now; the material follows with its section.
+/// Component values copied from one entity's section, to paste into another's:
+/// a transform, or the material of a mesh.
 final class EditorComponentClipboard: ObservableObject {
     static let shared = EditorComponentClipboard()
 
     @Published private(set) var transform: EditorTransformSnapshot?
+    @Published private(set) var material: MaterialSnapshot?
 
     func copyTransform(of entityId: EntityID) {
         guard hasComponent(entityId: entityId, componentType: LocalTransformComponent.self) else { return }
@@ -36,7 +37,26 @@ final class EditorComponentClipboard: ObservableObject {
         return true
     }
 
+    func copyMaterial(of entityId: EntityID, meshIndex: Int) {
+        guard hasComponent(entityId: entityId, componentType: RenderComponent.self) else { return }
+        material = MaterialSnapshot(entityId: entityId, meshIndex: meshIndex)
+    }
+
+    /// Applies the copied material to a mesh. False when nothing was copied or
+    /// the entity has no render component. Not on the undo stack: material
+    /// edits are not undoable yet.
+    @discardableResult
+    func pasteMaterial(into entityId: EntityID, meshIndex: Int) -> Bool {
+        guard let material, hasComponent(entityId: entityId, componentType: RenderComponent.self) else {
+            return false
+        }
+        material.apply(to: entityId, meshIndex: meshIndex)
+        EditorSceneDirtyState.shared.markDirty()
+        return true
+    }
+
     func clear() {
         transform = nil
+        material = nil
     }
 }

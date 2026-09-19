@@ -72,7 +72,15 @@ struct InspectorView: View {
                             // alongside selectedEntity on the same entity, so reaching this
                             // block means entityId genuinely is the active selection, not just
                             // a passive peek — safe (and expected) to be fully editable here.
-                            InspectorSectionView(title: "Mesh Renderer") {
+                            InspectorSectionView(
+                                title: "Mesh Renderer",
+                                onCopy: { clipboard.copyMaterial(of: entityId, meshIndex: inspectedMesh.meshIndex) },
+                                onPaste: {
+                                    clipboard.pasteMaterial(into: entityId, meshIndex: inspectedMesh.meshIndex)
+                                    refreshView()
+                                },
+                                canPaste: clipboard.material != nil
+                            ) {
                                 RenderingEditorView(
                                     entityId: entityId,
                                     asset: selectedAsset,
@@ -145,18 +153,29 @@ struct InspectorView: View {
 
     private func componentSection(_ component: ComponentOption_Editor, entityId: EntityID) -> some View {
         let hasClipboard = InspectorSectionModel.supportsClipboard(component.type)
+        let isMeshRenderer = InspectorSectionModel.isMeshRenderer(component.type)
         return InspectorSectionView(
             title: InspectorSectionModel.title(forComponentName: component.name),
             onReset: InspectorSectionModel.supportsReset(component.type) ? {
                 resetTransform(entityId: entityId)
                 refreshView()
             } : nil,
-            onCopy: hasClipboard ? { clipboard.copyTransform(of: entityId) } : nil,
+            onCopy: hasClipboard ? {
+                if isMeshRenderer {
+                    clipboard.copyMaterial(of: entityId, meshIndex: 0)
+                } else {
+                    clipboard.copyTransform(of: entityId)
+                }
+            } : nil,
             onPaste: hasClipboard ? {
-                clipboard.pasteTransform(into: entityId)
+                if isMeshRenderer {
+                    clipboard.pasteMaterial(into: entityId, meshIndex: 0)
+                } else {
+                    clipboard.pasteTransform(into: entityId)
+                }
                 refreshView()
             } : nil,
-            canPaste: clipboard.transform != nil,
+            canPaste: isMeshRenderer ? clipboard.material != nil : clipboard.transform != nil,
             onRemove: canRemoveComponentFromInspector(componentType: component.type, from: entityId) ? {
                 removeComponentFromEntity_Editor(componentType: component.type)
             } : nil
