@@ -211,6 +211,14 @@ public struct EditorView: View {
                 guard experienceMode == .edit else { return }
                 editor_handlePlayToggle(!isPlaying)
             }
+
+            // The hierarchy's eye on the keyboard: H hides the selection, ⌥H shows everything.
+            NotificationCenter.default.addObserver(forName: .editorHideSelectedEntity, object: nil, queue: .main) { _ in
+                editor_hideSelectedEntity()
+            }
+            NotificationCenter.default.addObserver(forName: .editorShowAllEntities, object: nil, queue: .main) { _ in
+                editor_showAllEntities()
+            }
         }
         .onChange(of: playbackSettings.useSceneCameraDuringPlay) { _, _ in
             updateActiveCameraForPlayMode()

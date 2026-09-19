@@ -320,79 +320,40 @@ final class SceneHierarchyViewTests: XCTestCase {
     func test_sceneHierarchyView_storesCallbacks() {
         // Arrange
         var addEntityCalled = false
-        var removeEntityCalled = false
 
         // Act
         let view = SceneHierarchyView(
             selectionManager: selectionManager,
             sceneGraphModel: sceneGraphModel,
-            sceneCatalog: ProjectSceneCatalog(),
-            projectName: "TestProject",
-            onSelectScene: { _ in },
-            entityList: [],
-            onAddEntity_Editor: { addEntityCalled = true },
-            onRemoveEntity_Editor: { removeEntityCalled = true }
+            sceneName: "Untold Scene",
+            onAddEntity_Editor: { addEntityCalled = true }
         )
 
         // Assert: Test that callbacks can be invoked via reflection
         let mirror = Mirror(reflecting: view)
-
         if let onAddEntity = mirror.descendant("onAddEntity_Editor") as? () -> Void {
             onAddEntity()
             XCTAssertTrue(addEntityCalled, "onAddEntity_Editor should be callable")
         }
-
-        if let onRemoveEntity = mirror.descendant("onRemoveEntity_Editor") as? () -> Void {
-            onRemoveEntity()
-            XCTAssertTrue(removeEntityCalled, "onRemoveEntity_Editor should be callable")
-        }
     }
 
-    func test_sceneHierarchyView_storesEntityList() {
-        // Arrange
-        let entity1 = createEntity()
-        let entity2 = createEntity()
-        let entity3 = createEntity()
-        let entityList = [entity1, entity2, entity3]
-
-        // Act
+    func test_sceneHierarchyView_storesTheSceneNameAndFilter() {
         let view = SceneHierarchyView(
             selectionManager: selectionManager,
             sceneGraphModel: sceneGraphModel,
-            sceneCatalog: ProjectSceneCatalog(),
-            projectName: "TestProject",
-            onSelectScene: { _ in },
-            entityList: entityList,
-            onAddEntity_Editor: {},
-            onRemoveEntity_Editor: {}
+            sceneName: "Level_02",
+            filter: "light",
+            onAddEntity_Editor: {}
         )
 
-        // Assert
         let mirror = Mirror(reflecting: view)
-        if let storedList = mirror.descendant("entityList") as? [EntityID] {
-            XCTAssertEqual(storedList.count, 3, "Should store entity list")
-            XCTAssertEqual(storedList, entityList, "Should match original entity list")
-        }
+        XCTAssertEqual(mirror.descendant("sceneName") as? String, "Level_02")
+        XCTAssertEqual(mirror.descendant("filter") as? String, "light")
     }
 
-    func test_sceneHierarchyView_withEmptyEntityList() {
-        // Act
-        let view = SceneHierarchyView(
-            selectionManager: selectionManager,
-            sceneGraphModel: sceneGraphModel,
-            sceneCatalog: ProjectSceneCatalog(),
-            projectName: "TestProject",
-            onSelectScene: { _ in },
-            entityList: [],
-            onAddEntity_Editor: {},
-            onRemoveEntity_Editor: {}
-        )
-
-        // Assert
-        let mirror = Mirror(reflecting: view)
-        if let storedList = mirror.descendant("entityList") as? [EntityID] {
-            XCTAssertEqual(storedList.count, 0, "Should handle empty entity list")
-        }
+    func test_hierarchyFooter_countsEntitiesAndTheSelection() {
+        XCTAssertEqual(HierarchyFooterView.summary(entityCount: 5, selectedCount: 1), "5 entities · 1 selected")
+        XCTAssertEqual(HierarchyFooterView.summary(entityCount: 1, selectedCount: 0), "1 entity · 0 selected")
     }
 
     // MARK: - Entity Hierarchy Tests

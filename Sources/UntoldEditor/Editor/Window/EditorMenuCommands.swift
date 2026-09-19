@@ -27,6 +27,10 @@ extension Notification.Name {
     /// Posted by the P key; the root view toggles play mode through the same
     /// snapshot-and-restore flow as the toolbar's Play button.
     static let editorTogglePlay = Notification.Name("editorTogglePlay")
+    /// H over the editor: hide the selected entity.
+    static let editorHideSelectedEntity = Notification.Name("editorHideSelectedEntity")
+    /// ⌥H: show every hidden entity again.
+    static let editorShowAllEntities = Notification.Name("editorShowAllEntities")
 }
 
 /// Playback-related settings that must be reachable from both the AppKit menu

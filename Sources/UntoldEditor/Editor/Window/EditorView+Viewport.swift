@@ -16,7 +16,23 @@ import UniformTypeIdentifiers
 import UntoldEngine
 
 extension EditorView {
+    /// The viewport panel: the scene tabs along the top in edit mode, then the
+    /// Metal view with its overlays.
     var editorSceneViewport: some View {
+        VStack(spacing: 0) {
+            if experienceMode == .edit {
+                SceneTabStripView(
+                    sceneCatalog: sceneCatalog,
+                    activeSceneURL: editorController?.currentSceneURL,
+                    onSelectScene: editor_requestLoadScene,
+                    onAddScene: { NotificationCenter.default.post(name: .editorMenuNewScene, object: nil) }
+                )
+            }
+            editorMetalView
+        }
+    }
+
+    private var editorMetalView: some View {
         EditorSceneView(renderer: renderer!)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Asset rows dropped on the Metal view. The MTKView registers no drag

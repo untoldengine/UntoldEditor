@@ -106,6 +106,12 @@ class SelectionManager: ObservableObject {
     /// True when the active scene node is selected. Drives the right panel to
     /// show the scene inspector.
     @Published var sceneSelected: Bool = false
+    /// Entities whose eye is off in the hierarchy: hidden in the viewport with
+    /// everything under them. Session-only; the scene file does not carry it yet.
+    @Published private(set) var hiddenEntities: Set<EntityID> = []
+    /// Entities the viewport must not select or move, with everything under
+    /// them. Session-only, like `hiddenEntities`; the hierarchy can still inspect them.
+    @Published private(set) var lockedEntities: Set<EntityID> = []
 
     init() {}
 
@@ -165,7 +171,7 @@ class SelectionManager: ObservableObject {
             meshIndex: meshIndex
         )
 
-        guard canEditSceneTransform(entityId: transformEntityId) else {
+        guard canEditSceneTransform(entityId: transformEntityId), canMove(transformEntityId) else {
             activeEntity = .invalid
             gizmoActive = false
             removeGizmo()
@@ -197,7 +203,8 @@ class SelectionManager: ObservableObject {
     private func selectEntity(entityId: EntityID, inspectEntityId: EntityID) {
         selectedEntity = inspectEntityId
 
-        guard canEditSceneTransform(entityId: entityId) else {
+        // A hidden or locked entity is inspected but never moved: no gizmo.
+        guard canEditSceneTransform(entityId: entityId), canMove(entityId) else {
             activeEntity = .invalid
             gizmoActive = false
             removeGizmo()
@@ -219,6 +226,119 @@ class SelectionManager: ObservableObject {
             createGizmo(name: "translateGizmo")
         } else {
             activeEntity = .invalid
+        }
+    }
+
+    // MARK: - Hidden and locked entities
+
+    /// Whether the hierarchy's eye is off for this entity.
+    func isHidden(_ entityId: EntityID) -> Bool {
+        hiddenEntities.contains(entityId)
+    }
+
+    /// Whether the entity or an ancestor is hidden: what the viewport shows.
+    func isEffectivelyHidden(_ entityId: EntityID?) -> Bool {
+        hasAncestorOrSelf(entityId, in: hiddenEntities)
+    }
+
+    func isLocked(_ entityId: EntityID) -> Bool {
+        lockedEntities.contains(entityId)
+    }
+
+    /// Whether the entity or an ancestor is locked.
+    func isEffectivelyLocked(_ entityId: EntityID?) -> Bool {
+        hasAncestorOrSelf(entityId, in: lockedEntities)
+    }
+
+    /// Whether the gizmo may move an entity: neither hidden nor locked, itself
+    /// or through an ancestor.
+    func canMove(_ entityId: EntityID) -> Bool {
+        isEffectivelyHidden(entityId) == false && isEffectivelyLocked(entityId) == false
+    }
+
+    /// Hides or shows an entity in the viewport, with everything under it, by
+    /// the render flag the passes, picking and shadows already honour. The flag
+    /// is not saved with the scene, so this lasts the session.
+    func setHidden(_ entityId: EntityID, _ hidden: Bool) {
+        if hidden {
+            hiddenEntities.insert(entityId)
+        } else {
+            hiddenEntities.remove(entityId)
+        }
+        applyVisibility(under: entityId)
+        refreshGizmo()
+    }
+
+    func toggleHidden(_ entityId: EntityID) {
+        setHidden(entityId, isHidden(entityId) == false)
+    }
+
+    /// Shows every hidden entity again.
+    func showAllEntities() {
+        let hidden = hiddenEntities
+        hiddenEntities = []
+        for entityId in hidden {
+            applyVisibility(under: entityId)
+        }
+        refreshGizmo()
+    }
+
+    /// Locks or unlocks an entity: the viewport neither selects nor moves a
+    /// locked entity or anything under it; the hierarchy can still inspect it.
+    func setLocked(_ entityId: EntityID, _ locked: Bool) {
+        if locked {
+            lockedEntities.insert(entityId)
+        } else {
+            lockedEntities.remove(entityId)
+        }
+        refreshGizmo()
+    }
+
+    func toggleLocked(_ entityId: EntityID) {
+        setLocked(entityId, isLocked(entityId) == false)
+    }
+
+    /// Forgets the hidden and locked entities, for a cleared or reloaded scene.
+    func resetEntityStates() {
+        hiddenEntities = []
+        lockedEntities = []
+    }
+
+    private func hasAncestorOrSelf(_ entityId: EntityID?, in set: Set<EntityID>) -> Bool {
+        var current = entityId
+        while let id = current, id != .invalid {
+            if set.contains(id) {
+                return true
+            }
+            current = getEntityParent(entityId: id)
+        }
+        return false
+    }
+
+    /// Writes the render flags under `entityId` from the hidden set: an entity
+    /// shows when neither it nor an ancestor is hidden.
+    private func applyVisibility(under entityId: EntityID) {
+        applyVisibility(to: entityId, parentVisible: isEffectivelyHidden(getEntityParent(entityId: entityId)) == false)
+    }
+
+    private func applyVisibility(to entityId: EntityID, parentVisible: Bool) {
+        let visible = parentVisible && hiddenEntities.contains(entityId) == false
+        if let render = scene.get(component: RenderComponent.self, for: entityId) {
+            render.isVisible = visible
+        }
+        for child in getEntityChildren(parentId: entityId) {
+            applyVisibility(to: child, parentVisible: visible)
+        }
+    }
+
+    /// Re-runs the current selection so the gizmo leaves an entity that was
+    /// hidden or locked and comes back when it is shown or unlocked.
+    private func refreshGizmo() {
+        guard let selected = selectedEntity, selected != .invalid else { return }
+        if let mesh = inspectedMesh {
+            inspectMesh(entityId: mesh.entityId, meshIndex: mesh.meshIndex)
+        } else {
+            selectEntity(entityId: sceneTransformEntity(for: selected), inspectEntityId: selected)
         }
     }
 

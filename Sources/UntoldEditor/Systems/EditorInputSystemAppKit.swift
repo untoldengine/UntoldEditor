@@ -966,6 +966,11 @@
             }
         }
 
+        /// The H key, which the engine's key table does not list: macOS virtual key code 0x04.
+        private var kVK_ANSI_H: UInt16 {
+            4
+        }
+
         func keyReleased(_ keyCode: UInt16) {
             switch keyCode {
             case kVK_ANSI_A:
@@ -985,6 +990,13 @@
             case kVK_ANSI_P:
                 // Play/Stop through the toolbar's flow, which snapshots and restores the scene.
                 NotificationCenter.default.post(name: .editorTogglePlay, object: nil)
+            case kVK_ANSI_H:
+                // Hide the selection; with ⌥ held, show every hidden entity again.
+                if NSEvent.modifierFlags.contains(.option) {
+                    NotificationCenter.default.post(name: .editorShowAllEntities, object: nil)
+                } else {
+                    NotificationCenter.default.post(name: .editorHideSelectedEntity, object: nil)
+                }
             case kVK_ANSI_R:
                 if keyState.shiftPressed {
                     hotReload = !hotReload
