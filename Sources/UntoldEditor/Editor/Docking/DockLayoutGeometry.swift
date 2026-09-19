@@ -23,6 +23,8 @@ enum DockLayoutGeometry {
     static let accessoryRowHeight: CGFloat = 30
     /// The strip that stands in for an area with no panels, to drop a tab on.
     static let edgeTargetThickness: CGFloat = 12
+    /// The line drawn where a divider will land while it drags.
+    static let resizePreviewThickness: CGFloat = 2
 
     /// The smallest length an area can take: the widest minimum of its tabs for
     /// a side area, the tallest plus the tab strip for the bottom one.
@@ -103,6 +105,23 @@ enum DockLayoutGeometry {
             return CGRect(x: size.width * 0.75, y: 0, width: size.width * 0.25, height: size.height)
         case .bottom:
             return CGRect(x: 0, y: size.height * 0.75, width: size.width, height: size.height * 0.25)
+        }
+    }
+
+    /// The line for a divider drag, in the container's coordinates: centred in
+    /// the grab area the divider would have when `length` is the area's width
+    /// or height. `leftSpace` and `rightSpace` are what the side areas take
+    /// with their dividers, or their edge strips, so the bottom line spans the
+    /// viewport column.
+    static func resizePreviewRect(for area: DockArea, length: CGFloat, leftSpace: CGFloat, rightSpace: CGFloat, in size: CGSize) -> CGRect {
+        let inset = (dividerThickness - resizePreviewThickness) / 2
+        switch area {
+        case .left:
+            return CGRect(x: length + inset, y: 0, width: resizePreviewThickness, height: size.height)
+        case .right:
+            return CGRect(x: size.width - length - dividerThickness + inset, y: 0, width: resizePreviewThickness, height: size.height)
+        case .bottom:
+            return CGRect(x: leftSpace, y: size.height - length - dividerThickness + inset, width: max(0, size.width - leftSpace - rightSpace), height: resizePreviewThickness)
         }
     }
 }

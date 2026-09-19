@@ -56,6 +56,18 @@ final class DockLayoutGeometryTests: XCTestCase {
         XCTAssertEqual(DockLayoutGeometry.maximumLength(for: .bottom, in: size), 800 - divider - viewportMinimum.height)
     }
 
+    func test_resizePreviewRect_isCentredWhereTheDividerWillLand() {
+        let size = CGSize(width: 1440, height: 800)
+        let thickness = DockLayoutGeometry.resizePreviewThickness
+        let inset = (divider - thickness) / 2
+        let left = DockLayoutGeometry.resizePreviewRect(for: .left, length: 300, leftSpace: 307, rightSpace: 327, in: size)
+        XCTAssertEqual(left, CGRect(x: 300 + inset, y: 0, width: thickness, height: 800))
+        let right = DockLayoutGeometry.resizePreviewRect(for: .right, length: 320, leftSpace: 307, rightSpace: 327, in: size)
+        XCTAssertEqual(right, CGRect(x: 1440 - 320 - divider + inset, y: 0, width: thickness, height: 800))
+        let bottom = DockLayoutGeometry.resizePreviewRect(for: .bottom, length: 250, leftSpace: 307, rightSpace: 327, in: size)
+        XCTAssertEqual(bottom, CGRect(x: 307, y: 800 - 250 - divider + inset, width: 1440 - 307 - 327, height: thickness))
+    }
+
     func test_dropArea_edgesOfTheViewportPickAnArea_theMiddleNothing() {
         let size = CGSize(width: 400, height: 200)
         XCTAssertEqual(DockLayoutGeometry.dropArea(at: CGPoint(x: 20, y: 100), in: size), .left)
