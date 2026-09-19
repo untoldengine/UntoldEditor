@@ -28,8 +28,13 @@ final class EditorDockLayout: ObservableObject {
 
     /// The areas the window renders.
     @Published private(set) var state: DockLayoutState
-    /// The panel a tab drag carries, from the drag's start to its drop.
-    @Published private(set) var draggingPanel: PanelID?
+    /// The frames of the areas and the viewport in the container's coordinate
+    /// space, kept up to date by the container, so a tab drag resolves to a target.
+    var frames = DockFrames()
+    /// A tab being dragged by the pointer, and where the pointer is.
+    @Published private(set) var tabDrag: DockTabDrag?
+    /// Where the dragged tab would dock if the pointer went up now.
+    @Published private(set) var tabDragTarget: DockDragTarget?
 
     /// Where each closed panel was, so reopening it puts it back.
     private var lastAreas: [PanelID: DockArea] = [:]
@@ -159,12 +164,32 @@ final class EditorDockLayout: ObservableObject {
         persist()
     }
 
-    func beginDrag(of panel: PanelID) {
-        draggingPanel = panel
+    // MARK: - Tab drags
+
+    /// The pointer moved while dragging a tab, to `location` in the container's
+    /// space. The first move starts the drag.
+    func tabDragMoved(_ panel: PanelID, to location: CGPoint) {
+        tabDrag = DockTabDrag(panel: panel, location: location)
+        let target = DockLayoutGeometry.dragTarget(at: location, frames: frames)
+        if target != tabDragTarget {
+            tabDragTarget = target
+        }
     }
 
-    func endDrag() {
-        draggingPanel = nil
+    /// The pointer went up: the tab docks where it was, if anywhere.
+    func tabDragEnded() {
+        let drag = tabDrag
+        let target = tabDragTarget
+        tabDrag = nil
+        tabDragTarget = nil
+        if let drag, let target {
+            move(drag.panel, to: target.area)
+        }
+    }
+
+    func tabDragCancelled() {
+        tabDrag = nil
+        tabDragTarget = nil
     }
 
     // MARK: - Resizing

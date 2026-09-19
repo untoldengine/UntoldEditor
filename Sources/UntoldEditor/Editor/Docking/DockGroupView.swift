@@ -10,16 +10,17 @@
 //
 import SwiftUI
 
-/// One area of the layout: its tab strip and the front panel's content, and the
-/// drop target that lets a dragged tab join the area. The whole area lights up
-/// while a tab hovers it.
+/// One area of the layout: its tab strip and the front panel's content. The
+/// whole area lights up while a dragged tab hovers it.
 struct DockGroupView: View {
     let area: DockArea
     let size: CGSize
     @ObservedObject var layout: EditorDockLayout
     let registry: EditorPanelRegistry
 
-    @State private var isDropTarget = false
+    private var isDropTarget: Bool {
+        layout.tabDragTarget == .area(area)
+    }
 
     var body: some View {
         let state = layout.state[area]
@@ -40,17 +41,5 @@ struct DockGroupView: View {
         .overlay {
             DockDropZoneHighlight(rect: isDropTarget ? CGRect(origin: .zero, size: size).insetBy(dx: 3, dy: 3) : nil)
         }
-        .onDrop(
-            of: [DockDropDelegate.dragType],
-            delegate: DockDropDelegate(
-                target: .area(area),
-                size: size,
-                layout: layout,
-                highlightedArea: Binding(
-                    get: { isDropTarget ? area : nil },
-                    set: { isDropTarget = $0 != nil }
-                )
-            )
-        )
     }
 }

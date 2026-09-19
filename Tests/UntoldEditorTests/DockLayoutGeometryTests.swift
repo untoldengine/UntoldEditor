@@ -68,6 +68,22 @@ final class DockLayoutGeometryTests: XCTestCase {
         XCTAssertEqual(bottom, CGRect(x: 307, y: 800 - 250 - divider + inset, width: 1440 - 307 - 327, height: thickness))
     }
 
+    func test_dragTarget_isTheAreaUnderThePointer_orTheViewportEdge() {
+        let frames = DockFrames(
+            left: CGRect(x: 0, y: 0, width: 250, height: 800),
+            right: CGRect(x: 1120, y: 0, width: 320, height: 800),
+            bottom: CGRect(x: 257, y: 550, width: 856, height: 250),
+            viewport: CGRect(x: 257, y: 0, width: 856, height: 543)
+        )
+        XCTAssertEqual(DockLayoutGeometry.dragTarget(at: CGPoint(x: 10, y: 10), frames: frames), .area(.left))
+        XCTAssertEqual(DockLayoutGeometry.dragTarget(at: CGPoint(x: 1300, y: 700), frames: frames), .area(.right))
+        XCTAssertEqual(DockLayoutGeometry.dragTarget(at: CGPoint(x: 500, y: 600), frames: frames), .area(.bottom))
+        XCTAssertEqual(DockLayoutGeometry.dragTarget(at: CGPoint(x: 1100, y: 100), frames: frames), .viewportEdge(.right))
+        XCTAssertEqual(DockLayoutGeometry.dragTarget(at: CGPoint(x: 600, y: 500), frames: frames), .viewportEdge(.bottom))
+        XCTAssertNil(DockLayoutGeometry.dragTarget(at: CGPoint(x: 600, y: 200), frames: frames))
+        XCTAssertNil(DockLayoutGeometry.dragTarget(at: CGPoint(x: 253, y: 100), frames: frames), "A divider is nowhere")
+    }
+
     func test_dropArea_edgesOfTheViewportPickAnArea_theMiddleNothing() {
         let size = CGSize(width: 400, height: 200)
         XCTAssertEqual(DockLayoutGeometry.dropArea(at: CGPoint(x: 20, y: 100), in: size), .left)

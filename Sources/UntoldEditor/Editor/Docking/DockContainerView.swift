@@ -13,7 +13,10 @@ import SwiftUI
 /// Renders the docking layout between the toolbar and the status bar: the left
 /// area, the viewport with the bottom area under it, the right area, and a
 /// divider between each area and the viewport. An area with no panels leaves a
-/// thin edge strip to drop a tab on. A tab dragged over the viewport docks into
+/// thin edge strip to drop a tab on. A tab drags by the pointer in the
+/// container's own coordinate space, with a ghost of the tab under the
+/// pointer; the container keeps the layout model's frames current so the
+/// model resolves the target, and a tab dragged over the viewport docks into
 /// the area of the edge it is dropped on. A divider drag draws a line where the
 /// divider will land and resizes once the mouse goes up, so the viewport and
 /// the panels are laid out once, at the final size. In explore mode only the
@@ -23,7 +26,9 @@ struct DockContainerView: View {
     let registry: EditorPanelRegistry
     var viewportOnly = false
 
-    @State private var viewportDropArea: DockArea?
+    /// The coordinate space tab drags report in: the container's.
+    static let coordinateSpace = "dock"
+
     @State private var resizePreview: DockResizePreview?
 
     var body: some View {
@@ -58,6 +63,18 @@ struct DockContainerView: View {
         let centerWidth = max(0, size.width - leftSpace - rightSpace)
         let viewportHeight = max(0, size.height - bottomSpace)
         let viewportSize = CGSize(width: centerWidth, height: viewportHeight)
+        let frames = DockFrames(
+            left: CGRect(x: 0, y: 0, width: showsLeft ? widths.left : edge, height: size.height),
+            right: CGRect(x: size.width - (showsRight ? widths.right : edge), y: 0, width: showsRight ? widths.right : edge, height: size.height),
+            bottom: CGRect(x: leftSpace, y: size.height - (showsBottom ? bottomHeight : edge), width: centerWidth, height: showsBottom ? bottomHeight : edge),
+            viewport: CGRect(x: leftSpace, y: 0, width: centerWidth, height: viewportHeight)
+        )
+        let viewportZone: CGRect? = {
+            if case let .viewportEdge(area)? = layout.tabDragTarget {
+                return DockLayoutGeometry.viewportDropZoneRect(for: area, in: viewportSize)
+            }
+            return nil
+        }()
 
         return HStack(spacing: 0) {
             if showsLeft {
@@ -73,12 +90,8 @@ struct DockContainerView: View {
                     .frame(width: centerWidth, height: viewportHeight)
                     .clipped()
                     .overlay {
-                        DockDropZoneHighlight(rect: viewportDropArea.map { DockLayoutGeometry.viewportDropZoneRect(for: $0, in: viewportSize) })
+                        DockDropZoneHighlight(rect: viewportZone)
                     }
-                    .onDrop(
-                        of: [DockDropDelegate.dragType],
-                        delegate: DockDropDelegate(target: .viewport, size: viewportSize, layout: layout, highlightedArea: $viewportDropArea)
-                    )
                 if showsBottom {
                     areaDivider(for: .bottom, currentLength: bottomHeight, maximum: DockLayoutGeometry.maximumLength(for: .bottom, in: size))
                     DockGroupView(area: .bottom, size: CGSize(width: centerWidth, height: bottomHeight), layout: layout, registry: registry)
@@ -98,10 +111,20 @@ struct DockContainerView: View {
                     .frame(width: edge, height: size.height)
             }
         }
+        .coordinateSpace(name: Self.coordinateSpace)
         .overlay {
             DockResizePreviewLine(rect: resizePreview.map {
                 DockLayoutGeometry.resizePreviewRect(for: $0.area, length: $0.length, leftSpace: leftSpace, rightSpace: rightSpace, in: size)
             })
+        }
+        .overlay {
+            DockTabGhostView(drag: layout.tabDrag)
+        }
+        .onAppear {
+            layout.frames = frames
+        }
+        .onChange(of: frames) { _, newFrames in
+            layout.frames = newFrames
         }
     }
 

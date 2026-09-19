@@ -176,6 +176,57 @@ final class EditorDockLayoutTests: XCTestCase {
         XCTAssertEqual(layout.state.left.length, DockArea.left.defaultLength)
     }
 
+    // MARK: - Tab drags
+
+    private let mockupFrames = DockFrames(
+        left: CGRect(x: 0, y: 0, width: 250, height: 800),
+        right: CGRect(x: 1120, y: 0, width: 320, height: 800),
+        bottom: CGRect(x: 257, y: 550, width: 856, height: 250),
+        viewport: CGRect(x: 257, y: 0, width: 856, height: 543)
+    )
+
+    func test_tabDrag_resolvesItsTargetFromTheFrames_andDocksOnRelease() {
+        layout.frames = mockupFrames
+
+        layout.tabDragMoved(.console, to: CGPoint(x: 100, y: 100))
+        XCTAssertEqual(layout.tabDrag?.panel, .console)
+        XCTAssertEqual(layout.tabDragTarget, .area(.left))
+
+        layout.tabDragMoved(.console, to: CGPoint(x: 300, y: 100))
+        XCTAssertEqual(layout.tabDragTarget, .viewportEdge(.left), "The viewport's left quarter stands for the left area")
+
+        layout.tabDragMoved(.console, to: CGPoint(x: 700, y: 100))
+        XCTAssertNil(layout.tabDragTarget, "The middle of the viewport is nowhere")
+
+        layout.tabDragMoved(.console, to: CGPoint(x: 1200, y: 400))
+        layout.tabDragEnded()
+        XCTAssertNil(layout.tabDrag)
+        XCTAssertNil(layout.tabDragTarget)
+        XCTAssertEqual(layout.area(of: .console), .right)
+        XCTAssertEqual(layout.state.right.selected, .console)
+    }
+
+    func test_tabDrag_releasedOverNothing_leavesTheLayoutAlone() {
+        layout.frames = mockupFrames
+        let before = layout.state
+
+        layout.tabDragMoved(.console, to: CGPoint(x: 700, y: 200))
+        layout.tabDragEnded()
+
+        XCTAssertEqual(layout.state, before)
+    }
+
+    func test_tabDragCancelled_forgetsTheDrag() {
+        layout.frames = mockupFrames
+        layout.tabDragMoved(.console, to: CGPoint(x: 100, y: 100))
+
+        layout.tabDragCancelled()
+
+        XCTAssertNil(layout.tabDrag)
+        XCTAssertNil(layout.tabDragTarget)
+        XCTAssertEqual(layout.area(of: .console), .bottom)
+    }
+
     // MARK: - Focus and reset
 
     func test_focusViewport_roundTrips() {
