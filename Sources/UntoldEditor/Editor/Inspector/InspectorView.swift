@@ -25,10 +25,6 @@ struct InspectorView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Inspector")
-                .font(.headline)
-                .padding(.bottom, 8)
-
             if let entityId = selectionManager.selectedEntity, entityId != .invalid {
                 ScrollView { // Make the entire inspector scrollable
                     VStack(alignment: .leading) {

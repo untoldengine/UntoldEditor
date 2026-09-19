@@ -188,7 +188,7 @@ struct AssetBrowserView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 300)
+                .frame(maxHeight: .infinity)
             }
             .padding(10)
         }

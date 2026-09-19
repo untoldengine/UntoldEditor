@@ -34,10 +34,8 @@ public struct EditorView: View {
     @State var isRestoringPlayMode: Bool = false
     @State var showBlockedDuringPlayAlert = false
     @State var showCreateProject = false
-    @State var bottomPanelTab: BottomPanelTab = .assets
     @ObservedObject var taskCenter = TaskCenter.shared
     @State var rightPanelEnvTab: EnvEffectsTab = .environment
-    @State var bottomSearchQuery: String = ""
     @State var consoleAutoScroll: Bool = true
     @State var showInvalidProjectAlert = false
     @State var invalidProjectMessage = ""
@@ -54,7 +52,9 @@ public struct EditorView: View {
     @State var showSceneRenameFailedAlert = false
     @State var sceneRenameFailedMessage = ""
     @ObservedObject var playbackSettings = EditorPlaybackSettings.shared
-    @ObservedObject var panelVisibility = EditorPanelVisibility.shared
+    @ObservedObject var dockLayout = EditorDockLayout.shared
+    /// Each panel's own filter text, keyed by panel.
+    @State var panelSearchText: [PanelID: String] = [:]
     @State var renderPauseGeneration = 0
     let panelAnimationDuration = 0.28
     @State var showWelcomeStart = true
@@ -120,85 +120,13 @@ public struct EditorView: View {
         ZStack {
             VStack(spacing: 0) {
                 editorToolbar
-                HStack(spacing: 0) {
-                    if experienceMode == .edit {
-                        ZStack {
-                            if panelVisibility.showLeftPanel {
-                                VStack {
-                                    SceneHierarchyView(
-                                        selectionManager: selectionManager,
-                                        sceneGraphModel: sceneGraphModel,
-                                        sceneCatalog: sceneCatalog,
-                                        projectName: editorBasePath.projectName ?? "Untitled Project",
-                                        activeSceneURL: editorController?.currentSceneURL,
-                                        onSelectScene: editor_requestLoadScene,
-                                        entityList: editor_entities,
-                                        onAddEntity_Editor: editor_addNewEntity,
-                                        onRemoveEntity_Editor: editor_removeEntity,
-                                        onParentEntity: editor_parentEntity,
-                                        onUnparentEntity: editor_unparentEntity,
-                                        onDeleteEntity: editor_removeEntity(_:),
-                                        onDropRow: { payload, parent in
-                                            editor_placeDroppedRow(payload, parent: parent)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        .frame(maxHeight: .infinity)
-                        .overlay(alignment: .trailing) {
-                            panelEdgeTabVertical(
-                                isOpen: panelVisibility.showLeftPanel,
-                                openIcon: "chevron.left",
-                                closedIcon: "chevron.right",
-                                help: panelVisibility.showLeftPanel ? "Hide left panel" : "Show left panel"
-                            ) { panelVisibility.showLeftPanel.toggle() }
-                                .offset(x: 10)
-                        }
-                        .zIndex(1)
-                    }
-
-                    VStack(spacing: 0) {
-                        editorSceneViewport
-                        if experienceMode == .edit {
-                            ZStack {
-                                if panelVisibility.showBottomPanel {
-                                    editorBottomPanel
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .overlay(alignment: .top) {
-                                panelEdgeTabHorizontal(
-                                    isOpen: panelVisibility.showBottomPanel,
-                                    help: panelVisibility.showBottomPanel ? "Hide bottom panel" : "Show bottom panel"
-                                ) { panelVisibility.showBottomPanel.toggle() }
-                                    .offset(y: -10)
-                            }
-                            .zIndex(1)
-                        }
-                    }
-                    .padding(.top, 5)
-
-                    if experienceMode == .edit {
-                        ZStack {
-                            if panelVisibility.showRightPanel {
-                                editorRightPanel
-                                    .frame(minWidth: 200, maxWidth: 250, maxHeight: .infinity, alignment: .top)
-                            }
-                        }
-                        .frame(maxHeight: .infinity)
-                        .overlay(alignment: .leading) {
-                            panelEdgeTabVertical(
-                                isOpen: panelVisibility.showRightPanel,
-                                openIcon: "chevron.right",
-                                closedIcon: "chevron.left",
-                                help: panelVisibility.showRightPanel ? "Hide right panel" : "Show right panel"
-                            ) { panelVisibility.showRightPanel.toggle() }
-                                .offset(x: -10)
-                        }
-                        .zIndex(1)
-                    }
-                }
+                DockContainerView(
+                    layout: dockLayout,
+                    registry: dockRegistry,
+                    viewportOnly: experienceMode == .explore,
+                    onResizeBegan: beginViewportResizeHold,
+                    onResizeEnded: endViewportResizeHold
+                )
                 editorStatusBar
             }
             // The toolbar row shares the window's title bar (full-size content view).
@@ -211,14 +139,9 @@ public struct EditorView: View {
                 )
                 .ignoresSafeArea()
             )
-            // Animate panel show/hide from any trigger (edge tabs, ⌘1/2/3, ⌘F)
-            // and pause the render loop for the duration so it stays fluid.
-            .animation(.easeInOut(duration: panelAnimationDuration), value: panelVisibility.showLeftPanel)
-            .animation(.easeInOut(duration: panelAnimationDuration), value: panelVisibility.showBottomPanel)
-            .animation(.easeInOut(duration: panelAnimationDuration), value: panelVisibility.showRightPanel)
-            .onChange(of: panelVisibility.showLeftPanel) { _, _ in pauseRenderForPanelAnimation() }
-            .onChange(of: panelVisibility.showBottomPanel) { _, _ in pauseRenderForPanelAnimation() }
-            .onChange(of: panelVisibility.showRightPanel) { _, _ in pauseRenderForPanelAnimation() }
+            // A layout change (a panel closed, opened or moved) resizes the
+            // viewport; hold the render loop briefly so it stays fluid.
+            .onChange(of: dockLayout.state) { _, _ in pauseRenderForPanelAnimation() }
 
             // Loading indicator overlay
             LoadingIndicatorView()

@@ -39,9 +39,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var showFPSItem: NSMenuItem?
     private var showFPSAdvancedItem: NSMenuItem?
     private var sceneCamItem: NSMenuItem?
-    private var leftPanelItem: NSMenuItem?
-    private var bottomPanelItem: NSMenuItem?
-    private var rightPanelItem: NSMenuItem?
+    private var panelMenuItems: [PanelID: [NSMenuItem]] = [:]
+    private var dockMenuItem: NSMenuItem?
     private var navigationStyleItems: [CameraNavigationStyle: NSMenuItem] = [:]
     private var splatDebugItems: [SplatDebugOption: NSMenuItem] = [:]
     private var splatBlendCapItems: [SplatBlendCapOption: NSMenuItem] = [:]
@@ -155,10 +154,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenu.autoenablesItems = false
         viewMenu.delegate = self
         viewMenuItem.submenu = viewMenu
-        leftPanelItem = addItem(to: viewMenu, title: "Show Left Panel", action: #selector(menuToggleLeftPanel), key: "1")
-        bottomPanelItem = addItem(to: viewMenu, title: "Show Bottom Panel", action: #selector(menuToggleBottomPanel), key: "2")
-        rightPanelItem = addItem(to: viewMenu, title: "Show Right Panel", action: #selector(menuToggleRightPanel), key: "3")
+        addPanelItem(.hierarchy, to: viewMenu, title: "Show Hierarchy", key: "1")
+        dockMenuItem = addItem(to: viewMenu, title: "Show Bottom Area", action: #selector(menuToggleDock), key: "2")
+        dockMenuItem?.toolTip = "Hide or show the panels docked below the viewport"
+        addPanelItem(.inspector, to: viewMenu, title: "Show Inspector", key: "3")
         addItem(to: viewMenu, title: "Focus Viewport", action: #selector(menuToggleFocusViewport), key: "f")
+        viewMenu.addItem(.separator())
+        // The dock panels one by one, so a panel closed from its tab comes back from here.
+        for panel in PanelID.available where panel.defaultArea == .bottom {
+            addPanelItem(panel, to: viewMenu, title: "Show \(panel.title)", key: "")
+        }
+        addItem(to: viewMenu, title: "Reset Layout", action: #selector(menuResetLayout), key: "")
         viewMenu.addItem(.separator())
         showFPSItem = addItem(to: viewMenu, title: "Show FPS", action: #selector(menuToggleFPS), key: "")
         showFPSAdvancedItem = addItem(to: viewMenu, title: "Show FPS Advanced", action: #selector(menuToggleFPSAdvanced), key: "")
@@ -242,7 +248,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         splatDebugItem.submenu = splatDebugMenu
         viewMenu.addItem(splatDebugItem)
 
+        // Window menu: the standard items; macOS appends the open windows.
+        let windowMenuItem = NSMenuItem()
+        mainMenu.addItem(windowMenuItem)
+        let windowMenu = NSMenu(title: "Window")
+        windowMenuItem.submenu = windowMenu
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.miniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.zoom(_:)), keyEquivalent: "")
+        NSApp.windowsMenu = windowMenu
+
         NSApp.mainMenu = mainMenu
+    }
+
+    /// A menu item that shows or hides a panel of the docking layout; its
+    /// checkmark follows the layout in `menuNeedsUpdate`.
+    private func addPanelItem(_ panel: PanelID, to menu: NSMenu, title: String, key: String) {
+        let item = addItem(to: menu, title: title, action: #selector(menuTogglePanel(_:)), key: key)
+        item.representedObject = panel.rawValue
+        panelMenuItems[panel, default: []].append(item)
     }
 
     @discardableResult
@@ -279,10 +302,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showFPSAdvancedItem?.isEnabled = store.overlayMode != .off
         sceneCamItem?.state = EditorPlaybackSettings.shared.useSceneCameraDuringPlay ? .on : .off
 
-        let panels = EditorPanelVisibility.shared
-        leftPanelItem?.state = panels.showLeftPanel ? .on : .off
-        bottomPanelItem?.state = panels.showBottomPanel ? .on : .off
-        rightPanelItem?.state = panels.showRightPanel ? .on : .off
+        let layout = EditorDockLayout.shared
+        for (panel, items) in panelMenuItems {
+            for item in items {
+                item.state = layout.isOpen(panel) ? .on : .off
+            }
+        }
+        dockMenuItem?.state = layout.isVisible(.bottom) ? .on : .off
 
         let activeStyle = EditorNavigationSettings.shared.style
         for (style, item) in navigationStyleItems {
@@ -383,22 +409,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sender.state = option.isEnabled ? .on : .off
     }
 
-    /// Animation + render-pause are driven by EditorView (which observes these
-    /// values), so the menu just flips the state.
-    @objc private func menuToggleLeftPanel() {
-        EditorPanelVisibility.shared.showLeftPanel.toggle()
+    /// The docking layout is shared with SwiftUI, which renders whatever it holds.
+    @objc private func menuTogglePanel(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let panel = PanelID(rawValue: raw) else {
+            return
+        }
+        EditorDockLayout.shared.toggle(panel)
     }
 
-    @objc private func menuToggleBottomPanel() {
-        EditorPanelVisibility.shared.showBottomPanel.toggle()
-    }
-
-    @objc private func menuToggleRightPanel() {
-        EditorPanelVisibility.shared.showRightPanel.toggle()
+    @objc private func menuToggleDock() {
+        EditorDockLayout.shared.toggleArea(.bottom)
     }
 
     @objc private func menuToggleFocusViewport() {
-        EditorPanelVisibility.shared.toggleFocusViewport()
+        EditorDockLayout.shared.toggleFocusViewport()
+    }
+
+    @objc private func menuResetLayout() {
+        EditorDockLayout.shared.reset()
     }
 }
 
