@@ -44,7 +44,6 @@ struct AnimationEditorView: View {
     let refreshView: () -> Void
 
     var body: some View {
-        Text("Animation Properties")
         // List of currently linked animations
         let animationClips: [String] = getAllAnimationClips(entityId: entityId)
 

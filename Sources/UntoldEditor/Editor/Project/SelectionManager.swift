@@ -88,6 +88,11 @@ class SceneGraphModel: ObservableObject {
         expandedEntityIds.contains(entityId)
     }
 
+    /// Whether the entity is in the tree, for state that must not outlive it.
+    func contains(_ entityId: EntityID) -> Bool {
+        childrenMap.values.contains { $0.contains(entityId) }
+    }
+
     func toggleExpanded(entityId: EntityID) {
         if expandedEntityIds.contains(entityId) {
             expandedEntityIds.remove(entityId)
@@ -112,6 +117,9 @@ class SelectionManager: ObservableObject {
     /// Entities the viewport must not select or move, with everything under
     /// them. Session-only, like `hiddenEntities`; the hierarchy can still inspect them.
     @Published private(set) var lockedEntities: Set<EntityID> = []
+    /// The entity the Inspector keeps showing while the selection changes,
+    /// from its pin. Nil follows the selection.
+    @Published var pinnedInspection: EntityID?
 
     init() {}
 
@@ -298,10 +306,17 @@ class SelectionManager: ObservableObject {
         setLocked(entityId, isLocked(entityId) == false)
     }
 
-    /// Forgets the hidden and locked entities, for a cleared or reloaded scene.
+    /// Forgets the hidden and locked entities and the Inspector's pin, for a
+    /// cleared or reloaded scene.
     func resetEntityStates() {
         hiddenEntities = []
         lockedEntities = []
+        pinnedInspection = nil
+    }
+
+    /// Pins the Inspector on an entity, or unpins it when it is the pinned one.
+    func togglePinnedInspection(_ entityId: EntityID) {
+        pinnedInspection = pinnedInspection == entityId ? nil : entityId
     }
 
     private func hasAncestorOrSelf(_ entityId: EntityID?, in set: Set<EntityID>) -> Bool {

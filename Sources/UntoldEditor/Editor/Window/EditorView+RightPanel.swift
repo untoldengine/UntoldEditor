@@ -61,8 +61,6 @@ extension EditorView {
                 onAddName_Editor: editor_addName,
                 selectedAsset: $selectedAsset
             )
-            .editorPanel()
-            .padding(5)
         }
     }
 

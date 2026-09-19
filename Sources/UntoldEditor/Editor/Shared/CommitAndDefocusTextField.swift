@@ -17,6 +17,10 @@
     struct CommitAndDefocusTextField: NSViewRepresentable {
         @Binding var text: String
         let onSubmit: () -> Void
+        /// The field's font; nil keeps the system's.
+        var font: NSFont?
+        /// A bare field draws no bezel or background, for a host that draws its own box.
+        var isBare = false
 
         func makeCoordinator() -> Coordinator {
             Coordinator(text: $text, onSubmit: onSubmit)
@@ -27,15 +31,29 @@
             textField.delegate = context.coordinator
             textField.target = context.coordinator
             textField.action = #selector(Coordinator.didSubmitFromAction(_:))
-            textField.isBordered = true
-            textField.isBezeled = true
-            textField.bezelStyle = .roundedBezel
+            if isBare {
+                textField.isBordered = false
+                textField.isBezeled = false
+                textField.drawsBackground = false
+                textField.focusRingType = .none
+                textField.textColor = NSColor(Color.editorTextPrimary)
+            } else {
+                textField.isBordered = true
+                textField.isBezeled = true
+                textField.bezelStyle = .roundedBezel
+            }
+            if let font {
+                textField.font = font
+            }
             textField.lineBreakMode = .byClipping
             return textField
         }
 
         func updateNSView(_ nsView: NSTextField, context: Context) {
             context.coordinator.onSubmit = onSubmit
+            if let font, nsView.font != font {
+                nsView.font = font
+            }
 
             if nsView.stringValue != text {
                 nsView.stringValue = text
