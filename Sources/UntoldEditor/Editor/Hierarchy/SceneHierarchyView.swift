@@ -107,7 +107,7 @@ struct SceneHierarchyView: View {
             .cornerRadius(8)
         }
         .padding(5)
-        .frame(minWidth: 320, maxWidth: 320, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.editorBackground)
         .cornerRadius(8)
         .shadow(color: Color.editorShadow, radius: 3, x: 0, y: 1)

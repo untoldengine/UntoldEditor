@@ -22,10 +22,12 @@ struct EditorSplitDivider: View {
     }
 
     let orientation: Orientation
+    var onDragBegan: () -> Void = {}
     var onDrag: (CGFloat) -> Void = { _ in }
     var onDragEnded: () -> Void = {}
 
     @State private var lastTranslation: CGFloat = 0
+    @State private var isDragging = false
 
     var body: some View {
         Color.editorHairline
@@ -35,12 +37,17 @@ struct EditorSplitDivider: View {
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
+                        if isDragging == false {
+                            isDragging = true
+                            onDragBegan()
+                        }
                         let translation = Self.translation(of: value.translation, along: orientation)
                         onDrag(translation - lastTranslation)
                         lastTranslation = translation
                     }
                     .onEnded { _ in
                         lastTranslation = 0
+                        isDragging = false
                         onDragEnded()
                     }
             )

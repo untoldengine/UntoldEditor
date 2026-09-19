@@ -39,38 +39,3 @@ final class EditorPlaybackSettings: ObservableObject {
 
     private init() {}
 }
-
-/// Which editor panels are visible. Shared between the AppKit View menu (for
-/// checkmarks) and SwiftUI (to show/hide the panels).
-final class EditorPanelVisibility: ObservableObject {
-    static let shared = EditorPanelVisibility()
-
-    @Published var showLeftPanel: Bool = true
-    @Published var showBottomPanel: Bool = true
-    @Published var showRightPanel: Bool = true
-
-    /// Saved layout used by the "focus viewport" toggle (⌘F).
-    private var savedLayout: (left: Bool, bottom: Bool, right: Bool)?
-
-    private init() {}
-
-    private var anyPanelVisible: Bool {
-        showLeftPanel || showBottomPanel || showRightPanel
-    }
-
-    /// Hide every panel to show only the viewport; toggling again restores the
-    /// panels that were visible before (not necessarily all of them).
-    func toggleFocusViewport() {
-        if anyPanelVisible {
-            savedLayout = (showLeftPanel, showBottomPanel, showRightPanel)
-            showLeftPanel = false
-            showBottomPanel = false
-            showRightPanel = false
-        } else {
-            let layout = savedLayout ?? (true, true, true)
-            showLeftPanel = layout.left
-            showBottomPanel = layout.bottom
-            showRightPanel = layout.right
-        }
-    }
-}

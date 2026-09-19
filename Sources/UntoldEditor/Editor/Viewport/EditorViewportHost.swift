@@ -19,18 +19,14 @@ struct EditorViewportHost: NSViewRepresentable {
     let renderer: UntoldRenderer
     let onInit: @MainActor () -> Void
 
-    final class Coordinator {
-        var didRunInit = false
-    }
+    /// Set once per process: the docking layout rebuilds the host when the
+    /// viewport panel moves, and the scene camera must not be created twice.
+    private static var didRunInit = false
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> EditorViewportHostView {
+    func makeNSView(context _: Context) -> EditorViewportHostView {
         let host = EditorViewportHostView(metalView: renderer.metalView)
-        if !context.coordinator.didRunInit {
-            context.coordinator.didRunInit = true
+        if Self.didRunInit == false {
+            Self.didRunInit = true
             onInit()
         }
         return host
