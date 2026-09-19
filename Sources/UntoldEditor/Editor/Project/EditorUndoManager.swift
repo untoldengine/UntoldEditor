@@ -220,6 +220,11 @@ final class EditorUndoManager: ObservableObject {
 
     @Published private(set) var canUndo = false
     @Published private(set) var canRedo = false
+    /// The names of the actions that can be undone, most recent first, and of
+    /// those that can be redone, next first: the toolbar's History popover and
+    /// the status bar's last action read them.
+    @Published private(set) var undoHistory: [String] = []
+    @Published private(set) var redoHistory: [String] = []
 
     private var undoStack: [EditorUndoCommand] = []
     private var redoStack: [EditorUndoCommand] = []
@@ -325,6 +330,19 @@ final class EditorUndoManager: ObservableObject {
         updateAvailability()
     }
 
+    /// Undoes several actions at once, as the History popover does.
+    func undo(steps: Int) {
+        for _ in 0 ..< max(0, steps) {
+            undo()
+        }
+    }
+
+    func redo(steps: Int) {
+        for _ in 0 ..< max(0, steps) {
+            redo()
+        }
+    }
+
     func clear() {
         undoStack.removeAll()
         redoStack.removeAll()
@@ -343,5 +361,7 @@ final class EditorUndoManager: ObservableObject {
     private func updateAvailability() {
         canUndo = undoStack.isEmpty == false
         canRedo = redoStack.isEmpty == false
+        undoHistory = undoStack.reversed().map(\.name)
+        redoHistory = redoStack.reversed().map(\.name)
     }
 }

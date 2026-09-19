@@ -24,6 +24,9 @@ public struct EditorView: View {
     /// bottom dock shows another tab (which removes the browser view).
     @StateObject var assetBrowserNavigation = AssetBrowserNavigationState()
     @State var isPlaying = false
+    /// True while the play session is paused: the snapshot stays, the engine's
+    /// update stops.
+    @State var isPaused = false
     /// Captured via `serializeScene()` the instant Play starts; consumed by
     /// `beginPlayModeRestore` on Stop to revert physics/animation/script drift.
     @State var playModeSnapshot: SceneData?
@@ -78,6 +81,7 @@ public struct EditorView: View {
     @State var isViewportDropTargeted = false
     @State var dropStatusMessage: String?
     @State var dropStatusIsError = false
+    @ObservedObject var buildTargetSettings = EditorBuildTargetSettings.shared
 
     var renderer: UntoldRenderer?
 
@@ -114,7 +118,8 @@ public struct EditorView: View {
 
     public var body: some View {
         ZStack {
-            VStack {
+            VStack(spacing: 0) {
+                editorToolbar
                 HStack(spacing: 0) {
                     if experienceMode == .edit {
                         ZStack {
@@ -127,9 +132,6 @@ public struct EditorView: View {
                                         projectName: editorBasePath.projectName ?? "Untitled Project",
                                         activeSceneURL: editorController?.currentSceneURL,
                                         onSelectScene: editor_requestLoadScene,
-                                        isPlaying: isPlaying,
-                                        onTogglePlay: { editor_handlePlayToggle(!isPlaying) },
-                                        isPlayModeBusy: isRestoringPlayMode,
                                         entityList: editor_entities,
                                         onAddEntity_Editor: editor_addNewEntity,
                                         onRemoveEntity_Editor: editor_removeEntity,
@@ -197,7 +199,10 @@ public struct EditorView: View {
                         .zIndex(1)
                     }
                 }
+                editorStatusBar
             }
+            // The toolbar row shares the window's title bar (full-size content view).
+            .ignoresSafeArea(.container, edges: .top)
             .background(
                 LinearGradient(
                     colors: [Color.editorBackground, Color.editorPanelBackground.opacity(0.95)],
@@ -273,6 +278,17 @@ public struct EditorView: View {
                 if isPlaying {
                     setEditorPlayMode(false)
                 }
+            }
+
+            // The P key and the toolbar share one play toggle, so the key goes
+            // through the snapshot flow like the button.
+            NotificationCenter.default.addObserver(
+                forName: .editorTogglePlay,
+                object: nil,
+                queue: .main
+            ) { _ in
+                guard experienceMode == .edit else { return }
+                editor_handlePlayToggle(!isPlaying)
             }
         }
         .onChange(of: playbackSettings.useSceneCameraDuringPlay) { _, _ in

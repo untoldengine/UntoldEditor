@@ -77,6 +77,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // color (editorBackground) show through.
         window.titlebarAppearsTransparent = true
         window.backgroundColor = NSColor(Color.editorBackground)
+        // The editor's toolbar row shares the title bar: the content view runs
+        // under it, the title is hidden, and an empty unified toolbar gives the
+        // title bar the height that centres the traffic lights in the row.
+        window.styleMask.insert(.fullSizeContentView)
+        window.titleVisibility = .hidden
+        let titleBar = NSToolbar(identifier: "EditorTitleBar")
+        titleBar.showsBaselineSeparator = false
+        window.toolbar = titleBar
+        window.toolbarStyle = .unified
+        window.isMovableByWindowBackground = true
         window.center()
 
         let hostingView = NSHostingView(rootView: EditorView())

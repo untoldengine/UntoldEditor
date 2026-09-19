@@ -329,8 +329,6 @@ final class SceneHierarchyViewTests: XCTestCase {
             sceneCatalog: ProjectSceneCatalog(),
             projectName: "TestProject",
             onSelectScene: { _ in },
-            isPlaying: false,
-            onTogglePlay: {},
             entityList: [],
             onAddEntity_Editor: { addEntityCalled = true },
             onRemoveEntity_Editor: { removeEntityCalled = true }
@@ -364,8 +362,6 @@ final class SceneHierarchyViewTests: XCTestCase {
             sceneCatalog: ProjectSceneCatalog(),
             projectName: "TestProject",
             onSelectScene: { _ in },
-            isPlaying: false,
-            onTogglePlay: {},
             entityList: entityList,
             onAddEntity_Editor: {},
             onRemoveEntity_Editor: {}
@@ -387,8 +383,6 @@ final class SceneHierarchyViewTests: XCTestCase {
             sceneCatalog: ProjectSceneCatalog(),
             projectName: "TestProject",
             onSelectScene: { _ in },
-            isPlaying: false,
-            onTogglePlay: {},
             entityList: [],
             onAddEntity_Editor: {},
             onRemoveEntity_Editor: {}

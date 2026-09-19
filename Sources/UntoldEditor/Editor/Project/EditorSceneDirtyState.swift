@@ -20,6 +20,9 @@ final class EditorSceneDirtyState: ObservableObject {
     static let shared = EditorSceneDirtyState()
 
     @Published private(set) var isDirty = false
+    /// When the editor last wrote the scene to disk; nil after a load, or for a
+    /// scene that was never saved. The status bar shows it.
+    @Published private(set) var lastSavedAt: Date?
 
     private init() {}
 
@@ -29,5 +32,12 @@ final class EditorSceneDirtyState: ObservableObject {
 
     func clear() {
         isDirty = false
+        lastSavedAt = nil
+    }
+
+    /// A save just succeeded: clean, and stamped for the status bar.
+    func markSaved(at date: Date = Date()) {
+        isDirty = false
+        lastSavedAt = date
     }
 }
