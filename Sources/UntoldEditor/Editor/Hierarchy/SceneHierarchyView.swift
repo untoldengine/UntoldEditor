@@ -18,11 +18,6 @@ struct SceneHierarchyView: View {
     var projectName: String
     var activeSceneURL: URL?
     var onSelectScene: (URL) -> Void
-    var isPlaying: Bool
-    var onTogglePlay: () -> Void
-    /// True while an async post-Play restore is in flight; disables the button
-    /// to prevent re-entrant Play/Stop toggling mid-restore.
-    var isPlayModeBusy: Bool = false
     var entityList: [EntityID]
     var onAddEntity_Editor: () -> Void
     var onRemoveEntity_Editor: () -> Void
@@ -132,8 +127,6 @@ struct SceneHierarchyView: View {
                 .lineLimit(1)
 
             Spacer()
-
-            playButton
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -147,21 +140,6 @@ struct SceneHierarchyView: View {
         .onTapGesture {
             selectionManager.selectProject()
         }
-    }
-
-    private var playButton: some View {
-        Button(action: onTogglePlay) {
-            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.editorTextPrimary)
-                .frame(width: 26, height: 26)
-                .background(isPlaying ? Color.editorSecondaryAccent : Color.editorAccent)
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .disabled(isPlayModeBusy)
-        .help(isPlaying ? "Stop play mode" : "Enter play mode")
     }
 
     // MARK: - Scene row (second level)

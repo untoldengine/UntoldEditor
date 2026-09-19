@@ -964,7 +964,8 @@
             case kVK_ANSI_E:
                 keyState.ePressed = false
             case kVK_ANSI_P:
-                gameMode = !gameMode
+                // Play/Stop through the toolbar's flow, which snapshots and restores the scene.
+                NotificationCenter.default.post(name: .editorTogglePlay, object: nil)
             case kVK_ANSI_R:
                 if keyState.shiftPressed {
                     hotReload = !hotReload

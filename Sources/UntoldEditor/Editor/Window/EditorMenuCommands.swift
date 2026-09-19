@@ -24,6 +24,9 @@ extension Notification.Name {
     static let editorMenuSave = Notification.Name("editorMenuSave")
     static let editorMenuSaveAs = Notification.Name("editorMenuSaveAs")
     static let editorMenuReset = Notification.Name("editorMenuReset")
+    /// Posted by the P key; the root view toggles play mode through the same
+    /// snapshot-and-restore flow as the toolbar's Play button.
+    static let editorTogglePlay = Notification.Name("editorTogglePlay")
 }
 
 /// Playback-related settings that must be reachable from both the AppKit menu

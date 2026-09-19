@@ -69,7 +69,7 @@ extension EditorView {
             do {
                 try saveSceneDirect(sceneData: sceneData, to: sceneURL)
                 sceneCatalog.refresh()
-                EditorSceneDirtyState.shared.clear()
+                EditorSceneDirtyState.shared.markSaved()
                 EditorPendingSwitchAction.shared.consume()
             } catch {
                 saveFailedMessage = "\(error)"
@@ -157,7 +157,7 @@ extension EditorView {
             showOverwriteAlert = false
             isSaveAs = false
             sceneCatalog.refresh()
-            EditorSceneDirtyState.shared.clear()
+            EditorSceneDirtyState.shared.markSaved()
             EditorPendingSwitchAction.shared.consume()
         } catch {
             saveFailedMessage = "\(error)"
@@ -289,7 +289,7 @@ extension EditorView {
             editorController?.currentSceneURL = destinationURL
             sceneCatalog.refresh()
             selectionManager.selectScene()
-            EditorSceneDirtyState.shared.clear()
+            EditorSceneDirtyState.shared.markSaved()
         } catch {
             print("❌ Failed to create new scene file at \(destinationURL.lastPathComponent): \(error)")
             editorController?.currentSceneURL = nil

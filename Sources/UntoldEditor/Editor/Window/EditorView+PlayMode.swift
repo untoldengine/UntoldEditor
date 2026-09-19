@@ -27,6 +27,13 @@ extension EditorView {
     func setEditorPlayMode(_ shouldPlay: Bool, capturesSnapshot: Bool = true) {
         guard isRestoringPlayMode == false else { return }
 
+        // Play while paused resumes the session instead of opening a new one.
+        if shouldPlay, isPlaying, isPaused {
+            editor_togglePauseInPlayMode()
+            return
+        }
+        isPaused = false
+
         let didChangePlayState = isPlaying != shouldPlay || gameMode != shouldPlay
         guard didChangePlayState else {
             isPlaying = shouldPlay
@@ -100,6 +107,16 @@ extension EditorView {
         }
     }
 
+    /// Pause keeps the play session and its snapshot but stops the engine's
+    /// update, so physics, animation and scripts freeze while the frame keeps
+    /// rendering. A second call resumes.
+    func editor_togglePauseInPlayMode() {
+        guard isPlaying, isRestoringPlayMode == false else { return }
+        isPaused.toggle()
+        gameMode = isPaused == false
+        AnimationSystem.shared.isEnabled = isPaused == false
+    }
+
     func enableExploreNavigationMode() {
         playbackSettings.useSceneCameraDuringPlay = true
         setEditorPlayMode(true, capturesSnapshot: false)
@@ -113,7 +130,8 @@ extension EditorView {
     }
 
     func updateActiveCameraForPlayMode() {
-        if gameMode {
+        // The session, not `gameMode`: a paused session keeps the game camera.
+        if isPlaying {
             CameraSystem.shared.activeCamera = playbackSettings.useSceneCameraDuringPlay ? findSceneCamera() : findEditorGameCamera()
         } else {
             CameraSystem.shared.activeCamera = findSceneCamera()
