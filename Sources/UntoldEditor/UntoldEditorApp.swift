@@ -76,7 +76,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // default near-black. Transparent title bar lets the window background
         // color (editorBackground) show through.
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = NSColor(red: 0.15, green: 0.16, blue: 0.21, alpha: 1.0)
+        window.backgroundColor = NSColor(Color.editorBackground)
         window.center()
 
         let hostingView = NSHostingView(rootView: EditorView())

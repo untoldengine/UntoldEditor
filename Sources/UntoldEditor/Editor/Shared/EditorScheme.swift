@@ -10,38 +10,73 @@
 //
 import SwiftUI
 
-// MARK: - Editor color scheme (Dracula-inspired)
+// MARK: - Editor color scheme
 
-///
 /// Single source of truth for the editor UI palette. All views should reference
 /// these semantic tokens instead of hardcoding `Color.white`, `.secondary`,
 /// `.red`, opacities, etc. Grouped by role so a re-theme only touches this file.
+///
+/// The values come from the editor redesign mockups (the engine repository's
+/// `docs/proposals/EditorUIRedesign`): neutral dark chrome, one orange accent that
+/// always means "selected" or "active", never a plain action button.
 extension Color {
     // MARK: Base surfaces
 
-    static let editorBackground = Color(red: 0.15, green: 0.16, blue: 0.21) // dracula background
-    static let editorPanelBackground = Color(red: 0.19, green: 0.20, blue: 0.26) // dracula current line
-    static let editorSurface = Color(red: 0.24, green: 0.25, blue: 0.32) // dracula selection
+    static let editorBackground = Color(hex: 0x2A2C35) // window body, bottom dock
+    static let editorPanelBackground = Color(hex: 0x2E3039) // side panels
+    static let editorSurface = Color(hex: 0x3F414D) // raised surfaces, active segments
+    static let editorChromeBackground = Color(hex: 0x30323D) // main toolbar
+    static let editorViewportHeader = Color(hex: 0x2E3039) // viewport tool header
+    static let editorTabStrip = Color(hex: 0x242630) // scene tab strip
+    static let editorBarDark = Color(hex: 0x1F2028) // status bar
+
+    // MARK: Controls
+
+    static let editorControlFill = Color.black.opacity(0.28) // pills, fields, menus
+    static let editorControlActive = Color(hex: 0x3F414D) // active segment or tab
+    static let editorHairline = Color.black.opacity(0.40) // toolbar and section hairlines
 
     // MARK: Accents
 
-    static let editorAccent = Color(red: 0.91, green: 0.64, blue: 0.35) // muted dracula orange
-    static let editorAccentSoft = Color(red: 0.91, green: 0.64, blue: 0.35, opacity: 0.16)
-    static let editorSecondaryAccent = Color(red: 0.74, green: 0.58, blue: 0.98) // dracula purple
+    static let editorAccent = Color(hex: 0xF39C3D) // orange: selection and active state
+    static let editorAccentSoft = Color(hex: 0xF39C3D, opacity: 0.22) // selected rows and cells
+    static let editorSecondaryAccent = Color(hex: 0x4F8DE0) // blue: secondary emphasis
 
     // MARK: Text hierarchy
 
-    static let editorTextPrimary = Color.white // titles, primary labels, text on accent buttons
-    static let editorTextSecondary = Color.white.opacity(0.70) // supporting / secondary labels
-    static let editorTextTertiary = Color.white.opacity(0.45) // muted / disabled-looking labels
-    static let editorTextInverse = Color.black.opacity(0.90) // dark text on light/accent fills
+    static let editorTextPrimary = Color(hex: 0xE6E7EC) // titles, primary labels
+    static let editorTextSecondary = Color(hex: 0xC8CAD2) // supporting labels
+    static let editorTextTertiary = Color(hex: 0x8A8C97) // muted labels, hints
+    static let editorTextDisabled = Color(hex: 0x5F616C) // disabled controls, hidden rows
+    static let editorTextInverse = Color(hex: 0x1F2028) // dark text on accent fills
+    static let editorTextSelected = Color(hex: 0xFFD9AD) // text of a selected hierarchy row
 
     // MARK: Semantic status
 
-    static let editorError = Color(red: 0.94, green: 0.38, blue: 0.42) // dracula red
-    static let editorSuccess = Color(red: 0.31, green: 0.82, blue: 0.55) // dracula green
-    static let editorWarning = Color(red: 0.95, green: 0.78, blue: 0.42) // dracula yellow/orange
-    static let editorInfo = Color(red: 0.55, green: 0.73, blue: 0.98) // dracula blue/cyan
+    static let editorError = Color(hex: 0xFF7B7B)
+    static let editorSuccess = Color(hex: 0x5CE08C)
+    static let editorWarning = Color(hex: 0xF5C451)
+    static let editorInfo = Color(hex: 0x4F8DE0)
+    static let editorErrorText = Color(hex: 0xFFB3B3) // console error rows
+    static let editorWarningText = Color(hex: 0xF0D9A0) // console warning rows
+    static let editorErrorRowBackground = Color(hex: 0xE5484D, opacity: 0.12)
+    static let editorBadge = Color(hex: 0xE5484D) // unread-error badge
+
+    // MARK: Axes and navigation gizmo
+
+    static let editorAxisX = Color(hex: 0xFF5A5A)
+    static let editorAxisY = Color(hex: 0x5CE08C)
+    static let editorAxisZ = Color(hex: 0x4C8DFF)
+    static let editorNavX = Color(hex: 0xE0574F)
+    static let editorNavY = Color(hex: 0x8BC34A)
+    static let editorNavZ = Color(hex: 0x4F8DE0)
+
+    // MARK: Interaction modes
+
+    static let editorModeObject = Color(hex: 0xE6E7EC)
+    static let editorModeEdit = Color(hex: 0xF39C3D)
+    static let editorModeAnimate = Color(hex: 0x4F8DE0)
+    static let editorModePaint = Color(hex: 0xB53F7A)
 
     // MARK: Fills & separators
 
@@ -53,10 +88,22 @@ extension Color {
     // MARK: Overlays & shadows
 
     static let editorShadow = Color.black.opacity(0.20) // default drop shadows
-    static let editorShadowStrong = Color.black.opacity(0.34) // elevated cards / popovers
-    static let editorScrim = Color.black.opacity(0.40) // floating stat cards over the scene
-    static let editorBadgeBackground = Color.black.opacity(0.18) // small badges / pills
+    static let editorShadowStrong = Color.black.opacity(0.50) // popovers
+    static let editorScrim = Color(hex: 0x14151C, opacity: 0.55) // floating cards over the scene
+    static let editorBadgeBackground = Color.black.opacity(0.25) // small badges / pills
     static let editorOverlay = Color.black.opacity(0.70) // full-screen dimming overlays
+}
+
+private extension Color {
+    /// A color from a `0xRRGGBB` literal, the form the design spec uses.
+    init(hex: UInt32, opacity: Double = 1) {
+        self.init(
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255,
+            opacity: opacity
+        )
+    }
 }
 
 extension View {
@@ -69,41 +116,5 @@ extension View {
             .background(Color.editorFillSubtle)
             .cornerRadius(8)
             .shadow(color: Color.editorShadow, radius: 3, x: 0, y: 1)
-    }
-}
-
-/// Disclosure style where each nesting level is indented by exactly the width of
-/// the expand/collapse chevron, so a child's content lines up with its parent's
-/// label text. Also themes the chevron to match the editor.
-struct EditorDisclosureStyle: DisclosureGroupStyle {
-    private let chevronWidth: CGFloat = 12
-    private let spacing: CGFloat = 6
-
-    func makeBody(configuration: Configuration) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    configuration.isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: spacing) {
-                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.editorTextSecondary)
-                        .frame(width: chevronWidth)
-                    configuration.label
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .focusable(false)
-
-            if configuration.isExpanded {
-                configuration.content
-                    .padding(.leading, chevronWidth + spacing)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
     }
 }
