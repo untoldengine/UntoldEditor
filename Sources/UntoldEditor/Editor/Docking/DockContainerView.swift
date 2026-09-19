@@ -14,17 +14,17 @@ import SwiftUI
 /// area, the viewport with the bottom area under it, the right area, and a
 /// divider between each area and the viewport. An area with no panels leaves a
 /// thin edge strip to drop a tab on. A tab dragged over the viewport docks into
-/// the area of the edge it is dropped on. In explore mode only the viewport
-/// shows, whatever the layout holds.
+/// the area of the edge it is dropped on. A divider drag draws a line where the
+/// divider will land and resizes once the mouse goes up, so the viewport and
+/// the panels are laid out once, at the final size. In explore mode only the
+/// viewport shows, whatever the layout holds.
 struct DockContainerView: View {
     @ObservedObject var layout: EditorDockLayout
     let registry: EditorPanelRegistry
     var viewportOnly = false
-    /// The render loop holds while a divider drags, as it does during a window resize.
-    var onResizeBegan: () -> Void = {}
-    var onResizeEnded: () -> Void = {}
 
     @State private var viewportDropArea: DockArea?
+    @State private var resizePreview: DockResizePreview?
 
     var body: some View {
         GeometryReader { proxy in
@@ -63,14 +63,7 @@ struct DockContainerView: View {
             if showsLeft {
                 DockGroupView(area: .left, size: CGSize(width: widths.left, height: size.height), layout: layout, registry: registry)
                     .frame(width: widths.left, height: size.height)
-                EditorSplitDivider(
-                    orientation: .vertical,
-                    onDragBegan: onResizeBegan,
-                    onDrag: { delta in
-                        layout.resize(.left, delta: delta, currentLength: widths.left, maximum: DockLayoutGeometry.maximumLength(for: .left, in: size, otherSide: widths.right))
-                    },
-                    onDragEnded: endResize
-                )
+                areaDivider(for: .left, currentLength: widths.left, maximum: DockLayoutGeometry.maximumLength(for: .left, in: size, otherSide: widths.right))
             } else if viewportOnly == false {
                 DockEdgeTarget(area: .left, layout: layout)
                     .frame(width: edge, height: size.height)
@@ -87,14 +80,7 @@ struct DockContainerView: View {
                         delegate: DockDropDelegate(target: .viewport, size: viewportSize, layout: layout, highlightedArea: $viewportDropArea)
                     )
                 if showsBottom {
-                    EditorSplitDivider(
-                        orientation: .horizontal,
-                        onDragBegan: onResizeBegan,
-                        onDrag: { delta in
-                            layout.resize(.bottom, delta: -delta, currentLength: bottomHeight, maximum: DockLayoutGeometry.maximumLength(for: .bottom, in: size))
-                        },
-                        onDragEnded: endResize
-                    )
+                    areaDivider(for: .bottom, currentLength: bottomHeight, maximum: DockLayoutGeometry.maximumLength(for: .bottom, in: size))
                     DockGroupView(area: .bottom, size: CGSize(width: centerWidth, height: bottomHeight), layout: layout, registry: registry)
                         .frame(width: centerWidth, height: bottomHeight)
                 } else if viewportOnly == false {
@@ -104,14 +90,7 @@ struct DockContainerView: View {
             }
             .frame(width: centerWidth, height: size.height)
             if showsRight {
-                EditorSplitDivider(
-                    orientation: .vertical,
-                    onDragBegan: onResizeBegan,
-                    onDrag: { delta in
-                        layout.resize(.right, delta: -delta, currentLength: widths.right, maximum: DockLayoutGeometry.maximumLength(for: .right, in: size, otherSide: widths.left))
-                    },
-                    onDragEnded: endResize
-                )
+                areaDivider(for: .right, currentLength: widths.right, maximum: DockLayoutGeometry.maximumLength(for: .right, in: size, otherSide: widths.left))
                 DockGroupView(area: .right, size: CGSize(width: widths.right, height: size.height), layout: layout, registry: registry)
                     .frame(width: widths.right, height: size.height)
             } else if viewportOnly == false {
@@ -119,10 +98,32 @@ struct DockContainerView: View {
                     .frame(width: edge, height: size.height)
             }
         }
+        .overlay {
+            DockResizePreviewLine(rect: resizePreview.map {
+                DockLayoutGeometry.resizePreviewRect(for: $0.area, length: $0.length, leftSpace: leftSpace, rightSpace: rightSpace, in: size)
+            })
+        }
     }
 
-    private func endResize() {
-        layout.resizeEnded()
-        onResizeEnded()
+    /// The divider between an area and the viewport. While it drags, the area's
+    /// length follows the pointer as a line only; the layout takes it when the
+    /// mouse goes up. The left area grows with the pointer's movement, the right
+    /// and bottom ones against it.
+    private func areaDivider(for area: DockArea, currentLength: CGFloat, maximum: CGFloat) -> some View {
+        let direction: CGFloat = area == .left ? 1 : -1
+        return EditorSplitDivider(
+            orientation: area.isSide ? .vertical : .horizontal,
+            onDragBegan: {
+                resizePreview = DockResizePreview(area: area, length: currentLength)
+            },
+            onDragChanged: { movement in
+                resizePreview = DockResizePreview(area: area, length: layout.clampedLength(for: area, proposed: currentLength + direction * movement, maximum: maximum))
+            },
+            onDragEnded: { movement in
+                resizePreview = nil
+                layout.resize(area, delta: direction * movement, currentLength: currentLength, maximum: maximum)
+                layout.resizeEnded()
+            }
+        )
     }
 }

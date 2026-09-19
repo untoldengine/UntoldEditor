@@ -123,9 +123,7 @@ public struct EditorView: View {
                 DockContainerView(
                     layout: dockLayout,
                     registry: dockRegistry,
-                    viewportOnly: experienceMode == .explore,
-                    onResizeBegan: beginViewportResizeHold,
-                    onResizeEnded: endViewportResizeHold
+                    viewportOnly: experienceMode == .explore
                 )
                 editorStatusBar
             }

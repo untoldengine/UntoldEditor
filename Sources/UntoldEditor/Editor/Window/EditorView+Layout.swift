@@ -19,7 +19,8 @@ extension EditorView {
     /// Pause the Metal render loop for the duration of a panel show/hide
     /// change so the viewport doesn't compete with the layout change (which
     /// caused stutter). Called when the docking layout changes, so it covers
-    /// every trigger: tab strips, the menus (⌘1/2/3) and Focus Viewport (⌘F).
+    /// every trigger: tab strips, the menus (⌘1/2/3), Focus Viewport (⌘F) and
+    /// a divider drag, which applies when the mouse goes up.
     /// The viewport freezes on a screen-sized frame trimmed to the changing
     /// size (see EditorViewportResizePolicy), then resumes.
     func pauseRenderForPanelAnimation() {
@@ -32,17 +33,5 @@ extension EditorView {
                 EditorViewportResizePolicy.endResizeHold(of: view)
             }
         }
-    }
-
-    /// The render loop holds while a docking divider drags, as it does during
-    /// a window resize: the frozen frame is trimmed, not stretched.
-    func beginViewportResizeHold() {
-        guard let view = renderer?.metalView else { return }
-        EditorViewportResizePolicy.beginResizeHold(of: view)
-    }
-
-    func endViewportResizeHold() {
-        guard let view = renderer?.metalView else { return }
-        EditorViewportResizePolicy.endResizeHold(of: view)
     }
 }

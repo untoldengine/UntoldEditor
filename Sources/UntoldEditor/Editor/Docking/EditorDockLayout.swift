@@ -169,13 +169,20 @@ final class EditorDockLayout: ObservableObject {
 
     // MARK: - Resizing
 
-    /// Sets an area's length from a divider drag: the length it is laid out at
-    /// plus the drag, kept between the area's minimum and the room the viewport
-    /// leaves. The layout persists when the drag ends.
-    func resize(_ area: DockArea, delta: CGFloat, currentLength: CGFloat, maximum: CGFloat) {
+    /// The length an area may take for what a drag asks: no less than the
+    /// minimum of its tabs, no more than `maximum` (the room that leaves the
+    /// viewport its minimum), the minimum winning when the two conflict. What a
+    /// drag shows before the mouse goes up, and what `resize` then applies.
+    func clampedLength(for area: DockArea, proposed: CGFloat, maximum: CGFloat) -> CGFloat {
         let minimum = DockLayoutGeometry.minimumLength(of: state[area].tabs, in: area)
-        let upper = max(minimum, maximum)
-        state[area].length = min(max(currentLength + delta, minimum), upper)
+        return min(max(proposed, minimum), max(minimum, maximum))
+    }
+
+    /// Sets an area's length from a divider drag: the length it is laid out at
+    /// plus the drag, clamped as `clampedLength` does. The layout persists when
+    /// the drag ends.
+    func resize(_ area: DockArea, delta: CGFloat, currentLength: CGFloat, maximum: CGFloat) {
+        state[area].length = clampedLength(for: area, proposed: currentLength + delta, maximum: maximum)
     }
 
     func resizeEnded() {

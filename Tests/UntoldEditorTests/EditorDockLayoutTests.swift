@@ -167,6 +167,15 @@ final class EditorDockLayoutTests: XCTestCase {
         XCTAssertEqual(layout.state.bottom.length, tallest + DockLayoutGeometry.tabStripHeight)
     }
 
+    func test_clampedLength_showsWhatResizeWouldApply_withoutChangingTheLayout() {
+        XCTAssertEqual(layout.clampedLength(for: .left, proposed: 290, maximum: 800), 290)
+        XCTAssertEqual(layout.clampedLength(for: .left, proposed: -250, maximum: 800), PanelID.hierarchy.minimumSize.width)
+        XCTAssertEqual(layout.clampedLength(for: .left, proposed: 5250, maximum: 800), 800)
+        // The minimum wins over a maximum under it, so a small window never squeezes the tabs.
+        XCTAssertEqual(layout.clampedLength(for: .left, proposed: 100, maximum: 50), PanelID.hierarchy.minimumSize.width)
+        XCTAssertEqual(layout.state.left.length, DockArea.left.defaultLength)
+    }
+
     // MARK: - Focus and reset
 
     func test_focusViewport_roundTrips() {

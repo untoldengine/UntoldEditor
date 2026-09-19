@@ -52,6 +52,12 @@ final class EditorControlsTests: XCTestCase {
         XCTAssertEqual(EditorSplitDivider.translation(of: drag, along: .horizontal), -3)
     }
 
+    func test_splitDividerHandle_reportsWindowMovementWithYDown() {
+        // Window coordinates grow upwards: a pointer that went right and down.
+        let translation = EditorSplitDividerHandleView.translation(from: CGPoint(x: 10, y: 100), to: CGPoint(x: 22, y: 97))
+        XCTAssertEqual(translation, CGSize(width: 12, height: 3))
+    }
+
     // MARK: - EditorType
 
     func test_typeScale_definesTheSpecSizes() {
