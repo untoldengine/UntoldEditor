@@ -96,6 +96,26 @@ enum DockLayoutGeometry {
         return nil
     }
 
+    /// Where a tab dragged to `point` would dock: over an area, or the strip of
+    /// a hidden one, that area; over the viewport, the area of the edge under
+    /// the pointer; elsewhere, nowhere.
+    static func dragTarget(at point: CGPoint, frames: DockFrames) -> DockDragTarget? {
+        if frames.viewport.contains(point) {
+            let local = CGPoint(x: point.x - frames.viewport.minX, y: point.y - frames.viewport.minY)
+            return dropArea(at: local, in: frames.viewport.size).map { .viewportEdge($0) }
+        }
+        if frames.left.contains(point) {
+            return .area(.left)
+        }
+        if frames.right.contains(point) {
+            return .area(.right)
+        }
+        if frames.bottom.contains(point) {
+            return .area(.bottom)
+        }
+        return nil
+    }
+
     /// The strip of the viewport that lights up for an area while a tab drags over it.
     static func viewportDropZoneRect(for area: DockArea, in size: CGSize) -> CGRect {
         switch area {

@@ -10,9 +10,10 @@
 //
 import SwiftUI
 
-/// One tab of an area's strip. A click brings the panel to front, a drag carries
-/// it to another area, the context menu moves it to an area or closes it, and a
-/// close button appears on hover.
+/// One tab of an area's strip. A click brings the panel to front, a drag by the
+/// pointer carries it to another area (no system drag, so the pointer keeps
+/// its shape), the context menu moves it to an area or closes it, and a close
+/// button appears on hover.
 struct DockTab: View {
     let panel: PanelID
     let isSelected: Bool
@@ -54,10 +55,17 @@ struct DockTab: View {
         .onHover { hovering in
             isHovering = hovering
         }
-        .onDrag {
-            layout.beginDrag(of: panel)
-            return DockDropDelegate.itemProvider(for: panel)
-        }
+        .gesture(
+            DragGesture(minimumDistance: 4, coordinateSpace: .named(DockContainerView.coordinateSpace))
+                .onChanged { drag in
+                    layout.tabDragMoved(panel, to: drag.location)
+                    NSCursor.closedHand.set()
+                }
+                .onEnded { _ in
+                    layout.tabDragEnded()
+                    NSCursor.arrow.set()
+                }
+        )
         .contextMenu {
             ForEach(DockArea.allCases.filter { $0 != layout.area(of: panel) }) { area in
                 Button("Move to \(area.title)") {

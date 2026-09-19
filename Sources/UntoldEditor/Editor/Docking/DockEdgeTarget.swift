@@ -16,7 +16,9 @@ struct DockEdgeTarget: View {
     let area: DockArea
     @ObservedObject var layout: EditorDockLayout
 
-    @State private var isDropTarget = false
+    private var isDropTarget: Bool {
+        layout.tabDragTarget == .area(area)
+    }
 
     var body: some View {
         Rectangle()
@@ -37,18 +39,6 @@ struct DockEdgeTarget: View {
                 layout.toggleArea(area)
             }
             .help("Drop a panel here to dock it in the \(area.title.lowercased()), or click to show the area")
-            .onDrop(
-                of: [DockDropDelegate.dragType],
-                delegate: DockDropDelegate(
-                    target: .area(area),
-                    size: .zero,
-                    layout: layout,
-                    highlightedArea: Binding(
-                        get: { isDropTarget ? area : nil },
-                        set: { isDropTarget = $0 != nil }
-                    )
-                )
-            )
     }
 
     /// Points into the window, where the area would open.
