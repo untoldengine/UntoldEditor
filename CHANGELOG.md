@@ -1,4 +1,22 @@
 # Changelog
+## v0.20.0 - 2026-09-20
+### 🐞 Fixes
+- [Patch] Open a project folder that has a project.yml but no generated Xcode project (3de9f54…)
+- [Patch] Cover entity templates in the Component SDK packaging check (2ff8b46…)
+- [Patch] Pick handles by projecting them to the screen, with either mouse button (ea5aab0…)
+- [Patch] Name a plugin package's editor-side library after its folder (eb601d9…)
+- [Patch] Label the cook sheet's binary sizes GiB and MiB (7e4743f…)
+### 🚀 Features
+- [Feature] Code Components: compile, load and reload project code in the editor (ea127f4…)
+- [Feature] Wire Code Components into the editor, and open a project at launch (3b37da7…)
+- [Feature] Package the Component SDK in the app bundle, and verify it (cb92463…)
+- [Feature] New projects get code components, pinned to the editor's engine (980bb28…)
+- [Feature] One Add Component menu, and entity kinds from loaded code (2b824ff…)
+- [Feature] Keep a kind's own components out of Add Component, and locked to their entity (4e080fe…)
+- [Feature] Entity plugins in the editor: own properties, geometry and editor representation (1f926ea…)
+- [Feature] Name the plugins folder and plugin packages apart in the editor (dfe6add…)
+- [Feature] Move a kind of entity's control points with the gizmo (cdfe8ce…)
+- [Feature] Gaussian capture testing and render-fidelity switches in the editor (1e85e08…)
 ## v0.19.1 - 2026-09-16
 ### 🐞 Fixes
 - [Patch] Only route canvas input to the 3D view when it is frontmost (53af52e…)
