@@ -246,7 +246,7 @@ let gaussianCookStoreBytesPerSplat = 56
 /// streams the source in windows and cooks it into one compact store, so the store is what
 /// the cook holds — about 100 bytes per splat at degree 3 — plus the windows in flight, the
 /// ranking and the chunk encode, about half as much again: a 10 M-splat degree-3 capture
-/// (a 2.25 GiB `.ply`) peaks at about 1.4 GB. The budget compacts the store in place, so the
+/// (a 2.25 GiB `.ply`) peaks at about 1.4 GiB. The budget compacts the store in place, so the
 /// source count is what counts, not the kept count. A `.spz` is decoded whole before the cook
 /// (its reader is not streamed), so the decoded asset sits beside the store through the read;
 /// the estimate is a floor there.
@@ -267,13 +267,14 @@ func gaussianCookMemoryCaption(splatCount: Int, shDegree: Int, physicalMemory: U
     return text + "."
 }
 
-/// Bytes as a short gibibyte figure for the captions ("9.4 GB", "512 MB").
+/// Bytes as a short gibibyte figure for the captions ("9.4 GiB", "512 MiB"), in the units
+/// `gaussianCookFormatBytes` and the engine's profile lines use.
 func gaussianCookFormatGiB(_ bytes: Int) -> String {
     let value = Double(bytes)
     if bytes >= 1 << 30 {
-        return String(format: "%.1f GB", value / Double(1 << 30))
+        return String(format: "%.1f GiB", value / Double(1 << 30))
     }
-    return String(format: "%.0f MB", value / Double(1 << 20))
+    return String(format: "%.0f MiB", value / Double(1 << 20))
 }
 
 /// Caption under the budget row: what the cooked file costs at runtime on this Mac — the
