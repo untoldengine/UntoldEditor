@@ -14,7 +14,8 @@ import SwiftUI
 /// the left (drawn by macOS), the project chip, Undo / Redo / History, the play
 /// controls in the middle, and the build target on the right. The search field
 /// of the mockup joins it with the command palette (stage 1.9). Global chrome:
-/// it shows in every experience mode.
+/// it shows in every experience mode. Dragging its empty space moves the
+/// window, as the title bar it replaces did.
 struct EditorToolbarView: View {
     /// Matches the unified title bar the window uses, so the traffic lights sit
     /// centred in the row.
@@ -58,7 +59,10 @@ struct EditorToolbarView: View {
                 onStep: onStep
             )
         }
-        .background(Color.editorChromeBackground)
+        .background {
+            WindowDragRegion()
+                .background(Color.editorChromeBackground)
+        }
         .overlay(alignment: .bottom) {
             Color.editorHairline
                 .frame(height: 1)

@@ -85,7 +85,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         titleBar.showsBaselineSeparator = false
         window.toolbar = titleBar
         window.toolbarStyle = .unified
-        window.isMovableByWindowBackground = true
+        // The toolbar row drags the window through WindowDragRegion; nothing else
+        // does, so a drag in the viewport or in a panel never moves the window.
+        window.isMovableByWindowBackground = false
         window.center()
 
         let hostingView = NSHostingView(rootView: EditorView())
