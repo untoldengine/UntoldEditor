@@ -173,7 +173,10 @@ We welcome PRs!
 3. Commit your changes  
 4. Push the branch and open a Pull Request  
 
-See **CONTRIBUTING.md** and **CODE_OF_CONDUCT.md** (coming soon).
+All contributions are expected to follow our
+[Engineering Principles](ENGINEERING_PRINCIPLES.md).
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** and **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**.
 
 ---
 
