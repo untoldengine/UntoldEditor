@@ -42,6 +42,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var panelMenuItems: [PanelID: [NSMenuItem]] = [:]
     private var dockMenuItem: NSMenuItem?
     private var navigationStyleItems: [CameraNavigationStyle: NSMenuItem] = [:]
+    private var textureDebugItems: [TextureDebugOption: NSMenuItem] = [:]
     private var splatDebugItems: [SplatDebugOption: NSMenuItem] = [:]
     private var splatBlendCapItems: [SplatBlendCapOption: NSMenuItem] = [:]
     private var splatWorkingSetItems: [EditorSplatWorkingSet: NSMenuItem] = [:]
@@ -187,6 +188,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         navigationItem.submenu = navigationMenu
         viewMenu.addItem(navigationItem)
 
+        // Engine render-target visualizations (radio-style checkmarks). Lit restores the
+        // regular rendered scene; the remaining choices expose G-buffer and post-process data.
+        let textureDebugItem = NSMenuItem(title: "Texture Debug", action: nil, keyEquivalent: "")
+        let textureDebugMenu = NSMenu(title: "Texture Debug")
+        textureDebugMenu.autoenablesItems = false
+        var textureDebugGroup: TextureDebugOption.Group?
+        for option in TextureDebugOption.allCases {
+            if let group = textureDebugGroup, group != option.group {
+                textureDebugMenu.addItem(.separator())
+            }
+            textureDebugGroup = option.group
+            let item = addItem(to: textureDebugMenu, title: option.title, action: #selector(menuSelectTextureDebug(_:)), key: "")
+            item.representedObject = option.rawValue
+            item.toolTip = option.summary
+            textureDebugItems[option] = item
+        }
+        textureDebugItem.submenu = textureDebugMenu
+        viewMenu.addItem(textureDebugItem)
+
         // Gaussian splat debug switches (engine GaussianDebugOptions): each turns off one
         // stage of the splat pipeline so a rendering artefact can be bisected live.
         let splatDebugItem = NSMenuItem(title: "Splat Debug", action: nil, keyEquivalent: "")
@@ -286,6 +306,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for (option, item) in splatDebugItems {
             item.state = option.isEnabled ? .on : .off
         }
+        let textureDebug = TextureDebugOption.current
+        for (option, item) in textureDebugItems {
+            item.state = option == textureDebug ? .on : .off
+        }
         let workingSet = EditorGaussianRuntimeSettings.shared.workingSet
         for (choice, item) in splatWorkingSetItems {
             item.state = choice == workingSet ? .on : .off
@@ -382,6 +406,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         EditorNavigationSettings.shared.style = style
     }
 
+    @objc private func menuSelectTextureDebug(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let option = TextureDebugOption(rawValue: raw)
+        else {
+            return
+        }
+        TextureDebugOption.current = option
+    }
+
     @objc private func menuSelectSplatWorkingSet(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let choice = EditorSplatWorkingSet(rawValue: raw) else {
             return
@@ -443,6 +476,118 @@ enum UntoldEditorApp {
         let delegate = AppDelegate()
         app.delegate = delegate
         app.run()
+    }
+}
+
+/// The engine's render-target visualizations, presented as View > Texture Debug choices.
+/// This editor-facing type supplies stable menu labels while keeping the engine enum as the
+/// source of truth for rendering behavior.
+enum TextureDebugOption: String, CaseIterable {
+    case lit
+    case albedo
+    case normal
+    case position
+    case depth
+    case roughness
+    case metallic
+    case height
+    case pomOffset
+    case ssaoBlurred
+    case fxaaEdges
+    case smaaEdges
+    case smaaBlend
+    case smaaDifference
+    case occlusion
+    case preTonemapHDRLuminance
+    case postTonemapOutput
+
+    enum Group: Int {
+        case output
+        case geometry
+        case material
+        case postProcess
+        case diagnostics
+    }
+
+    var group: Group {
+        switch self {
+        case .lit: .output
+        case .albedo, .normal, .position, .depth: .geometry
+        case .roughness, .metallic, .height, .pomOffset: .material
+        case .ssaoBlurred, .fxaaEdges, .smaaEdges, .smaaBlend, .smaaDifference: .postProcess
+        case .occlusion, .preTonemapHDRLuminance, .postTonemapOutput: .diagnostics
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .lit: "Lit"
+        case .albedo: "Albedo"
+        case .normal: "Normal"
+        case .position: "Position"
+        case .depth: "Depth"
+        case .roughness: "Roughness"
+        case .metallic: "Metallic"
+        case .height: "Height"
+        case .pomOffset: "POM Offset"
+        case .ssaoBlurred: "SSAO (Blurred)"
+        case .fxaaEdges: "FXAA Edges"
+        case .smaaEdges: "SMAA Edges"
+        case .smaaBlend: "SMAA Blend"
+        case .smaaDifference: "SMAA Difference"
+        case .occlusion: "Occlusion"
+        case .preTonemapHDRLuminance: "Pre-Tonemap HDR Luminance"
+        case .postTonemapOutput: "Post-Tonemap Output"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .lit: "Show the regular lit scene."
+        case .albedo: "Show the G-buffer albedo texture."
+        case .normal: "Show the G-buffer normal texture."
+        case .position: "Show world-space positions as repeating RGB bands."
+        case .depth: "Show linearized scene depth."
+        case .roughness: "Show the material roughness channel."
+        case .metallic: "Show the material metallic channel."
+        case .height: "Show the raw height-map sample used by parallax occlusion mapping."
+        case .pomOffset: "Show parallax UV displacement magnitude as a heatmap."
+        case .ssaoBlurred: "Show the blurred screen-space ambient-occlusion texture."
+        case .fxaaEdges: "Show edges detected by FXAA."
+        case .smaaEdges: "Show edges detected by SMAA."
+        case .smaaBlend: "Show the SMAA blend-weight texture."
+        case .smaaDifference: "Show the difference introduced by SMAA."
+        case .occlusion: "Show the lit scene with HZB-occluded bounds highlighted."
+        case .preTonemapHDRLuminance: "Show scene luminance before tone mapping."
+        case .postTonemapOutput: "Show the color pipeline's post-tone-map output."
+        }
+    }
+
+    var engineMode: RenderDebugViewMode {
+        switch self {
+        case .lit: .lit
+        case .albedo: .albedo
+        case .normal: .normal
+        case .position: .position
+        case .depth: .depth
+        case .roughness: .roughness
+        case .metallic: .metallic
+        case .height: .heightDebug
+        case .pomOffset: .pomOffsetDebug
+        case .ssaoBlurred: .ssaoBlurred
+        case .fxaaEdges: .fxaaEdgeDebug
+        case .smaaEdges: .smaaEdges
+        case .smaaBlend: .smaaBlend
+        case .smaaDifference: .smaaDifference
+        case .occlusion: .occlusionDebug
+        case .preTonemapHDRLuminance: .preTonemapHDRLuminance
+        case .postTonemapOutput: .postTonemapOutput
+        }
+    }
+
+    static var current: TextureDebugOption {
+        get { allCases.first(where: { $0.engineMode == renderDebugViewMode }) ?? .lit }
+        set { setRendering(.debugView(newValue.engineMode)) }
     }
 }
 
