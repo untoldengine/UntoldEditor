@@ -172,7 +172,7 @@ class SelectionManager: ObservableObject {
             return
         }
 
-        let hasRenderCapability = entityOrChildrenHaveRenderComponent(entityId: transformEntityId)
+        let hasRenderCapability = entityOrChildrenHaveRenderableRepresentation(entityId: transformEntityId)
 
         if hasRenderCapability, hasComponent(entityId: transformEntityId, componentType: LocalTransformComponent.self) {
             activeEntity = transformEntityId
@@ -207,7 +207,7 @@ class SelectionManager: ObservableObject {
         // Check if entity or any of its children have a render component. An entity written in
         // code that shows itself only through its editor representation (a spawn point's flag)
         // counts too: it is visible, so it can be moved.
-        let hasRenderCapability = entityOrChildrenHaveRenderComponent(entityId: entityId)
+        let hasRenderCapability = entityOrChildrenHaveRenderableRepresentation(entityId: entityId)
             || EditorRepresentationRenderer.drawing(for: entityId) != nil
 
         if hasRenderCapability, hasComponent(entityId: entityId, componentType: LocalTransformComponent.self) {
@@ -222,17 +222,19 @@ class SelectionManager: ObservableObject {
         }
     }
 
-    // Helper: Check if entity or any children have RenderComponent
-    private func entityOrChildrenHaveRenderComponent(entityId: EntityID) -> Bool {
+    // Helper: Check if the entity or any child has something drawn in the viewport.
+    private func entityOrChildrenHaveRenderableRepresentation(entityId: EntityID) -> Bool {
         // Check entity itself
-        if hasComponent(entityId: entityId, componentType: RenderComponent.self) {
+        if hasComponent(entityId: entityId, componentType: RenderComponent.self)
+            || hasComponent(entityId: entityId, componentType: GaussianComponent.self)
+        {
             return true
         }
 
         // Check children
         let children = getEntityChildren(parentId: entityId)
         for childId in children {
-            if entityOrChildrenHaveRenderComponent(entityId: childId) {
+            if entityOrChildrenHaveRenderableRepresentation(entityId: childId) {
                 return true
             }
         }
@@ -341,7 +343,9 @@ class SelectionManager: ObservableObject {
             return
         }
 
-        if hasComponent(entityId: entityId, componentType: RenderComponent.self) {
+        if hasComponent(entityId: entityId, componentType: RenderComponent.self)
+            || hasComponent(entityId: entityId, componentType: GaussianComponent.self)
+        {
             for corner in boundingBoxCorners(min: localTransform.boundingBox.min, max: localTransform.boundingBox.max) {
                 let transformed = simd_mul(localToRoot, simd_float4(corner, 1.0))
                 let point = simd_float3(transformed.x, transformed.y, transformed.z)

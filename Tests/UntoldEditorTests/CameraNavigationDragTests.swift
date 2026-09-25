@@ -259,8 +259,14 @@ final class CameraNavigationDragTests: XCTestCase {
         translateTo(entityId: splat, position: simd_float3(0, 0.5, 0))
 
         let forward = simd_normalize(simd_float3(0, -2, -3))
-        let depth = InputSystem.gaussianBoundsDepth(rayOrigin: eye, rayDirection: forward)
-        XCTAssertEqual(depth ?? -1, 3.0, accuracy: 0.01, "ray enters the box on its front face")
+        let hit = InputSystem.gaussianBoundsHit(rayOrigin: eye, rayDirection: forward)
+        XCTAssertEqual(hit?.entityId, splat)
+        XCTAssertEqual(hit?.distance ?? -1, 3.0, accuracy: 0.01, "ray enters the box on its front face")
+        XCTAssertEqual(
+            InputSystem.gaussianBoundsDepth(rayOrigin: eye, rayDirection: forward) ?? -1,
+            hit?.distance ?? -2,
+            accuracy: 0.0001
+        )
 
         InputSystem.shared.reanchorSceneCameraTarget()
 

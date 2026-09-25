@@ -312,8 +312,8 @@
             ) {
                 candidates.append(hit.distance)
             }
-            if let gaussian = InputSystem.gaussianBoundsDepth(rayOrigin: eye, rayDirection: forward) {
-                candidates.append(gaussian)
+            if let gaussian = InputSystem.gaussianBoundsHit(rayOrigin: eye, rayDirection: forward) {
+                candidates.append(gaussian.distance)
             }
             return candidates.min()
         }
@@ -322,13 +322,30 @@
         /// bounding box, or to its centre's depth when the ray starts inside the box
         /// (zoomed right into a capture). `nil` when the ray meets none.
         static func gaussianBoundsDepth(rayOrigin: simd_float3, rayDirection: simd_float3) -> Float? {
+            gaussianBoundsHit(rayOrigin: rayOrigin, rayDirection: rayDirection)?.distance
+        }
+
+        /// The nearest meshless Gaussian entity intersected by the ray. Gaussian assets keep
+        /// their rendered extent in `LocalTransformComponent.boundingBox`, so they can be
+        /// selected without manufacturing a proxy mesh solely for picking.
+        static func gaussianBoundsHit(
+            rayOrigin: simd_float3,
+            rayDirection: simd_float3
+        ) -> (entityId: EntityID, distance: Float)? {
             let length = simd_length(rayDirection)
             guard length > 0.0001, length.isFinite else { return nil }
             let direction = rayDirection / length
 
-            var nearest: Float?
+            var nearest: (entityId: EntityID, distance: Float)?
             let gaussianId = getComponentId(for: GaussianComponent.self)
             for entityId in queryEntitiesWithComponentIds([gaussianId], in: scene) {
+                // A captured twin with a real mesh is already handled more precisely by
+                // ScenePickingSystem. Only splat-only entities need the bounds fallback.
+                if let render = scene.get(component: RenderComponent.self, for: entityId),
+                   render.mesh.isEmpty == false
+                {
+                    continue
+                }
                 guard let local = scene.get(component: LocalTransformComponent.self, for: entityId),
                       let world = scene.get(component: WorldTransformComponent.self, for: entityId)
                 else { continue }
@@ -353,7 +370,9 @@
                 }
                 let depth = entry >= 0 ? entry : simd_dot((boxMin + boxMax) / 2 - rayOrigin, direction)
                 guard depth > 0, depth.isFinite else { continue }
-                nearest = Swift.min(nearest ?? depth, depth)
+                if depth < (nearest?.distance ?? .greatestFiniteMagnitude) {
+                    nearest = (entityId, depth)
+                }
             }
             return nearest
         }
@@ -1038,15 +1057,30 @@
                 return (.invalid, false)
             }
 
-            guard let hit = pickEntity(
+            let sceneHit = pickEntity(
                 rayOrigin: rayContext.rayOrigin,
                 rayDirection: rayContext.rayDirection,
                 options: ScenePickOptions(isGizmoActive: gizmoActive, backend: .octreeGPUPreferred)
-            ) else {
-                return (.invalid, false)
+            )
+            // Match ScenePickingSystem's gizmo-only rule. Shift temporarily allows scene
+            // objects through while a gizmo is active.
+            let gaussianHit = (!gizmoActive || keyState.shiftPressed)
+                ? InputSystem.gaussianBoundsHit(
+                    rayOrigin: rayContext.rayOrigin,
+                    rayDirection: rayContext.rayDirection
+                )
+                : nil
+
+            if let gaussianHit,
+               gaussianHit.distance < (sceneHit?.distance ?? .greatestFiniteMagnitude)
+            {
+                return (gaussianHit.entityId, true)
             }
 
-            return (hit.entityId, true)
+            if let sceneHit {
+                return (sceneHit.entityId, true)
+            }
+            return (.invalid, false)
         }
     }
 #endif
