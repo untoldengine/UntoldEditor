@@ -908,7 +908,7 @@ enum SplatDebugOption: String, CaseIterable {
     // Per-chunk coarse levels; the level mode itself is `SplatLevelModeOption`.
     case levelCrossFade
     case levelTint
-    // Per-chunk wireframe bounds, colored by the level currently drawn.
+    /// Per-chunk wireframe bounds, colored by the level currently drawn.
     case chunkBounds
     // The working-set budget and the chunk stage it drives.
     case chunkCull
