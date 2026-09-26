@@ -43,6 +43,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var dockMenuItem: NSMenuItem?
     private var navigationStyleItems: [CameraNavigationStyle: NSMenuItem] = [:]
     private var textureDebugItems: [TextureDebugOption: NSMenuItem] = [:]
+    private var spatialDebugItems: [SpatialDebugOption: NSMenuItem] = [:]
+    private var spatialDebugLeafColorModeItems: [SpatialDebugLeafColorModeOption: NSMenuItem] = [:]
+    private var spatialDebugBatchCellColorModeItems: [SpatialDebugBatchCellColorModeOption: NSMenuItem] = [:]
     private var splatDebugItems: [SplatDebugOption: NSMenuItem] = [:]
     private var splatBlendCapItems: [SplatBlendCapOption: NSMenuItem] = [:]
     private var splatWorkingSetItems: [EditorSplatWorkingSet: NSMenuItem] = [:]
@@ -207,6 +210,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         textureDebugItem.submenu = textureDebugMenu
         viewMenu.addItem(textureDebugItem)
 
+        // Scene spatial-debug visualizations (SpatialDebugVisualization): LOD/streaming-tier
+        // tinting, octree leaf bounds, streamed tile bounds and static-batch cell bounds.
+        let spatialDebugItem = NSMenuItem(title: "Spatial Debug", action: nil, keyEquivalent: "")
+        let spatialDebugMenu = NSMenu(title: "Spatial Debug")
+        spatialDebugMenu.autoenablesItems = false
+        var spatialDebugGroup: SpatialDebugOption.Group?
+        for option in SpatialDebugOption.allCases {
+            if let group = spatialDebugGroup, group != option.group {
+                spatialDebugMenu.addItem(.separator())
+            }
+            if option.group == .octree, spatialDebugGroup != .octree {
+                // Leaf color mode leads the octree group (radio items, synced in
+                // menuNeedsUpdate); it also governs Tile Bounds' coloring below.
+                let leafColorModeItem = NSMenuItem(title: "Leaf Color Mode", action: nil, keyEquivalent: "")
+                let leafColorModeMenu = NSMenu(title: "Leaf Color Mode")
+                leafColorModeMenu.autoenablesItems = false
+                for mode in SpatialDebugLeafColorModeOption.allCases {
+                    let modeItem = addItem(to: leafColorModeMenu, title: mode.title, action: #selector(menuSelectSpatialDebugLeafColorMode(_:)), key: "")
+                    modeItem.representedObject = mode.rawValue
+                    modeItem.toolTip = mode.summary
+                    spatialDebugLeafColorModeItems[mode] = modeItem
+                }
+                leafColorModeItem.submenu = leafColorModeMenu
+                spatialDebugMenu.addItem(leafColorModeItem)
+            }
+            if option.group == .batching, spatialDebugGroup != .batching {
+                // Cell color mode leads the batching group (radio items, synced in
+                // menuNeedsUpdate).
+                let cellColorModeItem = NSMenuItem(title: "Cell Color Mode", action: nil, keyEquivalent: "")
+                let cellColorModeMenu = NSMenu(title: "Cell Color Mode")
+                cellColorModeMenu.autoenablesItems = false
+                for mode in SpatialDebugBatchCellColorModeOption.allCases {
+                    let modeItem = addItem(to: cellColorModeMenu, title: mode.title, action: #selector(menuSelectSpatialDebugBatchCellColorMode(_:)), key: "")
+                    modeItem.representedObject = mode.rawValue
+                    modeItem.toolTip = mode.summary
+                    spatialDebugBatchCellColorModeItems[mode] = modeItem
+                }
+                cellColorModeItem.submenu = cellColorModeMenu
+                spatialDebugMenu.addItem(cellColorModeItem)
+            }
+            spatialDebugGroup = option.group
+            let item = addItem(to: spatialDebugMenu, title: option.title, action: #selector(menuToggleSpatialDebug(_:)), key: "")
+            item.representedObject = option.rawValue
+            item.toolTip = option.summary
+            spatialDebugItems[option] = item
+        }
+        spatialDebugItem.submenu = spatialDebugMenu
+        viewMenu.addItem(spatialDebugItem)
+
         // Gaussian splat debug switches (engine GaussianDebugOptions): each turns off one
         // stage of the splat pipeline so a rendering artefact can be bisected live.
         let splatDebugItem = NSMenuItem(title: "Splat Debug", action: nil, keyEquivalent: "")
@@ -309,6 +361,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let textureDebug = TextureDebugOption.current
         for (option, item) in textureDebugItems {
             item.state = option == textureDebug ? .on : .off
+        }
+        for (option, item) in spatialDebugItems {
+            item.state = option.isEnabled ? .on : .off
+        }
+        let leafColorMode = SpatialDebugLeafColorModeOption.current
+        for (mode, item) in spatialDebugLeafColorModeItems {
+            item.state = mode == leafColorMode ? .on : .off
+        }
+        let cellColorMode = SpatialDebugBatchCellColorModeOption.current
+        for (mode, item) in spatialDebugBatchCellColorModeItems {
+            item.state = mode == cellColorMode ? .on : .off
         }
         let workingSet = EditorGaussianRuntimeSettings.shared.workingSet
         for (choice, item) in splatWorkingSetItems {
@@ -413,6 +476,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         TextureDebugOption.current = option
+    }
+
+    @objc private func menuToggleSpatialDebug(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let option = SpatialDebugOption(rawValue: raw) else {
+            return
+        }
+        option.isEnabled.toggle()
+        sender.state = option.isEnabled ? .on : .off
+    }
+
+    @objc private func menuSelectSpatialDebugLeafColorMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = SpatialDebugLeafColorModeOption(rawValue: raw)
+        else {
+            return
+        }
+        SpatialDebugLeafColorModeOption.current = mode
+    }
+
+    @objc private func menuSelectSpatialDebugBatchCellColorMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = SpatialDebugBatchCellColorModeOption(rawValue: raw)
+        else {
+            return
+        }
+        SpatialDebugBatchCellColorModeOption.current = mode
     }
 
     @objc private func menuSelectSplatWorkingSet(_ sender: NSMenuItem) {
@@ -588,6 +677,217 @@ enum TextureDebugOption: String, CaseIterable {
     static var current: TextureDebugOption {
         get { allCases.first(where: { $0.engineMode == renderDebugViewMode }) ?? .lit }
         set { setRendering(.debugView(newValue.engineMode)) }
+    }
+}
+
+/// The engine's non-render-target scene debug visualizations (`SpatialDebugVisualization`),
+/// as View > Spatial Debug menu items, in menu order; a separator sits between groups. Unlike
+/// the Showcase demo's HUD, there is no "Spatial Debug" master checkbox: that toggle is a
+/// UI-only convenience in `DemoState` (it just forces Tile Bounds off when unchecked) with no
+/// engine state of its own, so each switch here is independent, matching `SplatDebugOption`.
+enum SpatialDebugOption: String, CaseIterable {
+    case lodLevels
+    case textureStreamingTiers
+    case octreeLeafBounds
+    case octreeLeafOccupiedOnly
+    case tileBounds
+    case staticBatchCellBounds
+
+    enum Group: Int, CaseIterable {
+        case coloring
+        case octree
+        case tiles
+        case batching
+    }
+
+    var group: Group {
+        switch self {
+        case .lodLevels, .textureStreamingTiers: .coloring
+        case .octreeLeafBounds, .octreeLeafOccupiedOnly: .octree
+        case .tileBounds: .tiles
+        case .staticBatchCellBounds: .batching
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .lodLevels: "LOD Debug"
+        case .textureStreamingTiers: "Texture Streaming Debug"
+        case .octreeLeafBounds: "Octree Cells"
+        case .octreeLeafOccupiedOnly: "Occupied Only"
+        case .tileBounds: "Tile Bounds"
+        case .staticBatchCellBounds: "Static Batch Cell Bounds"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .lodLevels: "Tints every renderable by its currently active LOD level."
+        case .textureStreamingTiers: "Tints every renderable by its current texture streaming tier: blue full, orange medium (capped), red minimum, yellow in-flight."
+        case .octreeLeafBounds: "Draws the occupied octree's leaf-node bounds."
+        case .octreeLeafOccupiedOnly: "Limits Octree Cells and Tile Bounds to leaves that hold something resident."
+        case .tileBounds: "Draws streamed tile bounds, colored by each tile's load state (unloaded/parsing/parsed/HLOD/failed); follows Octree Cells' Leaf Color Mode and Occupied Only."
+        case .staticBatchCellBounds: "Draws the static-batching grid's cell bounds."
+        }
+    }
+
+    var isEnabled: Bool {
+        get {
+            let debug = SpatialDebugVisualization.shared
+            return switch self {
+            case .lodLevels: debug.colorRenderablesByLOD
+            case .textureStreamingTiers: debug.colorRenderablesByStreamingTier
+            case .octreeLeafBounds: debug.showOctreeLeafBounds
+            case .octreeLeafOccupiedOnly: debug.octreeLeafOccupiedOnly
+            case .tileBounds: debug.showTileBounds
+            case .staticBatchCellBounds: debug.showStaticBatchCellBounds
+            }
+        }
+        nonmutating set {
+            let debug = SpatialDebugVisualization.shared
+            switch self {
+            case .lodLevels:
+                setLODLevelDebug(enabled: newValue)
+            case .textureStreamingTiers:
+                setTextureStreamingTierDebug(enabled: newValue)
+            case .octreeLeafBounds:
+                // Re-supplies the other fields explicitly: the engine's own
+                // `.octreeLeafBounds(.disabled)` convenience resets them to their defaults.
+                setOctreeLeafBoundsDebug(
+                    enabled: newValue,
+                    maxLeafNodeCount: debug.maxLeafNodeCount,
+                    occupiedOnly: debug.octreeLeafOccupiedOnly,
+                    colorMode: debug.octreeLeafColorMode
+                )
+            case .octreeLeafOccupiedOnly:
+                setOctreeLeafBoundsDebug(
+                    enabled: debug.showOctreeLeafBounds,
+                    maxLeafNodeCount: debug.maxLeafNodeCount,
+                    occupiedOnly: newValue,
+                    colorMode: debug.octreeLeafColorMode
+                )
+            case .tileBounds:
+                setTileBoundsDebug(enabled: newValue, maxTileNodeCount: debug.maxTileNodeCount)
+            case .staticBatchCellBounds:
+                setStaticBatchCellBoundsDebug(
+                    enabled: newValue,
+                    maxCellCount: debug.maxStaticBatchCellCount,
+                    colorMode: debug.staticBatchCellColorMode
+                )
+            }
+        }
+    }
+}
+
+/// Color mode for the View > Spatial Debug > Octree Cells > Leaf Color Mode radio items
+/// (`SpatialDebugVisualization.octreeLeafColorMode`). Also governs Tile Bounds' coloring.
+enum SpatialDebugLeafColorModeOption: String, CaseIterable {
+    case plain
+    case residency
+    case culling
+
+    var mode: SpatialDebugLeafColorMode {
+        switch self {
+        case .plain: .plain
+        case .residency: .residency
+        case .culling: .culling
+        }
+    }
+
+    init(mode: SpatialDebugLeafColorMode) {
+        switch mode {
+        case .plain: self = .plain
+        case .residency: self = .residency
+        case .culling: self = .culling
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .plain: "Plain"
+        case .residency: "Residency"
+        case .culling: "Culling"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .plain: "Every leaf draws in a single neutral color."
+        case .residency: "Tints each leaf by what's resident inside it: green loaded, yellow loading, red unloaded, magenta a failed tile parse, orange mixed."
+        case .culling: "Tints each leaf by whether the entities inside it were drawn this frame: green visible, blue culled, gray hidden, orange mixed. Tile Bounds shows a neutral wireframe in this mode; culling is octree-cell specific."
+        }
+    }
+
+    /// The mode in effect.
+    static var current: SpatialDebugLeafColorModeOption {
+        get { SpatialDebugLeafColorModeOption(mode: SpatialDebugVisualization.shared.octreeLeafColorMode) }
+        set {
+            let debug = SpatialDebugVisualization.shared
+            setOctreeLeafBoundsDebug(
+                enabled: debug.showOctreeLeafBounds,
+                maxLeafNodeCount: debug.maxLeafNodeCount,
+                occupiedOnly: debug.octreeLeafOccupiedOnly,
+                colorMode: newValue.mode
+            )
+        }
+    }
+}
+
+/// Color mode for the View > Spatial Debug > Static Batch Cell Bounds > Cell Color Mode radio
+/// items (`SpatialDebugVisualization.staticBatchCellColorMode`).
+enum SpatialDebugBatchCellColorModeOption: String, CaseIterable {
+    case plain
+    case culling
+    case lod
+    case cell
+
+    var mode: SpatialDebugBatchCellColorMode {
+        switch self {
+        case .plain: .plain
+        case .culling: .culling
+        case .lod: .lod
+        case .cell: .cell
+        }
+    }
+
+    init(mode: SpatialDebugBatchCellColorMode) {
+        switch mode {
+        case .plain: self = .plain
+        case .culling: self = .culling
+        case .lod: self = .lod
+        case .cell: self = .cell
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .plain: "Plain"
+        case .culling: "Culling"
+        case .lod: "LOD"
+        case .cell: "Cell"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .plain: "Every cell draws in a single neutral color."
+        case .culling: "Tints each cell by whether its batched entities were drawn this frame: green visible, blue culled, orange mixed."
+        case .lod: "Tints each cell by the LOD level its batch groups draw: red LOD 0, green LOD 1, blue LOD 2, orange mixed."
+        case .cell: "Gives each cell a stable pseudo-random hue so neighboring cells are easy to tell apart."
+        }
+    }
+
+    /// The mode in effect.
+    static var current: SpatialDebugBatchCellColorModeOption {
+        get { SpatialDebugBatchCellColorModeOption(mode: SpatialDebugVisualization.shared.staticBatchCellColorMode) }
+        set {
+            let debug = SpatialDebugVisualization.shared
+            setStaticBatchCellBoundsDebug(
+                enabled: debug.showStaticBatchCellBounds,
+                maxCellCount: debug.maxStaticBatchCellCount,
+                colorMode: newValue.mode
+            )
+        }
     }
 }
 
