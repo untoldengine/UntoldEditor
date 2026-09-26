@@ -908,6 +908,8 @@ enum SplatDebugOption: String, CaseIterable {
     // Per-chunk coarse levels; the level mode itself is `SplatLevelModeOption`.
     case levelCrossFade
     case levelTint
+    /// Per-chunk wireframe bounds, colored by the level currently drawn.
+    case chunkBounds
     // The working-set budget and the chunk stage it drives.
     case chunkCull
     case workingSetBudget
@@ -917,6 +919,7 @@ enum SplatDebugOption: String, CaseIterable {
         case draw
         case paging
         case levels
+        case bounds
         case budget
     }
 
@@ -925,6 +928,7 @@ enum SplatDebugOption: String, CaseIterable {
         case .hzbOcclusionCull, .opaqueDepthTest, .antiAliasSplatPixels, .toneMapSplatPixels, .crispSplatKernel: .draw
         case .paging, .forcePaging, .freezePaging, .residencyTint: .paging
         case .levelCrossFade, .levelTint: .levels
+        case .chunkBounds: .bounds
         case .chunkCull, .workingSetBudget, .screenWeightedQuotas: .budget
         }
     }
@@ -942,6 +946,7 @@ enum SplatDebugOption: String, CaseIterable {
         case .residencyTint: "Tint Splats by Residency"
         case .levelCrossFade: "Disable Splat Level Cross-Fade"
         case .levelTint: "Tint Splats by Level"
+        case .chunkBounds: "Show Splat Chunk Bounds"
         case .chunkCull: "Disable Splat Chunk Cull"
         case .workingSetBudget: "Disable Splat Working-Set Budget"
         case .screenWeightedQuotas: "Disable Splat Screen-Weighted Quotas"
@@ -961,6 +966,7 @@ enum SplatDebugOption: String, CaseIterable {
         case .residencyTint: "Every splat of a paged entity is tinted by its chunk's resident fraction: green whole, yellow deep, red head-only."
         case .levelCrossFade: "A chunk switches between its fine records and a coarse level at once instead of cross-fading over a few frames."
         case .levelTint: "Every splat of an entity with coarse levels is tinted by the level its chunk draws: white fine, yellow level 1, red level 2."
+        case .chunkBounds: "Draws the bounding box of every chunk in a chunked .untoldgs asset, colored by the splat level currently drawn."
         case .chunkCull: "The chunk cull keeps every chunk of a .untoldgs, so the per-chunk pass walks the whole asset: an A/B of the chunk stage's cost."
         case .workingSetBudget: "The working set is sized to the resident splats instead of the budget and every visible chunk draws whole: the pre-budget behaviour, for an A/B of what the budget cuts."
         case .screenWeightedQuotas: "Every visible chunk is granted the same fraction of its splats instead of a quota weighted by its screen area: the pre-weighting rule, for an A/B of what the weighting moves."
@@ -982,6 +988,7 @@ enum SplatDebugOption: String, CaseIterable {
             case .residencyTint: options.residencyDebugTint
             case .levelCrossFade: options.disableLevelCrossFade
             case .levelTint: options.levelDebugTint
+            case .chunkBounds: SpatialDebugVisualization.shared.showGaussianChunkBounds
             case .chunkCull: options.disableChunkCull
             case .workingSetBudget: options.disableWorkingSetBudget
             case .screenWeightedQuotas: options.disableScreenWeightedQuotas
@@ -1001,6 +1008,13 @@ enum SplatDebugOption: String, CaseIterable {
             case .residencyTint: options.residencyDebugTint = newValue
             case .levelCrossFade: options.disableLevelCrossFade = newValue
             case .levelTint: options.levelDebugTint = newValue
+            case .chunkBounds:
+                let debug = SpatialDebugVisualization.shared
+                setGaussianChunkBoundsDebug(
+                    enabled: newValue,
+                    maxChunkCount: debug.maxGaussianChunkCount,
+                    colorMode: .level
+                )
             case .chunkCull: options.disableChunkCull = newValue
             case .workingSetBudget: options.disableWorkingSetBudget = newValue
             case .screenWeightedQuotas: options.disableScreenWeightedQuotas = newValue
