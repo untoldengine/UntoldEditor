@@ -74,6 +74,10 @@ final class SplatDebugMenuTests: XCTestCase {
         SplatDebugOption.levelTint.isEnabled = true
         XCTAssertTrue(options.levelDebugTint)
         SplatDebugOption.levelTint.isEnabled = false
+        SplatDebugOption.chunkBounds.isEnabled = true
+        XCTAssertTrue(SpatialDebugVisualization.shared.showGaussianChunkBounds)
+        XCTAssertEqual(SpatialDebugVisualization.shared.gaussianChunkColorMode, .level)
+        SplatDebugOption.chunkBounds.isEnabled = false
         SplatDebugOption.chunkCull.isEnabled = true
         XCTAssertTrue(options.disableChunkCull)
         SplatDebugOption.chunkCull.isEnabled = false
@@ -97,6 +101,7 @@ final class SplatDebugMenuTests: XCTestCase {
         XCTAssertEqual(SplatDebugOption.allCases.filter { $0.group == .draw }, [.hzbOcclusionCull, .opaqueDepthTest, .antiAliasSplatPixels, .toneMapSplatPixels, .crispSplatKernel])
         XCTAssertEqual(SplatDebugOption.allCases.filter { $0.group == .paging }, [.paging, .forcePaging, .freezePaging, .residencyTint])
         XCTAssertEqual(SplatDebugOption.allCases.filter { $0.group == .levels }, [.levelCrossFade, .levelTint])
+        XCTAssertEqual(SplatDebugOption.allCases.filter { $0.group == .bounds }, [.chunkBounds])
         XCTAssertEqual(SplatDebugOption.paging.title, "Disable Splat Paging")
         XCTAssertEqual(SplatDebugOption.levelTint.title, "Tint Splats by Level")
         XCTAssertEqual(SplatDebugOption.levelCrossFade.title, "Disable Splat Level Cross-Fade")
