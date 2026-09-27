@@ -13,6 +13,7 @@
 - [Feature] Docking: three areas around the viewport, panels as tabs (e2addac…)
 - [Feature] Add texture debug views to the View menu (#137) (c080f20…)
 - [Feature] Add spatial debug controls to the View menu (#138) (578b904…)
+- [Feature] Add a View menu toggle for Gaussian chunk bounding-box visualization (#139) (6d3e983…)
 ## v0.20.0 - 2026-09-20
 ### 🐞 Fixes
 - [Patch] Open a project folder that has a project.yml but no generated Xcode project (3de9f54…)
