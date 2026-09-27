@@ -1,4 +1,19 @@
 # Changelog
+## v0.21.0 - 2026-09-27
+### 🐞 Fixes
+- [Patch] Dividers: system resize cursor and a preview line instead of live resizing (e27b770…)
+- [Patch] Docking: drag tabs by the pointer, not the system drag (5038617…)
+- [Patch] Only the toolbar row drags the window (d11023d…)
+- [Patch] Implemented Gaussian viewport selection using their world-space bounding boxes (#136) (43420d7…)
+### 📚 Docs
+- [Docs] Add Engineering Principles and contributor docs (d1111c1…)
+### 🚀 Features
+- [Feature] Editor palette from the redesign spec and the shared control primitives (fae9a08…)
+- [Feature] Toolbar in the title bar, status bar and play session controls (f07d94f…)
+- [Feature] Docking: three areas around the viewport, panels as tabs (e2addac…)
+- [Feature] Add texture debug views to the View menu (#137) (c080f20…)
+- [Feature] Add spatial debug controls to the View menu (#138) (578b904…)
+- [Feature] Add a View menu toggle for Gaussian chunk bounding-box visualization (#139) (6d3e983…)
 ## v0.20.0 - 2026-09-20
 ### 🐞 Fixes
 - [Patch] Open a project folder that has a project.yml but no generated Xcode project (3de9f54…)
