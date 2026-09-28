@@ -249,14 +249,8 @@ extension AssetBrowserView {
                 let stdout = (try? String(contentsOf: outputLogURL, encoding: .utf8)) ?? ""
                 let stderr = (try? String(contentsOf: errorLogURL, encoding: .utf8)) ?? ""
 
-                DispatchQueue.main.async {
-                    if !stdout.isEmpty {
-                        Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
-                    if !stderr.isEmpty {
-                        Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
-                }
+                let exportOutput = toolOutputLines(stdout: stdout, stderr: stderr, failed: process.terminationStatus != 0)
+                DispatchQueue.main.async { logToolOutput(exportOutput) }
 
                 let wasCancelled = task.isCancelRequested
                 let exportSucceeded = process.terminationStatus == 0 && !wasCancelled
@@ -270,24 +264,14 @@ extension AssetBrowserView {
                         DispatchQueue.main.async { showStatus("Baking textures (ASTC)...") }
                         let bakeResult = runTexbakeStep(script: texbakeScript, arguments: ["--dir", texturesDir.path], astcencBin: astcencBin)
                         DispatchQueue.main.async {
-                            if !bakeResult.stdout.isEmpty {
-                                Logger.log(message: bakeResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-                            }
-                            if !bakeResult.stderr.isEmpty {
-                                Logger.log(message: bakeResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines))
-                            }
+                            logToolOutput(toolOutputLines(stdout: bakeResult.stdout, stderr: bakeResult.stderr, failed: bakeResult.status != 0))
                         }
 
                         task.setDetail("Patching texture references…")
                         DispatchQueue.main.async { showStatus("Patching texture references...") }
                         let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputDirURL.path], astcencBin: astcencBin)
                         DispatchQueue.main.async {
-                            if !patchResult.stdout.isEmpty {
-                                Logger.log(message: patchResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-                            }
-                            if !patchResult.stderr.isEmpty {
-                                Logger.log(message: patchResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines))
-                            }
+                            logToolOutput(toolOutputLines(stdout: patchResult.stdout, stderr: patchResult.stderr, failed: patchResult.status != 0))
                             if bakeResult.status != 0 || patchResult.status != 0 {
                                 Logger.log(message: "⚠️ ASTC compression had errors — tiles imported without compressed textures")
                             }
@@ -302,7 +286,7 @@ extension AssetBrowserView {
                 if wasCancelled {
                     task.markCancelled("Cancelled by user")
                 } else if exportSucceeded {
-                    task.succeed("Wrote tiles to \(request.outputDirURL.lastPathComponent)/")
+                    task.succeed(taskDetail("Wrote tiles to \(request.outputDirURL.lastPathComponent)/", warningsIn: exportOutput))
                 } else {
                     task.fail("export-untold-tiles exited with status \(process.terminationStatus) (see Console)")
                 }

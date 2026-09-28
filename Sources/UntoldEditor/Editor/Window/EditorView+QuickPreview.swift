@@ -399,14 +399,8 @@ extension EditorView {
                 let wasCancelled = task.isCancelRequested
                 let exportSucceeded = process.terminationStatus == 0 && !wasCancelled
 
-                DispatchQueue.main.async {
-                    if !stdout.isEmpty {
-                        Logger.log(message: stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
-                    if !stderr.isEmpty {
-                        Logger.log(message: stderr.trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
-                }
+                let exportOutput = toolOutputLines(stdout: stdout, stderr: stderr, failed: process.terminationStatus != 0)
+                DispatchQueue.main.async { logToolOutput(exportOutput) }
 
                 if exportSucceeded, compressTextures {
                     let texturesDir = request.outputURL.deletingLastPathComponent().appendingPathComponent("Textures")
@@ -418,18 +412,8 @@ extension EditorView {
                         task.setDetail("Patching texture references…")
                         let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputURL.path], astcencBin: astcencBin)
                         DispatchQueue.main.async {
-                            if !bakeResult.stdout.isEmpty {
-                                Logger.log(message: bakeResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-                            }
-                            if !bakeResult.stderr.isEmpty {
-                                Logger.log(message: bakeResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines))
-                            }
-                            if !patchResult.stdout.isEmpty {
-                                Logger.log(message: patchResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
-                            }
-                            if !patchResult.stderr.isEmpty {
-                                Logger.log(message: patchResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines))
-                            }
+                            logToolOutput(toolOutputLines(stdout: bakeResult.stdout, stderr: bakeResult.stderr, failed: bakeResult.status != 0))
+                            logToolOutput(toolOutputLines(stdout: patchResult.stdout, stderr: patchResult.stderr, failed: patchResult.status != 0))
                             if bakeResult.status != 0 || patchResult.status != 0 {
                                 Logger.log(message: "⚠️ ASTC compression had errors — preview asset exported without compressed textures")
                             }
@@ -444,7 +428,7 @@ extension EditorView {
                 if wasCancelled {
                     task.markCancelled("Cancelled by user")
                 } else if exportSucceeded {
-                    task.succeed("Loaded into viewport")
+                    task.succeed(taskDetail("Loaded into viewport", warningsIn: exportOutput))
                 } else {
                     task.fail("export-untold exited with status \(process.terminationStatus) (see Console)")
                 }
