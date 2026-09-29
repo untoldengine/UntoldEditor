@@ -87,6 +87,18 @@ private struct GizmoDragState {
 private var gizmoDragState: GizmoDragState?
 private var pendingGizmoDragRay: GizmoDragRay?
 
+/// A rotation drag in progress: the whole turn so far, and the part of it
+/// already applied, so snapping quantizes the turn rather than each frame.
+private struct GizmoRotationDrag {
+    var accumulatedDegrees: Float = 0
+    var appliedDegrees: Float = 0
+}
+
+private var gizmoRotationDrag: GizmoRotationDrag?
+
+/// The snap settings the drags read; tests put their own here.
+var gizmoSnapSettings = EditorSnapSettings.shared
+
 func gizmoRootWorldPosition() -> simd_float3 {
     guard parentEntityIdGizmo != .invalid else {
         return activeEntity == .invalid ? .zero : getPosition(entityId: activeEntity)
@@ -141,7 +153,10 @@ func beginGizmoDrag(ray: GizmoDragRay) {
         return
     }
 
-    let axisDirection = worldDirection(for: handleComponent.axis)
+    let axisDirection = gizmoAxisDirection(for: handleComponent.axis, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
+    if handleComponent.mode == .rotate {
+        beginGizmoRotationDrag()
+    }
     guard handleComponent.mode == .translate || handleComponent.mode == .scale,
           simd_length_squared(axisDirection) > 0.0001
     else {
@@ -188,7 +203,8 @@ func updateGizmoDrag(ray: GizmoDragRay) {
         return
     }
 
-    let axisAmount = currentParameter - state.startAxisParameter
+    // With snapping on, the whole drag lands on a step; the increments follow.
+    let axisAmount = gizmoSnapSettings.snapped(currentParameter - state.startAxisParameter, for: state.mode)
     let incrementalAmount = axisAmount - state.appliedAxisAmount
     guard incrementalAmount.isFinite else {
         return
@@ -244,6 +260,7 @@ func applyPendingGizmoDragUpdate() -> Bool {
 func endGizmoDrag() {
     gizmoDragState = nil
     pendingGizmoDragRay = nil
+    gizmoRotationDrag = nil
 }
 
 func hasActiveAxisGizmoDrag() -> Bool {
@@ -266,6 +283,9 @@ func applyGizmoRotationDelta(entityId: EntityID, axis: simd_float3, degrees: Flo
     localTransform.rotation = simd_normalize(simd_mul(delta, currentRotation))
     translateTo(entityId: entityId, position: localTransform.position)
     syncStoredAxisRotationsFromQuaternion(entityId: entityId)
+    if entityId == activeEntity {
+        syncGizmoOrientation()
+    }
 }
 
 private func normalizedRotationOrIdentity(_ rotation: simd_quatf) -> simd_quatf {
@@ -343,6 +363,49 @@ func entityWorldRotation(entityId: EntityID) -> simd_quatf {
         depth += 1
     }
     return rotation
+}
+
+/// The world direction of a gizmo axis: the world's axis, or in Local space
+/// the entity's own, which its world rotation turns the world axis into.
+func gizmoAxisDirection(for axis: TransformAxis, entityId: EntityID, space: TransformSpace) -> simd_float3 {
+    let direction = worldDirection(for: axis)
+    guard space == .local, entityId != .invalid, simd_length_squared(direction) > 0 else {
+        return direction
+    }
+    return simd_normalize(simd_act(entityWorldRotation(entityId: entityId), direction))
+}
+
+/// Turns the gizmo to the entity's own axes in Local space, and back to the
+/// world's in World space.
+func syncGizmoOrientation() {
+    guard parentEntityIdGizmo != .invalid, activeEntity != .invalid else { return }
+    let rotation = EditorViewportSettings.shared.transformSpace == .local
+        ? entityWorldRotation(entityId: activeEntity)
+        : simd_quatf(real: 1, imag: .zero)
+    rotateTo(entityId: parentEntityIdGizmo, rotation: rotation)
+}
+
+/// Starts accumulating a rotation drag, so snapping can quantize the whole
+/// turn rather than each frame's part of it.
+func beginGizmoRotationDrag() {
+    gizmoRotationDrag = GizmoRotationDrag()
+}
+
+/// The rotation to apply for this frame's `degrees`: the amount itself, or
+/// with rotation snapping on, the steps the accumulated turn has crossed.
+func snappedGizmoRotationDelta(degrees: Float) -> Float {
+    guard degrees.isFinite else {
+        return 0
+    }
+    guard var drag = gizmoRotationDrag, let step = gizmoSnapSettings.step(for: .rotate) else {
+        return degrees
+    }
+    drag.accumulatedDegrees += degrees
+    let target = EditorSnapSettings.quantize(drag.accumulatedDegrees, step: step)
+    let delta = target - drag.appliedDegrees
+    drag.appliedDegrees = target
+    gizmoRotationDrag = drag
+    return delta
 }
 
 private func worldDirection(for axis: TransformAxis) -> simd_float3 {
@@ -967,6 +1030,7 @@ func createGizmo(mode: GizmoMode) {
     }
 
     gizmoActive = true
+    syncGizmoOrientation()
 
     if let cameraEntityId = CameraSystem.shared.activeCamera {
         updateGizmoScreenSpaceScale(cameraEntityId: cameraEntityId)

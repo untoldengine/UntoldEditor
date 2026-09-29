@@ -12,15 +12,16 @@ import Combine
 import Foundation
 
 /// What the viewport header controls: the interaction mode, the tool, the
-/// shading, the projection and the camera speed. The tool, the shading and
-/// the speed persist across launches; the projection is what the camera was
-/// last sent to.
+/// transform space, the shading, the projection and the camera speed. The
+/// tool, the space, the shading and the speed persist across launches; the
+/// projection is what the camera was last sent to.
 final class EditorViewportSettings: ObservableObject {
     static let shared = EditorViewportSettings(defaults: .standard)
 
     static let toolKey = "editor.viewport.tool"
     static let shadingKey = "editor.viewport.shading"
     static let cameraSpeedKey = "editor.viewport.cameraSpeed"
+    static let spaceKey = "editor.viewport.space"
     static let speedRange = 1 ... 10
     /// The speed whose multiplier is one: how the camera moved before the control existed.
     static let defaultCameraSpeed = 4
@@ -35,6 +36,12 @@ final class EditorViewportSettings: ObservableObject {
     @Published var shading: ViewportShading {
         didSet {
             defaults?.set(shading.rawValue, forKey: Self.shadingKey)
+        }
+    }
+
+    @Published var transformSpace: TransformSpace {
+        didSet {
+            defaults?.set(transformSpace.rawValue, forKey: Self.spaceKey)
         }
     }
 
@@ -60,6 +67,7 @@ final class EditorViewportSettings: ObservableObject {
         self.defaults = defaults
         tool = defaults?.string(forKey: Self.toolKey).flatMap(TransformTool.init(rawValue:)) ?? .move
         shading = defaults?.string(forKey: Self.shadingKey).flatMap(ViewportShading.init(rawValue:)) ?? .lit
+        transformSpace = defaults?.string(forKey: Self.spaceKey).flatMap(TransformSpace.init(rawValue:)) ?? .world
         let speed = defaults?.object(forKey: Self.cameraSpeedKey) as? Int ?? Self.defaultCameraSpeed
         cameraSpeed = Self.speedRange.contains(speed) ? speed : Self.defaultCameraSpeed
     }

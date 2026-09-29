@@ -17,7 +17,9 @@ extension EditorView {
     var viewportHeader: some View {
         ViewportHeaderView(
             settings: viewportSettings,
+            snap: EditorSnapSettings.shared,
             onSelectTool: editor_selectTool,
+            onSelectSpace: editor_selectSpace,
             onSelectShading: editor_selectShading,
             onSelectProjection: editor_selectProjection
         )
@@ -28,6 +30,12 @@ extension EditorView {
         viewportSettings.tool = tool
         editorController?.activeMode = .none
         selectionManager.refreshGizmo()
+    }
+
+    /// World or Local: the gizmo turns to the axes it will work along.
+    func editor_selectSpace(_ space: TransformSpace) {
+        viewportSettings.transformSpace = space
+        syncGizmoOrientation()
     }
 
     func editor_selectShading(_ shading: ViewportShading) {

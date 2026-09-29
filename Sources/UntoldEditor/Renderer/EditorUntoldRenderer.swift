@@ -103,7 +103,7 @@ extension UntoldRenderer {
 
         case (.translate, .x) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(1, 0, 0)
+            let axis = gizmoAxisDirection(for: .x, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let amt = computeAxisTranslationGizmo(
                 axisWorldDir: axis,
                 gizmoWorldPosition: gizmoRootWorldPosition(),
@@ -121,7 +121,7 @@ extension UntoldRenderer {
 
         case (.translate, .y) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(0, 1, 0)
+            let axis = gizmoAxisDirection(for: .y, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: gizmoRootWorldPosition(),
                                                   mouseDelta: simd_float2(InputSystem.shared.mouseDeltaX, InputSystem.shared.mouseDeltaY),
@@ -137,7 +137,7 @@ extension UntoldRenderer {
 
         case (.translate, .z) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(0, 0, 1)
+            let axis = gizmoAxisDirection(for: .z, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: gizmoRootWorldPosition(),
                                                   mouseDelta: simd_float2(InputSystem.shared.mouseDeltaX, InputSystem.shared.mouseDeltaY),
@@ -155,7 +155,7 @@ extension UntoldRenderer {
 
         case (.rotate, .x) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(1, 0, 0)
+            let axis = gizmoAxisDirection(for: .x, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let angle = computeRotationAngleFromGizmo(
                 axis: axis,
                 gizmoWorldPosition: gizmoRootWorldPosition(),
@@ -166,14 +166,14 @@ extension UntoldRenderer {
                 viewportSize: renderInfo.viewPort,
                 sensitivity: 100.0
             )
-            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: -angle * 10)
+            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: snappedGizmoRotationDelta(degrees: -angle * 10))
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
             consumeMouseDragDelta()
 
         case (.rotate, .y) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(0, 1, 0)
+            let axis = gizmoAxisDirection(for: .y, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let angle = computeRotationAngleFromGizmo(
                 axis: axis,
                 gizmoWorldPosition: gizmoRootWorldPosition(),
@@ -184,14 +184,14 @@ extension UntoldRenderer {
                 viewportSize: renderInfo.viewPort,
                 sensitivity: 100.0
             )
-            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: angle * 10)
+            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: snappedGizmoRotationDelta(degrees: angle * 10))
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
             consumeMouseDragDelta()
 
         case (.rotate, .z) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(0, 0, 1)
+            let axis = gizmoAxisDirection(for: .z, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let angle = computeRotationAngleFromGizmo(
                 axis: axis,
                 gizmoWorldPosition: gizmoRootWorldPosition(),
@@ -202,7 +202,7 @@ extension UntoldRenderer {
                 viewportSize: renderInfo.viewPort,
                 sensitivity: 100.0
             )
-            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: angle * 10)
+            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: snappedGizmoRotationDelta(degrees: angle * 10))
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
             consumeMouseDragDelta()
@@ -211,7 +211,7 @@ extension UntoldRenderer {
 
         case (.scale, .x) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(1, 0, 0)
+            let axis = gizmoAxisDirection(for: .x, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: gizmoRootWorldPosition(),
                                                   mouseDelta: simd_float2(InputSystem.shared.mouseDeltaX, InputSystem.shared.mouseDeltaY),
@@ -229,7 +229,7 @@ extension UntoldRenderer {
 
         case (.scale, .y) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(0, 1, 0)
+            let axis = gizmoAxisDirection(for: .y, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: gizmoRootWorldPosition(),
                                                   mouseDelta: simd_float2(InputSystem.shared.mouseDeltaX, InputSystem.shared.mouseDeltaY),
@@ -247,7 +247,7 @@ extension UntoldRenderer {
 
         case (.scale, .z) where InputSystem.shared.mouseActive:
             handleStaticBatchOnTransform(entityId: activeEntity)
-            let axis = simd_float3(0, 0, 1)
+            let axis = gizmoAxisDirection(for: .z, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
             let amt = computeAxisTranslationGizmo(axisWorldDir: axis,
                                                   gizmoWorldPosition: gizmoRootWorldPosition(),
                                                   mouseDelta: simd_float2(InputSystem.shared.mouseDeltaX, InputSystem.shared.mouseDeltaY),

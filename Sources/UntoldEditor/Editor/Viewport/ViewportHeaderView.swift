@@ -10,13 +10,16 @@
 //
 import SwiftUI
 
-/// The 36 pt row above the Metal view: the interaction mode, the tools, and
-/// at the right the shading, the projection and the camera speed.
+/// The 36 pt row above the Metal view: the interaction mode, the tools, the
+/// transform space and snapping, and at the right the shading, the
+/// projection and the camera speed.
 struct ViewportHeaderView: View {
     static let height: CGFloat = 36
 
     @ObservedObject var settings: EditorViewportSettings
+    @ObservedObject var snap: EditorSnapSettings
     let onSelectTool: (TransformTool) -> Void
+    let onSelectSpace: (TransformSpace) -> Void
     let onSelectShading: (ViewportShading) -> Void
     let onSelectProjection: (ViewportProjection) -> Void
 
@@ -25,6 +28,9 @@ struct ViewportHeaderView: View {
             InteractionModeMenu(mode: settings.interactionMode)
             divider
             ViewportToolCluster(tool: settings.tool, onSelect: onSelectTool)
+            divider
+            TransformSpaceControl(space: settings.transformSpace, onSelect: onSelectSpace)
+            SnapMenu(snap: snap)
             Spacer(minLength: 8)
             ViewportShadingMenu(shading: settings.shading, onSelect: onSelectShading)
             ViewportProjectionMenu(projection: settings.projection, onSelect: onSelectProjection)
