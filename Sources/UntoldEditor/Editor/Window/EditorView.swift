@@ -82,6 +82,7 @@ public struct EditorView: View {
     @State var dropStatusMessage: String?
     @State var dropStatusIsError = false
     @ObservedObject var buildTargetSettings = EditorBuildTargetSettings.shared
+    @ObservedObject var viewportSettings = EditorViewportSettings.shared
 
     var renderer: UntoldRenderer?
 
@@ -220,6 +221,16 @@ public struct EditorView: View {
             NotificationCenter.default.addObserver(forName: .editorShowAllEntities, object: nil, queue: .main) { _ in
                 editor_showAllEntities()
             }
+
+            // ⌥1 to ⌥4 pick a tool; F frames the selection.
+            NotificationCenter.default.addObserver(forName: .editorSelectTool, object: nil, queue: .main) { note in
+                guard let raw = note.userInfo?["tool"] as? String, let tool = TransformTool(rawValue: raw) else { return }
+                editor_selectTool(tool)
+            }
+            NotificationCenter.default.addObserver(forName: .editorFrameSelection, object: nil, queue: .main) { _ in
+                editor_frameSelection()
+            }
+            editor_applyViewportSettings()
         }
         .onChange(of: playbackSettings.useSceneCameraDuringPlay) { _, _ in
             updateActiveCameraForPlayMode()

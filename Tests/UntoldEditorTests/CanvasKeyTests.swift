@@ -149,7 +149,7 @@ final class CanvasKeyTests: XCTestCase {
 
     func test_onlyAFlyKeyTheKeyboardConfirms_makesItsStateTrusted() {
         InputSystem.shared.physicalKeyState = { _ in true }
-        InputSystem.shared.noteKeyDown(3) // F is a key, not one that flies
+        InputSystem.shared.noteKeyDown(3) // F frames the selection; it does not fly
         XCTAssertFalse(InputSystem.shared.isPhysicalKeyStateTrusted)
 
         InputSystem.shared.physicalKeyState = { _ in false }

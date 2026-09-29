@@ -202,7 +202,7 @@ class SelectionManager: ObservableObject {
                 updateBoundingBoxBuffer(min: highlightBoundingBox.min, max: highlightBoundingBox.max)
             }
 
-            createGizmo(name: "translateGizmo")
+            createGizmo(forTool: EditorViewportSettings.shared.tool)
         } else {
             activeEntity = .invalid
         }
@@ -231,10 +231,18 @@ class SelectionManager: ObservableObject {
             let highlightBoundingBox = getRenderableHierarchyBoundingBox(entityId: entityId)
             updateBoundingBoxBuffer(min: highlightBoundingBox.min, max: highlightBoundingBox.max)
 
-            createGizmo(name: "translateGizmo")
+            createGizmo(forTool: EditorViewportSettings.shared.tool)
         } else {
             activeEntity = .invalid
         }
+    }
+
+    /// The world bounds of the selection's renderable hierarchy, for framing it.
+    func selectionBounds() -> (min: simd_float3, max: simd_float3)? {
+        guard let selected = selectedEntity, selected != .invalid else { return nil }
+        let entity = sceneTransformEntity(for: selected)
+        guard hasComponent(entityId: entity, componentType: LocalTransformComponent.self) else { return nil }
+        return getRenderableHierarchyBoundingBox(entityId: entity)
     }
 
     // MARK: - Hidden and locked entities
@@ -347,8 +355,9 @@ class SelectionManager: ObservableObject {
     }
 
     /// Re-runs the current selection so the gizmo leaves an entity that was
-    /// hidden or locked and comes back when it is shown or unlocked.
-    private func refreshGizmo() {
+    /// hidden or locked, comes back when it is shown or unlocked, and follows
+    /// the tool when that changes.
+    func refreshGizmo() {
         guard let selected = selectedEntity, selected != .invalid else { return }
         if let mesh = inspectedMesh {
             inspectMesh(entityId: mesh.entityId, meshIndex: mesh.meshIndex)

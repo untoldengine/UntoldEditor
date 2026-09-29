@@ -27,6 +27,7 @@ extension EditorView {
                     onSelectScene: editor_requestLoadScene,
                     onAddScene: { NotificationCenter.default.post(name: .editorMenuNewScene, object: nil) }
                 )
+                viewportHeader
             }
             editorMetalView
         }
@@ -105,12 +106,6 @@ extension EditorView {
                         dismissCameraControlHints()
                     }
                     .padding(.bottom, 14)
-                }
-            }
-            .overlay(alignment: .top) {
-                if experienceMode == .edit, let controller = editorController {
-                    TransformModeCluster(controller: controller)
-                        .padding(.top, 12)
                 }
             }
             .overlay(alignment: .bottomTrailing) {

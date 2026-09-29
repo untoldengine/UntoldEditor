@@ -157,6 +157,14 @@
             return true
         }
 
+        /// The tool a key press picks: ⌥ with 1, 2, 3 or 4 while editing.
+        internal func toolShortcut(for event: NSEvent) -> TransformTool? {
+            guard gameMode == false, event.modifierFlags.contains(.option) else {
+                return nil
+            }
+            return TransformTool.tool(forKeyCode: event.keyCode)
+        }
+
         /// True while a text field has the keyboard, which then is not the editor's.
         private var isTextBeingEdited: Bool {
             NSApp.keyWindow?.firstResponder is NSTextView
@@ -247,6 +255,14 @@
             // Every other ⌘ shortcut is the menus'.
             if event.modifierFlags.contains(.command) {
                 return false
+            }
+
+            // ⌥1 to ⌥4 pick the tool. The letters stay with the camera, which they fly.
+            if let tool = toolShortcut(for: event) {
+                if event.isARepeat == false {
+                    NotificationCenter.default.post(name: .editorSelectTool, object: nil, userInfo: ["tool": tool.rawValue])
+                }
+                return true
             }
 
             guard canvasOwnsKeys else {
@@ -527,7 +543,7 @@
                 entityId: camera,
                 uTargetOffset: orbitDistance > 0.001 ? orbitDistance : simd_length(cameraComponent.localPosition)
             )
-            let speed = precise ? InputSystem.scrollOrbitSpeedPrecise : InputSystem.scrollOrbitSpeedWheel
+            let speed = (precise ? InputSystem.scrollOrbitSpeedPrecise : InputSystem.scrollOrbitSpeedWheel) * EditorViewportSettings.shared.speedMultiplier
             orbitAround(entityId: camera, uPosition: delta * speed)
         }
 
@@ -659,7 +675,7 @@
 
             // Move the camera opposite to the cursor so the scene tracks it.
             // View y already points up in the (non-flipped) canvas.
-            let offset = (-right * delta.x - up * delta.y) * distance * InputSystem.dragPanSpeed
+            let offset = (-right * delta.x - up * delta.y) * distance * InputSystem.dragPanSpeed * EditorViewportSettings.shared.speedMultiplier
             cameraLookAt(entityId: camera, eye: eye + offset, target: target + offset, up: up)
         }
 
@@ -1177,10 +1193,6 @@
                     return
                 }
                 editorController.activeAxis = .z
-            case kVK_ANSI_1:
-                break
-            case kVK_ANSI_2:
-                break
             default:
                 break
             }
@@ -1189,6 +1201,11 @@
         /// The H key, which the engine's key table does not list: macOS virtual key code 0x04.
         private var kVK_ANSI_H: UInt16 {
             4
+        }
+
+        /// The F key, likewise: macOS virtual key code 0x03.
+        private var kVK_ANSI_F: UInt16 {
+            3
         }
 
         func keyReleased(_ keyCode: UInt16) {
@@ -1207,6 +1224,8 @@
                 keyState.qPressed = false
             case kVK_ANSI_E:
                 keyState.ePressed = false
+            case kVK_ANSI_F:
+                NotificationCenter.default.post(name: .editorFrameSelection, object: nil)
             case kVK_ANSI_P:
                 // Play/Stop through the toolbar's flow, which snapshots and restores the scene.
                 NotificationCenter.default.post(name: .editorTogglePlay, object: nil)
@@ -1221,15 +1240,6 @@
                 if keyState.shiftPressed {
                     hotReload = !hotReload
                 }
-            case kVK_ANSI_L:
-                if keyState.shiftPressed {
-                    visualDebug = !visualDebug
-                    currentDebugSelection = DebugSelection.normalOutput
-                }
-            case kVK_ANSI_1:
-                currentDebugSelection = DebugSelection.normalOutput
-            case kVK_ANSI_2:
-                currentDebugSelection = DebugSelection.iblOutput
             default:
                 break
             }

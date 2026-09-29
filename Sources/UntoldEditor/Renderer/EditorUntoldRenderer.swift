@@ -22,7 +22,8 @@ extension UntoldRenderer {
         // Block editor + camera input during play unless the scene camera is active
         if gameMode, CameraSystem.shared.activeCamera != findSceneCamera() { return }
 
-        // Always allow camera WASDQE input, regardless of editor state
+        // Always allow camera WASDQE input, regardless of editor state. The
+        // camera speed of the viewport header scales the step.
         let input = (
             w: InputSystem.shared.keyState.wPressed,
             a: InputSystem.shared.keyState.aPressed,
@@ -31,7 +32,7 @@ extension UntoldRenderer {
             q: InputSystem.shared.keyState.qPressed,
             e: InputSystem.shared.keyState.ePressed
         )
-        moveCameraWithInput(entityId: findSceneCamera(), input: input, speed: 1, deltaTime: 0.1)
+        moveCameraWithInput(entityId: findSceneCamera(), input: input, speed: EditorViewportSettings.shared.speedMultiplier, deltaTime: 0.1)
 
         // Editor is optional; only gate editor logic with this flag
         let isEditorEnabled = editorController?.isEnabled ?? (editorController != nil)

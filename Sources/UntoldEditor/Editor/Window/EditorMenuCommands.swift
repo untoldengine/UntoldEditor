@@ -31,6 +31,10 @@ extension Notification.Name {
     static let editorHideSelectedEntity = Notification.Name("editorHideSelectedEntity")
     /// ⌥H: show every hidden entity again.
     static let editorShowAllEntities = Notification.Name("editorShowAllEntities")
+    /// ⌥1 to ⌥4: pick the tool named in `userInfo["tool"]`.
+    static let editorSelectTool = Notification.Name("editorSelectTool")
+    /// F: frame the selection.
+    static let editorFrameSelection = Notification.Name("editorFrameSelection")
 }
 
 /// Playback-related settings that must be reachable from both the AppKit menu

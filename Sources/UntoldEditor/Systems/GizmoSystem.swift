@@ -973,6 +973,16 @@ func createGizmo(mode: GizmoMode) {
     }
 }
 
+/// The gizmo for a tool of the viewport header: the tool's, or none for Select.
+func createGizmo(forTool tool: TransformTool) {
+    if let mode = tool.gizmoMode {
+        createGizmo(mode: mode)
+    } else {
+        removeGizmo()
+        gizmoActive = false
+    }
+}
+
 func processGizmoAction(entityId: EntityID) {
     #if canImport(AppKit)
         if entityId == .invalid {

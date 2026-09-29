@@ -230,6 +230,17 @@ final class ViewportCanvasEventTests: XCTestCase {
         XCTAssertFalse(InputSystem.shared.canvasOwnsKeys)
     }
 
+    func test_optionAndADigit_pickTheTool() throws {
+        let picked = expectation(forNotification: .editorSelectTool, object: nil) { note in
+            note.userInfo?["tool"] as? String == TransformTool.rotate.rawValue
+        }
+
+        try canvas.keyDown(with: key(.keyDown, 20, .option))
+
+        wait(for: [picked], timeout: 1)
+        XCTAssertTrue(InputSystem.shared.keyState.altPressed, "the modifiers come with the event")
+    }
+
     // MARK: - The left button
 
     func test_leftClickOnEmptySpace_clearsTheSelection() throws {

@@ -1,0 +1,60 @@
+//
+//  EditorView+ViewportControls.swift
+//  UntoldEditor
+//
+// Copyright (C) Untold Engine Studios
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+import simd
+import SwiftUI
+import UntoldEngine
+
+extension EditorView {
+    /// The header of the viewport panel, fed from the viewport settings.
+    var viewportHeader: some View {
+        ViewportHeaderView(
+            settings: viewportSettings,
+            onSelectTool: editor_selectTool,
+            onSelectShading: editor_selectShading,
+            onSelectProjection: editor_selectProjection
+        )
+    }
+
+    /// Picks a tool: the selection's gizmo follows it, and a drag in progress ends.
+    func editor_selectTool(_ tool: TransformTool) {
+        viewportSettings.tool = tool
+        editorController?.activeMode = .none
+        selectionManager.refreshGizmo()
+    }
+
+    func editor_selectShading(_ shading: ViewportShading) {
+        viewportSettings.shading = shading
+        setRendering(.debugView(shading.debugView))
+    }
+
+    /// Applies the persisted shading when the editor starts.
+    func editor_applyViewportSettings() {
+        setRendering(.debugView(viewportSettings.shading.debugView))
+    }
+
+    /// Sends the editor's camera to a preset view. Not while playing, when the
+    /// play flow owns the camera.
+    func editor_selectProjection(_ projection: ViewportProjection) {
+        guard isPlaying == false else { return }
+        viewportSettings.projection = projection
+        projection.applyToSceneCamera()
+    }
+
+    /// F: frames the selection, keeping the camera's direction.
+    func editor_frameSelection() {
+        guard experienceMode == .edit, isPlaying == false, let bounds = selectionManager.selectionBounds() else { return }
+        let camera = findSceneCamera()
+        let forward = getCameraTarget(entityId: camera) - getCameraEye(entityId: camera)
+        let framing = ViewportFraming.framing(minimum: bounds.min, maximum: bounds.max, forward: forward, fovDegrees: fov)
+        cameraLookAt(entityId: camera, eye: framing.eye, target: framing.target, up: getCameraUp(entityId: camera))
+        setOrbitOffset(entityId: camera, uTargetOffset: framing.distance)
+    }
+}
