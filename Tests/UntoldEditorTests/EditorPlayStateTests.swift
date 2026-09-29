@@ -35,6 +35,20 @@ final class EditorPlayStateTests: XCTestCase {
         XCTAssertTrue(EditorPlayState.paused.pauseButtonResumes)
     }
 
+    func test_whileEditing_playShowsTheGamesCamera_unlessTheViewMenuSaysOtherwise() {
+        XCTAssertFalse(EditorPlaybackSettings.playStaysOnTheEditorCamera(isExploring: false, userChoice: false))
+        XCTAssertTrue(EditorPlaybackSettings.playStaysOnTheEditorCamera(isExploring: false, userChoice: true))
+    }
+
+    func test_whileExploring_playStaysOnTheEditorsCamera_whateverTheViewMenuSays() {
+        XCTAssertTrue(EditorPlaybackSettings.playStaysOnTheEditorCamera(isExploring: true, userChoice: false))
+        XCTAssertTrue(EditorPlaybackSettings.playStaysOnTheEditorCamera(isExploring: true, userChoice: true))
+    }
+
+    func test_theChoiceOfTheViewMenu_startsSwitchedOff() {
+        XCTAssertFalse(EditorPlaybackSettings.shared.useSceneCameraDuringPlay)
+    }
+
     func test_stepWaitsForTheEngineFrameStep() {
         XCTAssertFalse(EditorPlayState.stepIsAvailable)
         XCTAssertFalse(EditorPlayState.paused.canStep)

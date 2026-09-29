@@ -117,8 +117,10 @@ extension EditorView {
         AnimationSystem.shared.isEnabled = isPaused == false
     }
 
+    /// Explore mode flies the editor's camera through the scene, which is play
+    /// mode without a snapshot. It leaves View > Use Scene Camera During Play
+    /// as the user set it: that choice is for playing while editing.
     func enableExploreNavigationMode() {
-        playbackSettings.useSceneCameraDuringPlay = true
         setEditorPlayMode(true, capturesSnapshot: false)
         CameraSystem.shared.activeCamera = findSceneCamera()
     }
@@ -133,7 +135,11 @@ extension EditorView {
         playbackSettings.isSessionActive = isPlaying
         // The session, not `gameMode`: a paused session keeps the game camera.
         if isPlaying {
-            CameraSystem.shared.activeCamera = playbackSettings.useSceneCameraDuringPlay ? findSceneCamera() : findEditorGameCamera()
+            let staysOnTheEditorCamera = EditorPlaybackSettings.playStaysOnTheEditorCamera(
+                isExploring: experienceMode == .explore,
+                userChoice: playbackSettings.useSceneCameraDuringPlay
+            )
+            CameraSystem.shared.activeCamera = staysOnTheEditorCamera ? findSceneCamera() : findEditorGameCamera()
         } else {
             CameraSystem.shared.activeCamera = findSceneCamera()
         }

@@ -52,4 +52,12 @@ final class EditorPlaybackSettings: ObservableObject {
     @Published var isSessionActive = false
 
     private init() {}
+
+    /// Whether the viewport stays on the editor's camera while playing. While
+    /// exploring it always does: flying through the scene is all explore mode
+    /// plays for. While editing the game's camera takes the viewport, unless
+    /// View > Use Scene Camera During Play says otherwise.
+    static func playStaysOnTheEditorCamera(isExploring: Bool, userChoice: Bool) -> Bool {
+        isExploring || userChoice
+    }
 }
