@@ -30,6 +30,9 @@ public struct EditorView: View {
     /// Captured via `serializeScene()` the instant Play starts; consumed by
     /// `beginPlayModeRestore` on Stop to revert physics/animation/script drift.
     @State var playModeSnapshot: SceneData?
+    /// Taken with the snapshot: where everything stood, so that Stop can put
+    /// a scene back in place when loading it again is not needed.
+    @State var playSessionState: PlaySessionState?
     /// True from Stop-press until the async post-Play restore completes.
     @State var isRestoringPlayMode: Bool = false
     @State var showBlockedDuringPlayAlert = false

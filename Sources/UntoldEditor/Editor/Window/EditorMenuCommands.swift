@@ -42,16 +42,34 @@ extension Notification.Name {
 
 /// Playback-related settings that must be reachable from both the AppKit menu
 /// bar and SwiftUI views: the "use the scene camera while playing" toggle that
-/// used to live in the top toolbar, and whether a play session is open.
+/// used to live in the top toolbar, whether the keys and the mouse steer the
+/// game's camera while playing, and whether a play session is open.
 final class EditorPlaybackSettings: ObservableObject {
-    static let shared = EditorPlaybackSettings()
+    static let shared = EditorPlaybackSettings(defaults: .standard)
+
+    static let steersCameraKey = "editor.play.steersCamera"
 
     @Published var useSceneCameraDuringPlay: Bool = false
+    /// Whether the keys and the mouse steer the game's camera while playing,
+    /// as they steer the editor's while editing. On until it is switched off:
+    /// a game that steers its camera itself wants it off. Kept across launches.
+    @Published var steersCameraWhilePlaying: Bool {
+        didSet {
+            defaults?.set(steersCameraWhilePlaying, forKey: Self.steersCameraKey)
+        }
+    }
+
     /// True from Play to Stop, paused or not: the play flow owns the viewport's
     /// camera, so the View menu offers no other.
     @Published var isSessionActive = false
 
-    private init() {}
+    private let defaults: UserDefaults?
+
+    /// `defaults` nil keeps nothing, for tests.
+    init(defaults: UserDefaults?) {
+        self.defaults = defaults
+        steersCameraWhilePlaying = defaults?.object(forKey: Self.steersCameraKey) as? Bool ?? true
+    }
 
     /// Whether the viewport stays on the editor's camera while playing. While
     /// exploring it always does: flying through the scene is all explore mode

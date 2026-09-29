@@ -46,16 +46,37 @@ enum ViewportCameras {
         }
     }
 
-    /// The camera the viewport shows while editing. While the game runs the
-    /// play flow owns the camera, so there it is never a preview.
+    /// The settings of play the cameras follow; tests put their own here.
+    static var playback = EditorPlaybackSettings.shared
+
+    /// True from Play to Stop, paused or not.
+    static var isPlaying: Bool {
+        gameMode || playback.isSessionActive
+    }
+
+    /// The camera the viewport shows while editing. From Play to Stop the play
+    /// flow owns the camera, so there it is never a preview.
     static var current: ViewportCamera {
-        guard gameMode == false,
+        guard isPlaying == false,
               let active = CameraSystem.shared.activeCamera,
               isGameCamera(active)
         else {
             return .editor
         }
         return .game(active)
+    }
+
+    /// The camera the keys and the mouse steer now, or nil when they steer
+    /// none. While editing it is the editor's, and a game camera shown as a
+    /// locked preview stays where it is. While playing it is the camera the
+    /// viewport shows: the game's, unless View > Steer the Camera While
+    /// Playing is off and the game steers it alone, or the editor's when the
+    /// View menu keeps the viewport on it.
+    static var steered: EntityID? {
+        if let active = CameraSystem.shared.activeCamera, isGameCamera(active) {
+            return isPlaying && playback.steersCameraWhilePlaying ? active : nil
+        }
+        return findSceneCamera()
     }
 
     /// True while the viewport is a locked preview of a game camera: the mouse

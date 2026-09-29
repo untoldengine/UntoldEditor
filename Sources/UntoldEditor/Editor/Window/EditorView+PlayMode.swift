@@ -45,7 +45,9 @@ extension EditorView {
 
         if shouldPlay {
             if capturesSnapshot {
-                playModeSnapshot = serializeScene()
+                let snapshot = serializeScene()
+                playModeSnapshot = snapshot
+                playSessionState = PlaySessionState.capture(saved: snapshot)
             }
             isPlaying = true
             gameMode = true
@@ -58,18 +60,55 @@ extension EditorView {
             gameMode = false
             AnimationSystem.shared.isEnabled = false
             USCSystem.shared.stopPlayMode()
+
+            let snapshot = capturesSnapshot ? playModeSnapshot : nil
+            let reasonToLoadAgain = snapshot == nil ? nil : editor_reasonToLoadTheSceneAgain()
+            let loadsAgain = snapshot != nil && reasonToLoadAgain != nil
             // A library built during play waits for the snapshot restore below before it loads.
-            ComponentLibraryController.shared.playModeDidStop(restoring: capturesSnapshot && playModeSnapshot != nil)
+            ComponentLibraryController.shared.playModeDidStop(restoring: loadsAgain)
             // Active-camera fixup is deliberately NOT done here: if a restore is about
             // to run, it must target the restored entities (new IDs), not the
             // about-to-be-destroyed drifted ones. beginPlayModeRestore's completion
-            // handles it instead; the legacy fallback below handles the no-restore case.
-            if capturesSnapshot, let snapshot = playModeSnapshot {
+            // handles it instead; the other two ways out handle it themselves.
+            if let snapshot, let reasonToLoadAgain {
+                Logger.log(message: "Play stopped. The scene is loaded again: \(reasonToLoadAgain).")
                 beginPlayModeRestore(from: snapshot)
+            } else if snapshot != nil {
+                finishPlayModeInPlace()
             } else {
                 updateActiveCameraForPlayMode()
             }
         }
+    }
+
+    /// Why Stop has to load the scene again; nil when the session moved
+    /// nothing but where things stand, which is put back in place.
+    func editor_reasonToLoadTheSceneAgain() -> PlaySessionState.ReasonToLoadAgain? {
+        guard let state = playSessionState else {
+            return .cannotBeCompared
+        }
+        // The scene is saved once more only to be compared. What the
+        // serializer has to say about it, it said at Play.
+        let logLevel = Logger.logLevel
+        Logger.logLevel = .none
+        defer { Logger.logLevel = logLevel }
+        return state.reasonToLoadAgain(saved: serializeScene())
+    }
+
+    /// Ends a play session that moved nothing but where things stand: they
+    /// are put back, and the scene is the one from before Play. Its entities
+    /// are the same ones, so the selection, the undo history and what is
+    /// hidden or locked stay as they were, and nothing is loaded.
+    func finishPlayModeInPlace() {
+        let restored = playSessionState?.restoreInPlace() ?? 0
+        playModeSnapshot = nil
+        playSessionState = nil
+        Logger.log(message: "Play stopped. The scene was put back in place (\(restored) moved).")
+
+        CameraSystem.shared.activeCamera = findSceneCamera()
+        updateActiveCameraForPlayMode()
+        selectionManager.refreshGizmo()
+        selectionManager.objectWillChange.send()
     }
 
     /// Reverts Play-mode drift (physics/animation/USC-script mutations) by wiping
@@ -82,6 +121,10 @@ extension EditorView {
     func beginPlayModeRestore(from snapshot: SceneData) {
         isRestoringPlayMode = true
         playModeSnapshot = nil
+        playSessionState = nil
+        // The editor's camera is the editor's, not the scene's: it is where the
+        // user was looking, and the scene coming back must not move it.
+        let editorCamera = CameraPlacement.capture(of: findSceneCamera())
 
         destroyAllEntities()
         removeGizmo()
@@ -100,6 +143,7 @@ extension EditorView {
             sceneGraphModel.refreshHierarchy()
 
             CameraSystem.shared.activeCamera = findSceneCamera()
+            editorCamera?.apply(to: findSceneCamera())
             updateActiveCameraForPlayMode()
 
             isRestoringPlayMode = false

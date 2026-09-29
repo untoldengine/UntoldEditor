@@ -19,15 +19,13 @@ extension UntoldRenderer {
             InputSystem.shared.releaseFlyKeysTheKeyboardLetGo()
         #endif
 
-        // Block editor + camera input during play unless the scene camera is active
-        if gameMode, CameraSystem.shared.activeCamera != findSceneCamera() { return }
+        // The keys fly the camera that is steered now: the editor's while
+        // editing, and while playing the one the viewport shows. A locked
+        // preview of a game camera takes no input, and neither does a game
+        // that steers its camera alone.
+        guard let steeredCamera = ViewportCameras.steered else { return }
 
-        // A locked preview of a game camera takes no input either: nothing
-        // moves until the editor's camera is chosen again.
-        guard ViewportCameras.isLockedPreview == false else { return }
-
-        // Always allow camera WASDQE input, regardless of editor state. The
-        // camera speed of the viewport header scales the step.
+        // The camera speed of the viewport header scales the step.
         let input = (
             w: InputSystem.shared.keyState.wPressed,
             a: InputSystem.shared.keyState.aPressed,
@@ -36,10 +34,11 @@ extension UntoldRenderer {
             q: InputSystem.shared.keyState.qPressed,
             e: InputSystem.shared.keyState.ePressed
         )
-        moveCameraWithInput(entityId: findSceneCamera(), input: input, speed: EditorViewportSettings.shared.speedMultiplier, deltaTime: 0.1)
+        moveCameraWithInput(entityId: steeredCamera, input: input, speed: EditorViewportSettings.shared.speedMultiplier, deltaTime: 0.1)
 
-        // Editor is optional; only gate editor logic with this flag
-        let isEditorEnabled = editorController?.isEnabled ?? (editorController != nil)
+        // Editor is optional; only gate editor logic with this flag. From Play
+        // to Stop nothing is edited: the gizmo moves no entity.
+        let isEditorEnabled = ViewportCameras.isPlaying == false && (editorController?.isEnabled ?? (editorController != nil))
 
         // Only proceed into gizmo/editor handling if:
         //  - editor exists/enabled

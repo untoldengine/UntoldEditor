@@ -203,6 +203,67 @@ final class EditorUntoldRendererTests: XCTestCase {
         XCTAssertEqual(position(of: testCamera), gameEye, "The previewed camera is only looked through")
     }
 
+    /// Play on a camera of the game, with the settings of play the test chooses.
+    private func playOnAGameCamera(steering: Bool) -> EntityID {
+        let playback = EditorPlaybackSettings(defaults: nil)
+        playback.steersCameraWhilePlaying = steering
+        playback.isSessionActive = true
+        ViewportCameras.playback = playback
+
+        testCamera = createEntity()
+        registerComponent(entityId: testCamera, componentType: CameraComponent.self)
+        cameraLookAt(entityId: testCamera, eye: simd_float3(3, 3, 3), target: .zero, up: simd_float3(0, 1, 0))
+        CameraSystem.shared.activeCamera = testCamera
+        gameMode = true
+        return testCamera
+    }
+
+    func test_flyKeys_moveTheGamesCamera_whilePlaying() {
+        let savedPlayback = ViewportCameras.playback
+        defer { ViewportCameras.playback = savedPlayback }
+        let gameCamera = playOnAGameCamera(steering: true)
+        let gameBefore = position(of: gameCamera)
+
+        let editor = flyForward()
+
+        XCTAssertEqual(editor.after, editor.before, "the editor's camera is not the one on screen")
+        XCTAssertGreaterThan(simd_length(position(of: gameCamera) - gameBefore), 0.001, "W flies the camera the viewport shows")
+    }
+
+    func test_flyKeys_moveNothing_whileAGameSteersItsCameraAlone() {
+        let savedPlayback = ViewportCameras.playback
+        defer { ViewportCameras.playback = savedPlayback }
+        let gameCamera = playOnAGameCamera(steering: false)
+        let gameBefore = position(of: gameCamera)
+
+        let editor = flyForward()
+
+        XCTAssertEqual(editor.after, editor.before)
+        XCTAssertEqual(position(of: gameCamera), gameBefore)
+        XCTAssertTrue(InputSystem.shared.keyState.wPressed, "the key is still the game's to read")
+    }
+
+    func test_theGizmo_movesNoEntity_whilePlaying() {
+        let savedPlayback = ViewportCameras.playback
+        defer { ViewportCameras.playback = savedPlayback }
+        testEntity = createEntity()
+        registerTransformComponent(entityId: testEntity)
+        activeEntity = testEntity
+        gizmoActive = true
+        editorController = EditorController(selectionManager: SelectionManager())
+        editorController?.isEnabled = true
+        editorController?.activeMode = .translate
+        editorController?.activeAxis = .x
+        _ = playOnAGameCamera(steering: true)
+        let before = getLocalPosition(entityId: testEntity)
+
+        InputSystem.shared.mouseActive = true
+        InputSystem.shared.mouseDeltaX = 40
+        renderer.handleSceneInput()
+
+        XCTAssertEqual(getLocalPosition(entityId: testEntity), before)
+    }
+
     func test_aStuckFlyKey_stopsFlying_onceTheKeyboardLetItGo() {
         let savedReader = InputSystem.shared.physicalKeyState
         let savedTrust = InputSystem.shared.isPhysicalKeyStateTrusted

@@ -169,7 +169,7 @@
 
         /// The tool a key press picks: ⌥ with 1, 2, 3 or 4 while editing.
         internal func toolShortcut(for event: NSEvent) -> TransformTool? {
-            guard gameMode == false, event.modifierFlags.contains(.option) else {
+            guard ViewportCameras.isPlaying == false, event.modifierFlags.contains(.option) else {
                 return nil
             }
             return TransformTool.tool(forKeyCode: event.keyCode)
@@ -191,9 +191,14 @@
         static let clickSlop: CGFloat = 3
 
         /// False while the viewport is a locked preview of a game camera: the
-        /// pointer would neither steer nor pick through what is on screen.
+        /// pointer would not pick through what is on screen.
         private var canvasTakesThePointer: Bool {
             ViewportCameras.isLockedPreview == false
+        }
+
+        /// The camera the keys and the mouse steer now, or nil when they steer none.
+        private var steeredCamera: EntityID? {
+            ViewportCameras.steered
         }
 
         func canvasLeftMouseDown(_ event: NSEvent, at location: NSPoint) {
@@ -236,9 +241,6 @@
         func canvasRightMouseDown(_ event: NSEvent) {
             syncModifiers(from: event)
             keyState.rightMousePressed = true
-            guard canvasTakesThePointer else {
-                return
-            }
             beginCameraDrag()
         }
 
@@ -254,16 +256,10 @@
 
         func canvasScrolled(_ event: NSEvent) {
             syncModifiers(from: event)
-            guard canvasTakesThePointer else {
-                return
-            }
             handleMouseScroll(event)
         }
 
         func canvasMagnified(_ event: NSEvent) {
-            guard canvasTakesThePointer else {
-                return
-            }
             handleMagnify(by: event.magnification, phase: event.phase)
         }
 
@@ -442,12 +438,14 @@
             return eye + direction * depth
         }
 
-        /// Re-anchors the scene camera's target on `orbitPivot` before a navigation
+        /// Re-anchors the steered camera's target on `orbitPivot` before a navigation
         /// session. The target is only ever set by a look-at, so flying with WASD,
         /// loading a scene or zooming leaves it where it was, sometimes far away or
         /// behind the camera, and every orbit, zoom and pan step is measured from it.
         func reanchorSceneCameraTarget() {
-            let camera = findSceneCamera()
+            guard let camera = steeredCamera else {
+                return
+            }
             guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
                 return
             }
@@ -557,7 +555,9 @@
                 return
             }
 
-            let camera = findSceneCamera()
+            guard let camera = steeredCamera else {
+                return
+            }
             guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
                 handleError(.noActiveCamera)
                 return
@@ -637,7 +637,9 @@
                 return
             }
 
-            let camera = findSceneCamera()
+            guard let camera = steeredCamera else {
+                return
+            }
             guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
                 handleError(.noActiveCamera)
                 return
@@ -677,7 +679,9 @@
                 return
             }
 
-            let camera = findSceneCamera()
+            guard let camera = steeredCamera else {
+                return
+            }
             guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
                 handleError(.noActiveCamera)
                 return
@@ -708,7 +712,9 @@
         /// ⌘-drag). Dragging up or right zooms in; the step scales with the
         /// distance to the target.
         private func dragZoomSceneCamera(by delta: simd_float2) {
-            let camera = findSceneCamera()
+            guard let camera = steeredCamera else {
+                return
+            }
             guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
                 handleError(.noActiveCamera)
                 return
@@ -732,9 +738,10 @@
 
         /// A left click: selects what is under the pointer, or clears the
         /// selection when nothing is there, so the Inspector empties. A click on
-        /// a gizmo handle is left to the drag that moves it.
+        /// a gizmo handle is left to the drag that moves it. While the game plays
+        /// a click is the game's and selects nothing.
         func selectEntity(at currentLocation: NSPoint, in view: NSView) {
-            guard editorController?.isEnabled == true else {
+            guard editorController?.isEnabled == true, ViewportCameras.isPlaying == false else {
                 return
             }
 
@@ -832,9 +839,14 @@
 
         // MARK: - The scene on the left button
 
-        /// True while the editor is there and enabled; it only gates what is the editor's.
+        /// True while the editor is there, enabled and editing; it only gates
+        /// what is the editor's. From Play to Stop the pointer is the game's:
+        /// it takes no gizmo handle and moves no entity.
         private var isEditorEnabled: Bool {
-            editorController?.isEnabled ?? (editorController != nil)
+            guard ViewportCameras.isPlaying == false else {
+                return false
+            }
+            return editorController?.isEnabled ?? (editorController != nil)
         }
 
         /// A drag with the left button began at `currentLocation`. It works on the
@@ -975,22 +987,18 @@
         /// Radians the camera orbits per point of an orbit drag.
         static let dragOrbitSpeed: Float = 0.005
 
-        /// The right button went down on the canvas and steers the scene camera
-        /// until it is released. With nothing held the drag looks around where
+        /// The right button went down on the canvas and steers the camera until
+        /// it is released: the editor's while editing, and while playing the one
+        /// the viewport shows. With nothing held the drag looks around where
         /// the camera stands, as the mouse does in a game; ⇧ pans, ⌘ moves the
         /// camera forward and back, ⌥ orbits the point ahead. The keys keep
         /// flying the camera meanwhile. A navigation control over the viewport
-        /// begins the same drag and says itself what it does, as `chosen`; over
-        /// a locked preview it begins none.
+        /// begins the same drag and says itself what it does, as `chosen`.
         func beginCameraDrag(as chosen: CameraDragAction? = nil) {
-            guard canvasTakesThePointer else {
+            guard let camera = steeredCamera else {
                 return
             }
-            // While a game plays on its own camera the scene camera is not the view.
-            if gameMode, CameraSystem.shared.activeCamera != findSceneCamera() {
-                return
-            }
-            guard let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera()) else {
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
                 handleError(.noActiveCamera)
                 return
             }
@@ -1007,9 +1015,9 @@
             // looking around only needs where the camera stands.
             if action != .look {
                 reanchorSceneCameraTarget()
-                let orbitDistance = simd_length(cameraComponent.localPosition - getCameraTarget(entityId: findSceneCamera()))
+                let orbitDistance = simd_length(cameraComponent.localPosition - getCameraTarget(entityId: camera))
                 setOrbitOffset(
-                    entityId: findSceneCamera(),
+                    entityId: camera,
                     uTargetOffset: orbitDistance > 0.001 ? orbitDistance : length(cameraComponent.localPosition)
                 )
             }
@@ -1078,7 +1086,9 @@
                 return
             }
 
-            let camera = findSceneCamera()
+            guard let camera = steeredCamera else {
+                return
+            }
             guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
                 handleError(.noActiveCamera)
                 return
@@ -1129,7 +1139,10 @@
                 return
             }
 
-            orbitAround(entityId: findSceneCamera(), uPosition: simd_float2(deltaX, deltaY) * InputSystem.dragOrbitSpeed)
+            guard let camera = steeredCamera else {
+                return
+            }
+            orbitAround(entityId: camera, uPosition: simd_float2(deltaX, deltaY) * InputSystem.dragOrbitSpeed)
         }
 
         func leftMouseDragged(_ delta: simd_float2) {

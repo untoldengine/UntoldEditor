@@ -40,6 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var showFPSAdvancedItem: NSMenuItem?
     private var overlayItems: [ViewportOverlay: NSMenuItem] = [:]
     private var sceneCamItem: NSMenuItem?
+    private var steerWhilePlayingItem: NSMenuItem?
     private var cameraMenu: NSMenu?
     private var panelMenuItems: [PanelID: [NSMenuItem]] = [:]
     private var dockMenuItem: NSMenuItem?
@@ -180,6 +181,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenu.addItem(cameraItem)
         self.cameraMenu = cameraMenu
         sceneCamItem = addItem(to: viewMenu, title: "Use Scene Camera During Play", action: #selector(menuToggleSceneCam), key: "")
+        sceneCamItem?.toolTip = "While playing, keep the viewport on the editor's camera"
+        steerWhilePlayingItem = addItem(to: viewMenu, title: "Steer the Camera While Playing", action: #selector(menuToggleSteerWhilePlaying), key: "")
+        steerWhilePlayingItem?.toolTip = "While playing, the keys and the mouse steer the game's camera as they steer the editor's. Switch it off for a game that steers its camera itself."
         viewMenu.addItem(.separator())
 
         // Camera navigation style (radio-style checkmarks, synced in menuNeedsUpdate).
@@ -402,6 +406,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.state = EditorViewportOverlaySettings.shared.isShown(overlay) ? .on : .off
         }
         sceneCamItem?.state = EditorPlaybackSettings.shared.useSceneCameraDuringPlay ? .on : .off
+        steerWhilePlayingItem?.state = EditorPlaybackSettings.shared.steersCameraWhilePlaying ? .on : .off
 
         let layout = EditorDockLayout.shared
         for (panel, items) in panelMenuItems {
@@ -477,6 +482,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func menuToggleSceneCam() {
         EditorPlaybackSettings.shared.useSceneCameraDuringPlay.toggle()
+    }
+
+    @objc private func menuToggleSteerWhilePlaying() {
+        EditorPlaybackSettings.shared.steersCameraWhilePlaying.toggle()
     }
 
     /// View > Camera: the editor's camera, then every game camera of the scene by name,
