@@ -200,7 +200,9 @@ func updateGizmoDrag(ray: GizmoDragRay) {
         if let handle = state.handle {
             EditorRepresentationHandles.move(handle, toWorld: state.startGizmoWorldPosition + translation)
         } else {
-            translateTo(entityId: activeEntity, position: state.startActiveLocalPosition + translation)
+            // The gizmo moves in world space; the entity's position is its parent's.
+            let localTranslation = localTranslation(ofWorld: translation, for: activeEntity)
+            translateTo(entityId: activeEntity, position: state.startActiveLocalPosition + localTranslation)
         }
         translateTo(entityId: parentEntityIdGizmo, position: state.startGizmoWorldPosition + translation)
 
@@ -208,9 +210,10 @@ func updateGizmoDrag(ray: GizmoDragRay) {
         if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
             handleLightScaleInput(projectedAmount: incrementalAmount, axis: state.axisWorldDirection)
         } else {
+            // The engine takes the axis as the entity's parent sees it.
             applyWorldSpaceScaleDelta(
                 entityId: activeEntity,
-                worldAxis: state.axisWorldDirection,
+                worldAxis: localAxis(ofWorld: state.axisWorldDirection, for: activeEntity),
                 projectedAmount: incrementalAmount
             )
         }
@@ -256,7 +259,9 @@ func applyGizmoRotationDelta(entityId: EntityID, axis: simd_float3, degrees: Flo
         return
     }
 
-    let delta = simd_quatf(angle: degreesToRadians(degrees: degrees), axis: simd_normalize(axis))
+    // `axis` is the world's; the rotation is stored relative to the parent.
+    let axisForParent = localAxis(ofWorld: simd_normalize(axis), for: entityId)
+    let delta = simd_quatf(angle: degreesToRadians(degrees: degrees), axis: simd_normalize(axisForParent))
     let currentRotation = normalizedRotationOrIdentity(localTransform.rotation)
     localTransform.rotation = simd_normalize(simd_mul(delta, currentRotation))
     translateTo(entityId: entityId, position: localTransform.position)
@@ -281,6 +286,63 @@ private func syncStoredAxisRotationsFromQuaternion(entityId: EntityID) {
     localTransform.rotationX = euler.pitch
     localTransform.rotationY = euler.yaw
     localTransform.rotationZ = euler.roll
+}
+
+/// The entity's parent, or nil for a root. An entity outside the scene graph
+/// has none, which the engine's `getEntityParent` would report as an error.
+private func parentInSceneGraph(of entityId: EntityID) -> EntityID? {
+    guard hasComponent(entityId: entityId, componentType: ScenegraphComponent.self),
+          let parent = getEntityParent(entityId: entityId),
+          parent != .invalid
+    else {
+        return nil
+    }
+    return parent
+}
+
+/// A movement in world space as the entity's parent measures it. An entity's
+/// position is relative to its parent, so under a parent that is turned or
+/// scaled the same movement has other numbers: half a turn around Y reverses
+/// its X and Z, a parent twice the size halves it.
+func localTranslation(ofWorld translation: simd_float3, for entityId: EntityID) -> simd_float3 {
+    guard let parent = parentInSceneGraph(of: entityId),
+          let parentSpace = scene.get(component: WorldTransformComponent.self, for: parent)?.space
+    else {
+        return translation
+    }
+
+    let determinant = simd_determinant(parentSpace)
+    guard determinant.isFinite, abs(determinant) > 1e-12 else {
+        // A parent squashed flat has no way back; its turn alone still has.
+        return simd_act(entityWorldRotation(entityId: parent).inverse, translation)
+    }
+    let local = simd_mul(parentSpace.inverse, simd_float4(translation, 0))
+    return simd_float3(local.x, local.y, local.z)
+}
+
+/// An axis of the world as the entity's parent sees it, for a turn that is
+/// stored relative to the parent.
+func localAxis(ofWorld axis: simd_float3, for entityId: EntityID) -> simd_float3 {
+    guard let parent = parentInSceneGraph(of: entityId) else {
+        return axis
+    }
+    return simd_act(entityWorldRotation(entityId: parent).inverse, axis)
+}
+
+/// The entity's rotation in world space: its own composed with its ancestors',
+/// from the local transforms, so it is right before the frame's world update.
+func entityWorldRotation(entityId: EntityID) -> simd_quatf {
+    var rotation = simd_quatf(real: 1, imag: .zero)
+    var current: EntityID? = entityId
+    var depth = 0
+    while let id = current, id != .invalid, depth < 64 {
+        if let local = scene.get(component: LocalTransformComponent.self, for: id) {
+            rotation = simd_normalize(simd_mul(normalizedRotationOrIdentity(local.rotation), rotation))
+        }
+        current = parentInSceneGraph(of: id)
+        depth += 1
+    }
+    return rotation
 }
 
 private func worldDirection(for axis: TransformAxis) -> simd_float3 {

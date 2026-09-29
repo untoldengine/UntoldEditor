@@ -103,7 +103,8 @@ extension UntoldRenderer {
                 viewportSize: renderInfo.viewPort
             )
             let t = axis * amt
-            translateBy(entityId: activeEntity, position: t)
+            // The gizmo moves in world space; the entity's position is its parent's.
+            translateBy(entityId: activeEntity, position: localTranslation(ofWorld: t, for: activeEntity))
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
             consumeMouseDragDelta()
@@ -118,7 +119,8 @@ extension UntoldRenderer {
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
             let t = axis * amt
-            translateBy(entityId: activeEntity, position: t)
+            // The gizmo moves in world space; the entity's position is its parent's.
+            translateBy(entityId: activeEntity, position: localTranslation(ofWorld: t, for: activeEntity))
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
             consumeMouseDragDelta()
@@ -133,7 +135,8 @@ extension UntoldRenderer {
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
             let t = axis * amt
-            translateBy(entityId: activeEntity, position: t)
+            // The gizmo moves in world space; the entity's position is its parent's.
+            translateBy(entityId: activeEntity, position: localTranslation(ofWorld: t, for: activeEntity))
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
             consumeMouseDragDelta()
@@ -208,7 +211,8 @@ extension UntoldRenderer {
             if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
                 handleLightScaleInput(projectedAmount: amt, axis: axis)
             } else {
-                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: axis, projectedAmount: amt)
+                // The engine takes the axis as the entity's parent sees it.
+                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
             }
             refreshInspector()
             consumeMouseDragDelta()
@@ -225,7 +229,8 @@ extension UntoldRenderer {
             if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
                 handleLightScaleInput(projectedAmount: amt, axis: axis)
             } else {
-                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: axis, projectedAmount: amt)
+                // The engine takes the axis as the entity's parent sees it.
+                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
             }
             refreshInspector()
             consumeMouseDragDelta()
@@ -242,7 +247,8 @@ extension UntoldRenderer {
             if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
                 handleLightScaleInput(projectedAmount: amt, axis: axis)
             } else {
-                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: axis, projectedAmount: amt)
+                // The engine takes the axis as the entity's parent sees it.
+                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
             }
             refreshInspector()
             consumeMouseDragDelta()

@@ -563,6 +563,99 @@ final class GizmoSystemTests: XCTestCase {
         }
     }
 
+    /// A child under a parent turned half around Y, as an object exported with
+    /// its orientation converted: the parent's X and Z point the other way.
+    private func makeChildOfATurnedParent() -> EntityID {
+        let parent = makeEntity(name: "TurnedParent", pos: SIMD3<Float>(5, 0, 0))
+        rotateTo(entityId: parent, rotation: simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0)))
+        let child = makeEntity(name: "Child")
+        setParent(childId: child, parentId: parent)
+        translateTo(entityId: child, position: SIMD3<Float>(1, 0, 0))
+        return child
+    }
+
+    func test_axisGizmoDrag_underATurnedParent_movesTheEntityWithTheGizmo() {
+        let axes: [TransformAxis] = [.x, .y, .z]
+
+        for axis in axes {
+            let child = makeChildOfATurnedParent()
+            let startWorldPosition = getPosition(entityId: child)
+            assertNearlyEqual(startWorldPosition, SIMD3<Float>(4, 0, 0))
+            activeEntity = child
+            createGizmo(mode: .translate)
+
+            let handle = findGizmoHandle(mode: .translate, axis: axis)
+            guard handle != .invalid else {
+                XCTFail("Expected translate handle for axis \(axis).")
+                return
+            }
+
+            activeHitGizmoEntity = handle
+            let startAxisAmount = component(of: startWorldPosition, along: axis)
+            beginGizmoDrag(ray: rayThroughGizmoAxis(axis, amount: startAxisAmount))
+            updateGizmoDrag(ray: rayThroughGizmoAxis(axis, amount: startAxisAmount + 1.5))
+
+            let expected = startWorldPosition + vector(for: axis, amount: 1.5)
+            assertNearlyEqual(getPosition(entityId: parentEntityIdGizmo), expected)
+            assertNearlyEqual(getPosition(entityId: child), expected)
+
+            endGizmoDrag()
+            removeGizmo()
+        }
+    }
+
+    func test_localTranslation_isTheWorldMovementAsTheParentMeasuresIt() {
+        let child = makeChildOfATurnedParent()
+        assertNearlyEqual(localTranslation(ofWorld: SIMD3<Float>(1, 2, 3), for: child), SIMD3<Float>(-1, 2, -3))
+
+        let root = makeEntity(name: "Root", pos: SIMD3<Float>(3, 0, 0))
+        assertNearlyEqual(localTranslation(ofWorld: SIMD3<Float>(1, 2, 3), for: root), SIMD3<Float>(1, 2, 3))
+
+        // A parent twice the size halves what its child has to move.
+        let bigParent = makeEntity(name: "BigParent")
+        scaleTo(entityId: bigParent, scale: SIMD3<Float>(repeating: 2))
+        let smallChild = makeEntity(name: "SmallChild")
+        setParent(childId: smallChild, parentId: bigParent)
+        assertNearlyEqual(localTranslation(ofWorld: SIMD3<Float>(1, 2, 3), for: smallChild), SIMD3<Float>(0.5, 1, 1.5))
+    }
+
+    func test_axisGizmoDrag_underATurnedParent_scalesTheAxisThatLiesAlongTheHandle() {
+        // Under a parent turned a quarter around Y the child's own Z lies along the world's X.
+        let parent = makeEntity(name: "QuarterTurnedParent")
+        rotateTo(entityId: parent, rotation: simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(0, 1, 0)))
+        let child = makeEntity(name: "ScaledChild")
+        setParent(childId: child, parentId: parent)
+        activeEntity = child
+        createGizmo(mode: .scale)
+
+        let xHandle = findGizmoHandle(mode: .scale, axis: .x)
+        guard xHandle != .invalid else {
+            XCTFail("Expected x-axis scale handle.")
+            return
+        }
+
+        activeHitGizmoEntity = xHandle
+        beginGizmoDrag(ray: rayThroughGizmoAxis(.x, amount: 0))
+        updateGizmoDrag(ray: rayThroughGizmoAxis(.x, amount: 0.5))
+
+        let scale = scene.get(component: LocalTransformComponent.self, for: child)?.scale ?? .zero
+        assertNearlyEqual(scale, SIMD3<Float>(1.0, 1.0, 1.5))
+    }
+
+    func test_rotationDelta_underATurnedParent_turnsAboutTheWorldAxis() {
+        let child = makeChildOfATurnedParent()
+
+        applyGizmoRotationDelta(entityId: child, axis: SIMD3<Float>(1, 0, 0), degrees: 90)
+
+        // A quarter turn about the world's X carries what pointed up to the world's Z.
+        let worldRotation = entityWorldRotation(entityId: child)
+        let parentRotation = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
+        let upBefore = simd_act(parentRotation, SIMD3<Float>(0, 1, 0))
+        let quarterTurn = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(1, 0, 0))
+        assertNearlyEqual(simd_act(worldRotation, SIMD3<Float>(0, 1, 0)), simd_act(quarterTurn, upBefore))
+        assertNearlyEqual(simd_act(worldRotation, SIMD3<Float>(0, 1, 0)), SIMD3<Float>(0, 0, 1))
+    }
+
     func test_axisGizmoDrag_scalesFromCurrentRayConstraint() {
         let active = makeEntity(name: "ScaledBox", pos: SIMD3<Float>(0, 0, 0))
         activeEntity = active
