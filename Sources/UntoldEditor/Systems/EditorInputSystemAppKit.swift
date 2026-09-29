@@ -17,13 +17,31 @@
 
     private final class EditorInputTargetViewRef {
         weak var view: NSView?
-        /// Set when a left-button press landed on the canvas, so the drag that
-        /// follows keeps feeding the canvas even if the pointer leaves it.
-        var isTrackingLeftMouseDrag = false
-        /// What the in-progress left-button drag does to the camera. Resolved
-        /// once when the drag begins so a modifier released mid-drag does not
-        /// flip a pan into an orbit halfway through.
+        /// Where the left button went down on the canvas; nil while it is up.
+        var leftDownLocation: NSPoint?
+        /// True once the left button's press became a drag, which works on the
+        /// selection's gizmo. A press released before that is a click.
+        var isObjectDragActive = false
+        /// True while the right button, pressed on the canvas, steers the camera.
+        var isCameraDragActive = false
+        /// What the right button's drag does to the camera. Resolved once when
+        /// it begins so a modifier released mid-drag does not flip a pan into a
+        /// look halfway through.
         var activeDragAction: CameraDragAction = .none
+        /// Set when a left-button drag began as a ⇧-drag with a selection, which
+        /// moves that entity from the mouse deltas and takes no gizmo handle.
+        var isEntityDragReserved = false
+        /// Whether the keyboard itself holds a key down, asked of the system and
+        /// not of the events. Tests replace it.
+        var isKeyPhysicallyDown: (UInt16) -> Bool = { keyCode in
+            CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(keyCode))
+        }
+
+        /// True once the keyboard's own state has agreed with a key-down event,
+        /// which shows it can be read here. Until then no key is let go on its word.
+        var isPhysicalKeyStateTrusted = false
+        /// Whether a key let go without its key-up event has been reported.
+        var hasReportedLostKeyUp = false
         /// When the last scroll event navigated the camera. A gap longer than
         /// `InputSystem.scrollSessionGap` starts a new session, which re-anchors
         /// the pivot; inside a session the pivot stays put so an orbit in
@@ -34,141 +52,247 @@
     private let editorInputTargetViewRef = EditorInputTargetViewRef()
 
     public extension InputSystem {
+        /// Tells the input system which view is the canvas. On macOS the viewport's
+        /// view receives the mouse, the wheel, the trackpad and the keys itself, as
+        /// any AppKit view does, and hands them over through the `canvas…` functions
+        /// below, so no gesture recogniser is attached.
         func setupGestureRecognizers(view: NSView) {
             editorInputTargetViewRef.view = view
-
-            // Pinch gesture
-            let pinchGesture = NSMagnificationGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
-            view.addGestureRecognizer(pinchGesture)
-
-            // Pan gesture
-            let panGesture = NSPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
-
-            view.addGestureRecognizer(panGesture)
-
-            // Click gesture
-            let rightClickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleRightClick(_:)))
-            view.addGestureRecognizer(rightClickGesture)
-            rightClickGesture.buttonMask = 0x2 // 0x1 = left, 0x2 = right, 0x4 = middle
-
-            // A left click (no drag) on empty space clears the selection. The
-            // click recogniser fails as soon as the pointer moves, so it never
-            // competes with the pan recogniser for drags.
-            let leftClickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleLeftClick(_:)))
-            leftClickGesture.buttonMask = 0x1
-            view.addGestureRecognizer(leftClickGesture)
         }
 
+        /// The one shortcut that is the window's and not the canvas's: ⌘Z and ⇧⌘Z
+        /// undo and redo wherever the keyboard is, except in a text field.
         func setupEventMonitors() {
-            NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-                self?.handleFlagsChanged(event)
-                return event
-            }
-
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                if self?.shouldHandleKey(event) == true,
-                   event.modifierFlags.contains(.command),
-                   event.charactersIgnoringModifiers?.lowercased() == "z"
-                {
-                    if event.modifierFlags.contains(.shift) {
-                        EditorUndoManager.shared.redo()
-                    } else {
-                        EditorUndoManager.shared.undo()
-                    }
-                    return nil
-                }
-
-                // Let Command-based shortcuts (native menu key equivalents like
-                // ⌘1/⌘2/⌘3) reach the menu instead of being eaten as game input.
-                if event.modifierFlags.contains(.command) {
+                guard self?.isTextBeingEdited == false,
+                      event.modifierFlags.contains(.command),
+                      event.charactersIgnoringModifiers?.lowercased() == "z"
+                else {
                     return event
                 }
-
-                // Game/camera keys only belong to the canvas while it is the
-                // frontmost view under the pointer; an overlay such as the
-                // project gallery must not drive the camera behind it.
-                if self?.shouldHandleKey(event) == true,
-                   self?.isPointerOverEditorInputView() == true
-                {
-                    self?.keyPressed(event.keyCode)
-                    return nil // Mark event as handled
+                if event.modifierFlags.contains(.shift) {
+                    EditorUndoManager.shared.redo()
+                } else {
+                    EditorUndoManager.shared.undo()
                 }
-                return event // Pass event to the system
+                return nil
             }
+        }
 
-            NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
-                // Releases are never gated by hover so a key pressed over the
-                // canvas cannot get stuck down after the pointer moves away.
-                if self?.shouldHandleKey(event) == true {
-                    self?.keyReleased(event.keyCode)
-                    return nil // Mark event as handled
+        /// Whether the keys the canvas receives are for the scene: the pointer is
+        /// over the canvas, or a button pressed on it is still held, wherever the
+        /// drag went. An overlay such as the project gallery must not drive the
+        /// camera behind it.
+        internal var canvasOwnsKeys: Bool {
+            editorInputTargetViewRef.isCameraDragActive
+                || editorInputTargetViewRef.leftDownLocation != nil
+                || isPointerOverEditorInputView()
+        }
+
+        /// The keys that fly the camera, by their flag in the key state and their
+        /// macOS virtual key code: W, A, S, D, Q and E.
+        internal static let flyKeys: [(flag: WritableKeyPath<KeyState, Bool>, keyCode: UInt16)] = [
+            (\.wPressed, 13), (\.aPressed, 0), (\.sPressed, 1), (\.dPressed, 2), (\.qPressed, 12), (\.ePressed, 14),
+        ]
+
+        /// Reads whether the keyboard itself holds a key down. Tests replace it.
+        internal var physicalKeyState: (UInt16) -> Bool {
+            get { editorInputTargetViewRef.isKeyPhysicallyDown }
+            set { editorInputTargetViewRef.isKeyPhysicallyDown = newValue }
+        }
+
+        /// Whether the keyboard's own state has been seen to agree with the events.
+        internal var isPhysicalKeyStateTrusted: Bool {
+            get { editorInputTargetViewRef.isPhysicalKeyStateTrusted }
+            set { editorInputTargetViewRef.isPhysicalKeyStateTrusted = newValue }
+        }
+
+        /// A key-down event for a fly key: when the keyboard's own state agrees
+        /// that the key is down, that state can be trusted from here on.
+        internal func noteKeyDown(_ keyCode: UInt16) {
+            guard editorInputTargetViewRef.isPhysicalKeyStateTrusted == false,
+                  InputSystem.flyKeys.contains(where: { $0.keyCode == keyCode }),
+                  editorInputTargetViewRef.isKeyPhysicallyDown(keyCode)
+            else {
+                return
+            }
+            editorInputTargetViewRef.isPhysicalKeyStateTrusted = true
+        }
+
+        /// Lets go of the fly keys the keyboard no longer holds. A key-up event
+        /// can be lost: macOS sends none while ⌘ is down, nor to a window that
+        /// stopped being key, and a lost one would fly the camera forever.
+        internal func releaseFlyKeysTheKeyboardLetGo() {
+            guard editorInputTargetViewRef.isPhysicalKeyStateTrusted else {
+                return
+            }
+            var letGo = false
+            for key in InputSystem.flyKeys where keyState[keyPath: key.flag] {
+                if editorInputTargetViewRef.isKeyPhysicallyDown(key.keyCode) == false {
+                    keyState[keyPath: key.flag] = false
+                    letGo = true
                 }
-                return event
             }
-
-            NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-                guard let self, isEventInsideEditorInputView(event) else {
-                    editorInputTargetViewRef.isTrackingLeftMouseDrag = false
-                    return event
-                }
-                editorInputTargetViewRef.isTrackingLeftMouseDrag = true
-                leftMouseDown(event)
-                return event
-            }
-
-            NSEvent.addLocalMonitorForEvents(matching: .leftMouseDragged) { [weak self] event in
-                guard editorInputTargetViewRef.isTrackingLeftMouseDrag else {
-                    return event
-                }
-                self?.leftMouseDragged(simd_float2(Float(event.deltaX), Float(event.deltaY)))
-                return event
-            }
-
-            NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
-                // Always clear pressed state, even for presses that started
-                // elsewhere, so the canvas never believes a button is held.
-                editorInputTargetViewRef.isTrackingLeftMouseDrag = false
-                self?.leftMouseUp(event)
-                return event
-            }
-
-            NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                self?.handleMouseScroll(event)
-                return event
+            if letGo, editorInputTargetViewRef.hasReportedLostKeyUp == false {
+                editorInputTargetViewRef.hasReportedLostKeyUp = true
+                Logger.log(message: "A camera key was released without its key-up event; the editor let it go from the keyboard's own state.")
             }
         }
 
-        private func shouldHandleKey(_: NSEvent) -> Bool {
-            if let firstResponder = NSApp.keyWindow?.firstResponder {
-                if firstResponder is NSTextView {
-                    return false // allow normal text input
-                }
+        /// True for W, A, S, D, Q or E pressed with ⌘ while the right button
+        /// steers the camera, which the canvas takes: the menu must not have it
+        /// for a shortcut. It flies the camera when the keyboard's own state can
+        /// be read, since macOS sends no key up while ⌘ is down; else it is dropped.
+        internal func takesCommandKeyDuringCameraDrag(_ event: NSEvent) -> Bool {
+            guard keyState.rightMousePressed,
+                  event.modifierFlags.contains(.command),
+                  InputSystem.flyKeys.contains(where: { $0.keyCode == event.keyCode })
+            else {
+                return false
             }
-
-            return true // handle the key event
+            noteKeyDown(event.keyCode)
+            if editorInputTargetViewRef.isPhysicalKeyStateTrusted {
+                keyPressed(event.keyCode)
+            }
+            return true
         }
 
-        @objc internal func handlePinch(_ gestureRecognizer: NSMagnificationGestureRecognizer) {
-            handlePinchGesture(gestureRecognizer, in: gestureRecognizer.view!)
+        /// True while a text field has the keyboard, which then is not the editor's.
+        private var isTextBeingEdited: Bool {
+            NSApp.keyWindow?.firstResponder is NSTextView
         }
 
-        @objc internal func handlePan(_ gestureRecognizer: NSPanGestureRecognizer) {
-            handlePanGesture(gestureRecognizer, in: gestureRecognizer.view!)
+        // MARK: - The canvas's events
+
+        // The viewport's view receives the mouse, the wheel, the trackpad and the
+        // keys as any AppKit view does and hands each event over here. The left
+        // button works on the scene, the right one steers the camera, and the
+        // keys fly it.
+
+        /// How far the pointer may travel between press and release and still click.
+        static let clickSlop: CGFloat = 3
+
+        func canvasLeftMouseDown(_ event: NSEvent, at location: NSPoint) {
+            syncModifiers(from: event)
+            leftMouseDown(event)
+            editorInputTargetViewRef.leftDownLocation = location
+            editorInputTargetViewRef.isObjectDragActive = false
         }
 
-        @objc internal func handleRightClick(_ gestureRecognizer: NSClickGestureRecognizer) {
-            mouseRaycast(gestureRecognizer: gestureRecognizer, in: gestureRecognizer.view!)
-        }
-
-        @objc internal func handleLeftClick(_ gestureRecognizer: NSClickGestureRecognizer) {
-            clearSelectionOnEmptyClick(gestureRecognizer: gestureRecognizer, in: gestureRecognizer.view!)
-        }
-
-        func handleMouseScroll(_ event: NSEvent) {
-            guard isEventInsideEditorInputView(event) else {
+        func canvasLeftMouseDragged(_ event: NSEvent, to location: NSPoint, in view: NSView) {
+            leftMouseDragged(simd_float2(Float(event.deltaX), Float(event.deltaY)))
+            guard let start = editorInputTargetViewRef.leftDownLocation else {
                 return
             }
 
+            if editorInputTargetViewRef.isObjectDragActive == false {
+                guard hypot(location.x - start.x, location.y - start.y) > InputSystem.clickSlop else {
+                    return
+                }
+                editorInputTargetViewRef.isObjectDragActive = true
+                beginObjectDrag(at: start, in: view)
+            }
+            continueObjectDrag(to: location, translation: NSPoint(x: location.x - start.x, y: location.y - start.y), in: view)
+        }
+
+        func canvasLeftMouseUp(_ event: NSEvent, at location: NSPoint, in view: NSView) {
+            leftMouseUp(event)
+            let wasPressedOnTheCanvas = editorInputTargetViewRef.leftDownLocation != nil
+            let wasDragging = editorInputTargetViewRef.isObjectDragActive
+            editorInputTargetViewRef.leftDownLocation = nil
+            editorInputTargetViewRef.isObjectDragActive = false
+
+            if wasDragging {
+                endObjectDrag()
+            } else if wasPressedOnTheCanvas {
+                selectEntity(at: location, in: view)
+            }
+        }
+
+        func canvasRightMouseDown(_ event: NSEvent) {
+            syncModifiers(from: event)
+            keyState.rightMousePressed = true
+            beginCameraDrag()
+        }
+
+        func canvasRightMouseDragged(_ event: NSEvent) {
+            // The event's Y grows down the screen; the view's Y points up.
+            moveCameraDrag(by: simd_float2(Float(event.deltaX), Float(-event.deltaY)))
+        }
+
+        func canvasRightMouseUp(_: NSEvent) {
+            keyState.rightMousePressed = false
+            endCameraDrag()
+        }
+
+        func canvasScrolled(_ event: NSEvent) {
+            syncModifiers(from: event)
+            handleMouseScroll(event)
+        }
+
+        func canvasMagnified(_ event: NSEvent) {
+            handleMagnify(by: event.magnification, phase: event.phase)
+        }
+
+        /// A key pressed while the canvas has the keyboard. False when the key is
+        /// not the canvas's to take, so the view passes it on.
+        func canvasKeyDown(_ event: NSEvent) -> Bool {
+            syncModifiers(from: event)
+
+            // ⌘ with the right button held moves the camera. A fly key pressed
+            // then must not reach the menu, where ⌘Q would quit the editor.
+            if takesCommandKeyDuringCameraDrag(event) {
+                return true
+            }
+            // Every other ⌘ shortcut is the menus'.
+            if event.modifierFlags.contains(.command) {
+                return false
+            }
+
+            guard canvasOwnsKeys else {
+                return false
+            }
+            keyPressed(event.keyCode)
+            noteKeyDown(event.keyCode)
+            return true
+        }
+
+        /// A key released while the canvas has the keyboard. Never gated by where
+        /// the pointer is, so a key pressed over the canvas cannot stay down.
+        func canvasKeyUp(_ event: NSEvent) {
+            syncModifiers(from: event)
+            keyReleased(event.keyCode)
+        }
+
+        func canvasFlagsChanged(_ event: NSEvent) {
+            syncModifiers(from: event)
+        }
+
+        /// The canvas stopped receiving the keys: another view took the keyboard,
+        /// or the window stopped being key. Every key and button it held is let
+        /// go and its drags end, since their releases will go elsewhere.
+        func canvasLostTheKeyboard() {
+            for key in InputSystem.flyKeys {
+                keyState[keyPath: key.flag] = false
+            }
+            keyState.spacePressed = false
+            keyState.shiftPressed = false
+            keyState.ctrlPressed = false
+            keyState.commandPressed = false
+            keyState.altPressed = false
+            keyState.leftMousePressed = false
+            keyState.rightMousePressed = false
+            mouseActive = false
+
+            if editorInputTargetViewRef.isObjectDragActive {
+                endObjectDrag()
+            }
+            editorInputTargetViewRef.leftDownLocation = nil
+            editorInputTargetViewRef.isObjectDragActive = false
+            endCameraDrag()
+        }
+
+        func handleMouseScroll(_ event: NSEvent) {
             let rawDelta = simd_float2(Float(event.scrollingDeltaX), Float(event.scrollingDeltaY))
             guard rawDelta.x.isFinite, rawDelta.y.isFinite else {
                 return
@@ -407,17 +531,6 @@
             orbitAround(entityId: camera, uPosition: delta * speed)
         }
 
-        private func isEventInsideEditorInputView(_ event: NSEvent) -> Bool {
-            guard let view = editorInputTargetViewRef.view,
-                  let eventWindow = event.window,
-                  eventWindow === view.window
-            else {
-                return false
-            }
-
-            return InputSystem.isEditorInputViewFrontmost(at: event.locationInWindow, in: view)
-        }
-
         /// Whether the pointer currently sits over the visible canvas of the key
         /// window. Used to gate key events, which carry no location of their own.
         private func isPointerOverEditorInputView() -> Bool {
@@ -456,28 +569,24 @@
             return hitView === view || hitView.isDescendant(of: view)
         }
 
-        func handlePinchGesture(_ gestureRecognizer: NSMagnificationGestureRecognizer, in _: NSView) {
-            let currentScale = gestureRecognizer.magnification
-
-            if gestureRecognizer.state == .began {
-                // store the initial scale
-                previousScale = currentScale
+        /// A pinch on the trackpad zooms. `magnification` is the change since the
+        /// last event of the pinch.
+        func handleMagnify(by magnification: CGFloat, phase: NSEvent.Phase) {
+            if phase.contains(.began) {
+                previousScale = 1.0
                 currentPinchGestureState = .began
+            }
 
-            } else if gestureRecognizer.state == .changed {
-                // determine the direction of the pinch
-                let scaleDiff = currentScale - previousScale
-                pinchDelta = 3.0 * simd_float3(0.0, 0.0, Float(1.0) * Float(scaleDiff))
-                zoomSceneCamera(by: Float(scaleDiff) * 8.0)
-
-                previousScale = currentScale
-
+            if magnification != 0 {
+                pinchDelta = 3.0 * simd_float3(0.0, 0.0, Float(magnification))
+                zoomSceneCamera(by: Float(magnification) * 8.0)
+                previousScale += magnification
                 currentPinchGestureState = .changed
+            }
 
-            } else if gestureRecognizer.state == .ended {
+            if phase.contains(.ended) || phase.contains(.cancelled) {
                 previousScale = 1.0
                 pinchDelta = .init(0, 0, 0)
-
                 currentPinchGestureState = .ended
             }
         }
@@ -580,7 +689,10 @@
             return (delta.y + delta.x) * 0.005 * distance
         }
 
-        func mouseRaycast(gestureRecognizer: NSClickGestureRecognizer, in view: NSView) {
+        /// A left click: selects what is under the pointer, or clears the
+        /// selection when nothing is there, so the Inspector empties. A click on
+        /// a gizmo handle is left to the drag that moves it.
+        func selectEntity(at currentLocation: NSPoint, in view: NSView) {
             guard editorController?.isEnabled == true else {
                 return
             }
@@ -590,7 +702,6 @@
                 return
             }
 
-            let currentLocation = gestureRecognizer.location(in: view)
             let rayContext = raycastContext(currentLocation: currentLocation, view: view)
 
             let (entityId, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
@@ -643,40 +754,6 @@
             }
         }
 
-        /// Left click that lands on nothing: drop the selection so the Inspector
-        /// empties and a following ⇧-drag moves the camera instead of an entity.
-        /// A click on an entity or a gizmo axis is left to the right-click
-        /// selection path and the pan recogniser.
-        func clearSelectionOnEmptyClick(gestureRecognizer: NSClickGestureRecognizer, in view: NSView) {
-            guard editorController?.isEnabled == true else {
-                return
-            }
-
-            guard scene.get(component: CameraComponent.self, for: findSceneCamera()) != nil else {
-                handleError(.noActiveCamera)
-                return
-            }
-
-            let currentLocation = gestureRecognizer.location(in: view)
-
-            // A handle of an entity written in code is a small target made to be clicked, so
-            // either button selects it; it is checked before meshes because it is drawn over them.
-            if selectHandleUnderCursor(currentLocation: currentLocation, view: view) {
-                return
-            }
-
-            let (_, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
-            guard hit == false else {
-                return
-            }
-
-            gizmoActive = false
-            editorController?.activeMode = .none
-            editorController?.activeAxis = .none
-            activeHitGizmoEntity = .invalid
-            clearViewportSelection()
-        }
-
         /// Selects the handle under the cursor, if there is one: its entity becomes the
         /// selection and the move gizmo goes on the point. Returns `false` when no handle is there.
         func selectHandleUnderCursor(currentLocation: NSPoint, view: NSView) -> Bool {
@@ -712,158 +789,301 @@
             selectionDelegate?.didClearSelection()
         }
 
-        func handlePanGesture(_ gestureRecognizer: NSPanGestureRecognizer, in view: NSView) {
-            let currentPanLocation = gestureRecognizer.translation(in: view)
-            let currentLocation = gestureRecognizer.location(in: view)
+        // MARK: - The scene on the left button
 
-            // Camera is required for any pan handling
-            guard let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera()) else {
+        /// True while the editor is there and enabled; it only gates what is the editor's.
+        private var isEditorEnabled: Bool {
+            editorController?.isEnabled ?? (editorController != nil)
+        }
+
+        /// A drag with the left button began at `currentLocation`. It works on the
+        /// selection: it takes the gizmo handle under the pointer, to move the
+        /// entity along it. The camera is the right button's, so a drag that
+        /// starts anywhere else moves nothing.
+        func beginObjectDrag(at currentLocation: NSPoint, in view: NSView) {
+            // The gizmo is picked and dragged through the scene camera
+            guard scene.get(component: CameraComponent.self, for: findSceneCamera()) != nil else {
                 handleError(.noActiveCamera)
                 return
             }
+            let isEditorEnabled = isEditorEnabled
 
-            // Editor is optional; only gates editor-specific logic
-            let isEditorEnabled = editorController?.isEnabled ?? (editorController != nil)
-
-            // Decide once, when the drag starts, what it does to the camera.
-            // ⇧-drag with a selected entity is reserved for manipulating that
-            // entity (in every navigation style) and never moves the camera.
-            if gestureRecognizer.state == .began {
-                editorInputTargetViewRef.activeDragAction = EditorNavigationSettings.shared.dragAction(
-                    shiftPressed: keyState.shiftPressed,
-                    commandPressed: keyState.commandPressed,
-                    hasSelection: isEditorEnabled && activeEntity != .invalid
-                )
-            }
-            let dragAction = editorInputTargetViewRef.activeDragAction
-
-            // Exit *only* the camera logic, not the entire gesture handler, so
-            // entity manipulation keeps receiving mouse deltas.
-            if dragAction == .none {
+            // Decided once, when the drag starts: ⇧-drag with a selected entity
+            // moves that entity from the mouse deltas and takes no handle.
+            editorInputTargetViewRef.isEntityDragReserved = keyState.shiftPressed && isEditorEnabled && activeEntity != .invalid
+            if editorInputTargetViewRef.isEntityDragReserved {
                 return
             }
 
-            switch gestureRecognizer.state {
-            case .began:
-                // Store initial state
-                initialPanLocation = currentPanLocation
-                currentPanGestureState = .began
-                reanchorSceneCameraTarget()
-                let orbitDistance = simd_length(cameraComponent.localPosition - getCameraTarget(entityId: findSceneCamera()))
-                setOrbitOffset(
-                    entityId: findSceneCamera(),
-                    uTargetOffset: orbitDistance > 0.001 ? orbitDistance : length(cameraComponent.localPosition)
-                )
-                cameraControlMode = dragAction == .orbit ? .orbiting : .moving
+            // Store initial state
+            initialPanLocation = .zero
+            currentPanGestureState = .began
 
-                // Editor-only: hit-test gizmo if editor/gizmo mode is active
-                if gizmoActive, isEditorEnabled {
-                    let (hitEntityId, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
-                    if hit {
-                        activeHitGizmoEntity = hitEntityId
-                        processGizmoAction(entityId: activeHitGizmoEntity)
-                        if let rayContext = raycastContext(currentLocation: currentLocation, view: view) {
-                            beginGizmoDrag(
-                                ray: GizmoDragRay(
-                                    origin: rayContext.rayOrigin,
-                                    direction: rayContext.rayDirection
-                                )
-                            )
-                        }
-                        if activeEntity != .invalid {
-                            EditorUndoManager.shared.beginTransformEdit(entityId: activeEntity)
-                        }
-                        EditorRepresentationHandles.dragDidBegin()
-                    } else {
-                        activeHitGizmoEntity = .invalid
-                        editorController?.activeMode = .none
-                        editorController?.activeAxis = .none
-                    }
-                }
-
-            case .changed:
-                // Editor-only: process gizmo if we hit one
-                if isEditorEnabled {
-                    if activeHitGizmoEntity != .invalid,
-                       let rayContext = raycastContext(currentLocation: currentLocation, view: view)
-                    {
-                        queueGizmoDragUpdate(
+            // Editor-only: hit-test gizmo if editor/gizmo mode is active
+            if gizmoActive, isEditorEnabled {
+                let (hitEntityId, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
+                if hit {
+                    activeHitGizmoEntity = hitEntityId
+                    processGizmoAction(entityId: activeHitGizmoEntity)
+                    if let rayContext = raycastContext(currentLocation: currentLocation, view: view) {
+                        beginGizmoDrag(
                             ray: GizmoDragRay(
                                 origin: rayContext.rayOrigin,
                                 direction: rayContext.rayDirection
                             )
                         )
                     }
-                    processGizmoAction(entityId: activeHitGizmoEntity)
-                    if activeHitGizmoEntity != .invalid {
-                        // While dragging a gizmo, skip camera orbit updates
-                        return
+                    if activeEntity != .invalid {
+                        EditorUndoManager.shared.beginTransformEdit(entityId: activeEntity)
                     }
+                    EditorRepresentationHandles.dragDidBegin()
+                } else {
+                    activeHitGizmoEntity = .invalid
+                    editorController?.activeMode = .none
+                    editorController?.activeAxis = .none
                 }
+            }
+        }
 
-                // Blender-style ⇧ pan / ⌘ zoom use the raw two-axis delta;
-                // orbit below keeps its dominant-axis lock.
-                if dragAction == .pan || dragAction == .zoom {
-                    let rawDelta = simd_float2(
-                        Float(currentPanLocation.x - (initialPanLocation?.x ?? currentPanLocation.x)),
-                        Float(currentPanLocation.y - (initialPanLocation?.y ?? currentPanLocation.y))
+        /// The drag moved to `currentLocation`; `currentPanLocation` is how far it
+        /// is from where it began.
+        func continueObjectDrag(to currentLocation: NSPoint, translation currentPanLocation: NSPoint, in view: NSView) {
+            guard editorInputTargetViewRef.isEntityDragReserved == false else {
+                return
+            }
+            guard scene.get(component: CameraComponent.self, for: findSceneCamera()) != nil else {
+                handleError(.noActiveCamera)
+                return
+            }
+            let isEditorEnabled = isEditorEnabled
+
+            // Editor-only: process gizmo if we hit one
+            if isEditorEnabled {
+                if activeHitGizmoEntity != .invalid,
+                   let rayContext = raycastContext(currentLocation: currentLocation, view: view)
+                {
+                    queueGizmoDragUpdate(
+                        ray: GizmoDragRay(
+                            origin: rayContext.rayOrigin,
+                            direction: rayContext.rayDirection
+                        )
                     )
-                    initialPanLocation = currentPanLocation
-                    currentPanGestureState = .changed
-                    if dragAction == .pan {
-                        panSceneCamera(by: rawDelta)
-                    } else {
-                        dragZoomSceneCamera(by: rawDelta)
-                    }
+                }
+                processGizmoAction(entityId: activeHitGizmoEntity)
+                if activeHitGizmoEntity != .invalid {
+                    // While dragging a gizmo, the drag is the gizmo's alone
                     return
                 }
+            }
 
-                // Camera orbit pan (unaffected by editor being absent/disabled)
-                var deltaX = currentPanLocation.x - (initialPanLocation?.x ?? currentPanLocation.x)
-                var deltaY = currentPanLocation.y - (initialPanLocation?.y ?? currentPanLocation.y)
+            // The step since the last one, locked to its dominant axis with
+            // X inverted, as the input state has always reported a drag to
+            // whatever reads it (a game in play mode).
+            var deltaX = currentPanLocation.x - (initialPanLocation?.x ?? currentPanLocation.x)
+            var deltaY = currentPanLocation.y - (initialPanLocation?.y ?? currentPanLocation.y)
 
-                // Lock to dominant axis; invert X for your orbit convention
-                if abs(deltaX) < abs(deltaY) {
-                    deltaX = 0.0
-                } else {
-                    deltaY = 0.0
-                    deltaX = -deltaX
-                }
+            if abs(deltaX) < abs(deltaY) {
+                deltaX = 0.0
+            } else {
+                deltaY = 0.0
+                deltaX = -deltaX
+            }
 
-                // Dead zone
-                if abs(deltaX) <= 1.0 {
-                    deltaX = 0.0
-                }
-                if abs(deltaY) <= 1.0 {
-                    deltaY = 0.0
-                }
+            // Dead zone
+            if abs(deltaX) <= 1.0 {
+                deltaX = 0.0
+            }
+            if abs(deltaY) <= 1.0 {
+                deltaY = 0.0
+            }
 
-                panDelta = simd_float2(Float(deltaX), Float(deltaY))
-                currentPanGestureState = .changed
-                initialPanLocation = currentPanLocation
+            panDelta = simd_float2(Float(deltaX), Float(deltaY))
+            currentPanGestureState = .changed
+            initialPanLocation = currentPanLocation
+        }
 
-                orbitAround(entityId: findSceneCamera(), uPosition: InputSystem.shared.panDelta * 0.005)
+        /// The left button was released at the end of a drag.
+        func endObjectDrag() {
+            guard editorInputTargetViewRef.isEntityDragReserved == false else {
+                editorInputTargetViewRef.isEntityDragReserved = false
+                return
+            }
+            let isEditorEnabled = isEditorEnabled
 
-            case .ended, .cancelled, .failed:
-                if isEditorEnabled,
-                   activeHitGizmoEntity != .invalid,
-                   activeEntity != .invalid
-                {
-                    EditorUndoManager.shared.commitTransformEdit(entityId: activeEntity)
-                    EditorRepresentationHandles.dragDidEnd()
-                }
+            if isEditorEnabled,
+               activeHitGizmoEntity != .invalid,
+               activeEntity != .invalid
+            {
+                EditorUndoManager.shared.commitTransformEdit(entityId: activeEntity)
+                EditorRepresentationHandles.dragDidEnd()
+            }
 
-                // Reset
-                panDelta = simd_float2(0, 0)
-                initialPanLocation = nil
-                currentPanGestureState = .ended
-                cameraControlMode = .idle
-                editorInputTargetViewRef.activeDragAction = .none
-                endGizmoDrag()
+            // Reset
+            panDelta = simd_float2(0, 0)
+            initialPanLocation = nil
+            currentPanGestureState = .ended
+            endGizmoDrag()
+        }
 
-            default:
+        // MARK: - The camera on the right button
+
+        /// Radians the view turns per point of a look drag.
+        static let lookSpeed: Float = 0.005
+        /// How close to straight up or down the view may tilt, so it never flips over.
+        static let lookPitchLimit: Float = .pi / 2 - 0.02
+        /// Radians the camera orbits per point of an orbit drag.
+        static let dragOrbitSpeed: Float = 0.005
+
+        /// The right button went down on the canvas and steers the scene camera
+        /// until it is released. With nothing held the drag looks around where
+        /// the camera stands, as the mouse does in a game; ⇧ pans, ⌘ moves the
+        /// camera forward and back, ⌥ orbits the point ahead. The keys keep
+        /// flying the camera meanwhile.
+        func beginCameraDrag() {
+            // While a game plays on its own camera the scene camera is not the view.
+            if gameMode, CameraSystem.shared.activeCamera != findSceneCamera() {
+                return
+            }
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera()) else {
+                handleError(.noActiveCamera)
+                return
+            }
+
+            let action = EditorNavigationSettings.dragAction(
+                shiftPressed: keyState.shiftPressed,
+                commandPressed: keyState.commandPressed,
+                optionPressed: keyState.altPressed
+            )
+            editorInputTargetViewRef.activeDragAction = action
+            editorInputTargetViewRef.isCameraDragActive = true
+
+            // Panning, moving and orbiting are measured from the point ahead;
+            // looking around only needs where the camera stands.
+            if action != .look {
+                reanchorSceneCameraTarget()
+                let orbitDistance = simd_length(cameraComponent.localPosition - getCameraTarget(entityId: findSceneCamera()))
+                setOrbitOffset(
+                    entityId: findSceneCamera(),
+                    uTargetOffset: orbitDistance > 0.001 ? orbitDistance : length(cameraComponent.localPosition)
+                )
+            }
+            // Only an orbit holds the fly keys back.
+            cameraControlMode = action == .orbit ? .orbiting : .moving
+        }
+
+        /// The pointer moved by `delta` points, Y up, with the right button held.
+        func moveCameraDrag(by delta: simd_float2) {
+            guard editorInputTargetViewRef.isCameraDragActive else {
+                return
+            }
+            switch editorInputTargetViewRef.activeDragAction {
+            case .look:
+                lookAroundSceneCamera(by: delta)
+            case .pan:
+                panSceneCamera(by: delta)
+            case .zoom:
+                dragZoomSceneCamera(by: delta)
+            case .orbit:
+                orbitSceneCamera(byDrag: delta)
+            case .none:
                 break
             }
+        }
+
+        /// The right button was released.
+        func endCameraDrag() {
+            guard editorInputTargetViewRef.isCameraDragActive else {
+                return
+            }
+            editorInputTargetViewRef.isCameraDragActive = false
+            editorInputTargetViewRef.activeDragAction = .none
+            cameraControlMode = .idle
+        }
+
+        /// The view direction after a look drag. `delta.x` turns it about the
+        /// world's up axis, to the right for a drag to the right; `delta.y`
+        /// tilts it, up for a drag up, stopping short of straight up and down.
+        /// `up` gives the heading when `forward` is vertical and has none.
+        static func lookDirection(from forward: simd_float3, up: simd_float3, delta: simd_float2) -> simd_float3 {
+            let forwardLength = simd_length(forward)
+            guard forwardLength > 0.0001, forwardLength.isFinite, delta.x.isFinite, delta.y.isFinite else {
+                return forward
+            }
+            let direction = forward / forwardLength
+
+            // Looking straight down, the top of the view points where the camera
+            // is heading; looking straight up, it points behind.
+            var heading = simd_float2(direction.x, -direction.z)
+            if simd_length(heading) < 0.0001 {
+                heading = simd_float2(up.x, -up.z) * (direction.y < 0 ? 1 : -1)
+            }
+            let currentYaw = simd_length(heading) > 0.0001 ? atan2(heading.x, heading.y) : 0
+            let currentPitch = asin(Swift.min(Swift.max(direction.y, -1), 1))
+
+            let yaw = currentYaw + delta.x * lookSpeed
+            let pitch = Swift.min(Swift.max(currentPitch + delta.y * lookSpeed, -lookPitchLimit), lookPitchLimit)
+            return simd_float3(sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
+        }
+
+        /// Turns the scene camera where it stands: the eye stays and the target
+        /// swings around it, as far ahead as it was.
+        func lookAroundSceneCamera(by delta: simd_float2) {
+            guard delta.x.isFinite, delta.y.isFinite, delta.x != 0 || delta.y != 0 else {
+                return
+            }
+
+            let camera = findSceneCamera()
+            guard let cameraComponent = scene.get(component: CameraComponent.self, for: camera) else {
+                handleError(.noActiveCamera)
+                return
+            }
+
+            let eye = cameraComponent.localPosition
+            // The camera looks down its negative Z axis, as the spawn code assumes.
+            let forward = -forwardDirectionVector(from: cameraComponent.rotation)
+            let direction = InputSystem.lookDirection(
+                from: forward,
+                up: upDirectionVector(from: cameraComponent.rotation),
+                delta: delta
+            )
+
+            // Flying leaves the target where the last look-at put it, so only
+            // its depth ahead is kept, within the range a pivot may have.
+            let depth = simd_dot(getCameraTarget(entityId: camera) - eye, simd_normalize(forward))
+            let reach = depth.isFinite
+                && depth >= InputSystem.minimumOrbitPivotDistance
+                && depth <= InputSystem.maximumOrbitPivotDistance
+                ? depth : InputSystem.defaultOrbitPivotDistance
+            cameraLookAt(entityId: camera, eye: eye, target: eye + direction * reach, up: cameraUpDefault)
+        }
+
+        /// Turns the scene camera around the point ahead of it from a drag,
+        /// locked to the drag's dominant axis with X inverted and a one-point
+        /// dead zone, as the orbit drag always was.
+        func orbitSceneCamera(byDrag delta: simd_float2) {
+            guard delta.x.isFinite, delta.y.isFinite else {
+                return
+            }
+            var deltaX = delta.x
+            var deltaY = delta.y
+
+            if abs(deltaX) < abs(deltaY) {
+                deltaX = 0.0
+            } else {
+                deltaY = 0.0
+                deltaX = -deltaX
+            }
+            if abs(deltaX) <= 1.0 {
+                deltaX = 0.0
+            }
+            if abs(deltaY) <= 1.0 {
+                deltaY = 0.0
+            }
+            guard deltaX != 0 || deltaY != 0 else {
+                return
+            }
+
+            orbitAround(entityId: findSceneCamera(), uPosition: simd_float2(deltaX, deltaY) * InputSystem.dragOrbitSpeed)
         }
 
         func leftMouseDragged(_ delta: simd_float2) {
@@ -1015,27 +1235,15 @@
             }
         }
 
-        private func handleFlagsChanged(_ event: NSEvent) {
-            // Shift key
-            if event.modifierFlags.contains(.shift) {
-                keyState.shiftPressed = true
-            } else {
-                keyState.shiftPressed = false
-            }
-
-            // Control key
-            if event.modifierFlags.contains(.control) {
-                keyState.ctrlPressed = true
-            } else {
-                keyState.ctrlPressed = false
-            }
-
-            // Command key
-            if event.modifierFlags.contains(.command) {
-                keyState.commandPressed = true
-            } else {
-                keyState.commandPressed = false
-            }
+        /// Takes the modifiers from an event. Every event the canvas receives
+        /// carries them, so they are right even when they were pressed while
+        /// another view had the keyboard.
+        internal func syncModifiers(from event: NSEvent) {
+            let flags = event.modifierFlags
+            keyState.shiftPressed = flags.contains(.shift)
+            keyState.ctrlPressed = flags.contains(.control)
+            keyState.commandPressed = flags.contains(.command)
+            keyState.altPressed = flags.contains(.option)
         }
 
         private func raycastContext(currentLocation: NSPoint, view: NSView) -> (rayOrigin: simd_float3, rayDirection: simd_float3)? {

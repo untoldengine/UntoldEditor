@@ -14,6 +14,11 @@ import UntoldEngine
 
 extension UntoldRenderer {
     func handleSceneInput() {
+        // A key whose release was never reported must not fly the camera forever.
+        #if os(macOS)
+            InputSystem.shared.releaseFlyKeysTheKeyboardLetGo()
+        #endif
+
         // Block editor + camera input during play unless the scene camera is active
         if gameMode, CameraSystem.shared.activeCamera != findSceneCamera() { return }
 

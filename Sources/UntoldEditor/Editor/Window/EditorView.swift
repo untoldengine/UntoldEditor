@@ -101,7 +101,8 @@ public struct EditorView: View {
         if let r = renderer, let v = renderer?.metalView {
             r.setupCallbacks(gameUpdate: { _ in }, handleInput: r.handleSceneInput)
 
-            InputSystem.shared.setupGestureRecognizers(view: v)
+            // The viewport's host view receives the canvas's events itself and
+            // names itself to the input system; only the undo shortcut is set here.
             InputSystem.shared.setupEventMonitors()
 
             // The render loop pauses while the viewport is resized (live window

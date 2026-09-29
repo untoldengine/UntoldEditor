@@ -11,13 +11,14 @@
 
 import Foundation
 
-/// How a left-button drag on the viewport moves the scene camera.
+/// How scrolling over the viewport moves the scene camera. The right button
+/// steers it the same way in every style: a drag looks around, ⇧ pans, ⌘ moves
+/// the camera forward and back, ⌥ orbits.
 public enum CameraNavigationStyle: String, CaseIterable {
-    /// Drag orbits. Zoom comes from the scroll wheel / pinch only; modifier
-    /// keys do not change what a drag does.
+    /// The scroll wheel and a pinch zoom.
     case classic
     /// Blender-like: scrolling (wheel or two-finger swipe) orbits, ⇧-scroll pans,
-    /// ⌘-scroll zooms, drag orbits, ⇧-drag pans, ⌘-drag zooms (dolly).
+    /// ⌘-scroll zooms.
     case blender
 
     public var title: String {
@@ -29,19 +30,23 @@ public enum CameraNavigationStyle: String, CaseIterable {
 
     public var summary: String {
         switch self {
-        case .classic: return "Drag orbits · Scroll zooms"
-        case .blender: return "Scroll orbits · ⇧ Scroll pans · ⌘ Scroll zooms · ⇧ Drag pans · ⌘ Drag zooms"
+        case .classic: return "Scroll zooms"
+        case .blender: return "Scroll orbits · ⇧ Scroll pans · ⌘ Scroll zooms"
         }
     }
 }
 
-/// What a viewport drag should do to the scene camera.
+/// What a right-button drag on the viewport does to the scene camera.
 public enum CameraDragAction: Equatable {
-    case orbit
+    /// Turns the view where the camera stands, as the mouse does in a game.
+    case look
+    /// Slides the camera along the view plane.
     case pan
+    /// Moves the camera forward and back.
     case zoom
-    /// The drag is reserved for something else (entity manipulation), so the
-    /// camera must stay put.
+    /// Turns the camera around the point ahead of it.
+    case orbit
+    /// No drag is steering the camera.
     case none
 }
 
@@ -78,47 +83,26 @@ public final class EditorNavigationSettings: ObservableObject {
         }
     }
 
-    /// Resolves what a left-button drag does given the active style and the
-    /// modifier / selection state at the moment the drag starts.
-    ///
-    /// ⇧-drag while an entity is selected is reserved for manipulating that
-    /// entity without the camera moving underneath it, in every style. With
-    /// nothing selected the Blender style turns ⇧-drag into a pan and ⌘-drag
-    /// into a zoom; the classic style always orbits.
-    public static func dragAction(
-        style: CameraNavigationStyle,
-        shiftPressed: Bool,
-        commandPressed: Bool,
-        hasSelection: Bool
-    ) -> CameraDragAction {
-        if shiftPressed, hasSelection {
-            return .none
-        }
+    /// What the right button's drags do, for the hints and the tooltips.
+    public static let dragSummary = "Right drag looks around · ⇧ pans · ⌘ moves · ⌥ orbits"
 
-        switch style {
-        case .classic:
-            return .orbit
-        case .blender:
-            if shiftPressed {
-                return .pan
-            }
-            if commandPressed {
-                return .zoom
-            }
-            return .orbit
+    /// Resolves what a right-button drag does from the modifiers held when it
+    /// starts: nothing held looks around, ⇧ pans, ⌘ moves the camera forward
+    /// and back, ⌥ orbits the point ahead. ⇧ wins over ⌘, and ⌘ over ⌥.
+    public static func dragAction(shiftPressed: Bool, commandPressed: Bool, optionPressed: Bool) -> CameraDragAction {
+        if shiftPressed {
+            return .pan
         }
-    }
-
-    /// Convenience over `dragAction(style:...)` using the current style.
-    public func dragAction(shiftPressed: Bool, commandPressed: Bool, hasSelection: Bool) -> CameraDragAction {
-        Self.dragAction(style: style, shiftPressed: shiftPressed, commandPressed: commandPressed, hasSelection: hasSelection)
+        if commandPressed {
+            return .zoom
+        }
+        return optionPressed ? .orbit : .look
     }
 
     /// Resolves what scrolling does. The classic style zooms, as it always has.
-    /// The Blender style navigates without any button held, so clicks stay free
-    /// for selecting: a plain wheel or two-finger swipe orbits with both axes,
-    /// ⇧-scroll pans along the view plane and ⌘-scroll zooms. ⇧ wins over ⌘,
-    /// as it does for drags.
+    /// The Blender style navigates without any button held: a plain wheel or
+    /// two-finger swipe orbits with both axes, ⇧-scroll pans along the view
+    /// plane and ⌘-scroll zooms. ⇧ wins over ⌘, as it does for drags.
     public static func scrollAction(style: CameraNavigationStyle, shiftPressed: Bool, commandPressed: Bool) -> CameraScrollAction {
         switch style {
         case .classic:

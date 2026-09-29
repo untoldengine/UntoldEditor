@@ -15,59 +15,34 @@ import UntoldEngine
 import XCTest
 
 final class EditorNavigationSettingsTests: XCTestCase {
-    private func action(
-        _ style: CameraNavigationStyle,
-        shift: Bool = false,
-        command: Bool = false,
-        selected: Bool = false
-    ) -> CameraDragAction {
-        EditorNavigationSettings.dragAction(
-            style: style,
-            shiftPressed: shift,
-            commandPressed: command,
-            hasSelection: selected
-        )
+    private func action(shift: Bool = false, command: Bool = false, option: Bool = false) -> CameraDragAction {
+        EditorNavigationSettings.dragAction(shiftPressed: shift, commandPressed: command, optionPressed: option)
     }
 
-    // MARK: - Classic style
+    // MARK: - Right-button drags
 
-    func test_classic_plainDragOrbits() {
-        XCTAssertEqual(action(.classic), .orbit)
+    func test_plainDragLooksAround() {
+        XCTAssertEqual(action(), .look)
     }
 
-    func test_classic_modifiersStillOrbitWithoutSelection() {
-        XCTAssertEqual(action(.classic, shift: true), .orbit)
-        XCTAssertEqual(action(.classic, command: true), .orbit)
+    func test_shiftPans_commandMoves_optionOrbits() {
+        XCTAssertEqual(action(shift: true), .pan)
+        XCTAssertEqual(action(command: true), .zoom)
+        XCTAssertEqual(action(option: true), .orbit)
     }
 
-    func test_classic_shiftWithSelectionIsReservedForEntityManipulation() {
-        XCTAssertEqual(action(.classic, shift: true, selected: true), .none)
+    func test_shiftWinsOverCommand_andCommandOverOption() {
+        XCTAssertEqual(action(shift: true, command: true), .pan)
+        XCTAssertEqual(action(shift: true, option: true), .pan)
+        XCTAssertEqual(action(command: true, option: true), .zoom)
+        XCTAssertEqual(action(shift: true, command: true, option: true), .pan)
     }
 
-    // MARK: - Blender style
-
-    func test_blender_plainDragOrbits() {
-        XCTAssertEqual(action(.blender), .orbit)
-        XCTAssertEqual(action(.blender, selected: true), .orbit)
-    }
-
-    func test_blender_shiftDragPansWhenNothingIsSelected() {
-        XCTAssertEqual(action(.blender, shift: true), .pan)
-    }
-
-    func test_blender_commandDragZooms() {
-        XCTAssertEqual(action(.blender, command: true), .zoom)
-        XCTAssertEqual(action(.blender, command: true, selected: true), .zoom)
-    }
-
-    func test_blender_shiftWithSelectionIsReservedForEntityManipulation() {
-        XCTAssertEqual(action(.blender, shift: true, selected: true), .none)
-        // Shift wins over Command in that case too.
-        XCTAssertEqual(action(.blender, shift: true, command: true, selected: true), .none)
-    }
-
-    func test_blender_shiftWinsOverCommand() {
-        XCTAssertEqual(action(.blender, shift: true, command: true), .pan)
+    func test_stylesOnlyDescribeScrolling() {
+        for style in CameraNavigationStyle.allCases {
+            XCTAssertFalse(style.summary.contains("Drag"), "\(style.title) describes a drag")
+        }
+        XCTAssertTrue(EditorNavigationSettings.dragSummary.contains("looks around"))
     }
 
     // MARK: - Persistence

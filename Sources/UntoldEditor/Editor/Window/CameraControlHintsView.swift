@@ -37,8 +37,8 @@ struct CameraControlHintsView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Label("Two-finger drag to orbit", systemImage: "arrow.triangle.2.circlepath")
-                Label("Scroll or pinch to zoom", systemImage: "magnifyingglass")
+                Label(EditorNavigationSettings.dragSummary, systemImage: "arrow.triangle.2.circlepath")
+                Label(EditorNavigationSettings.shared.style.summary, systemImage: "magnifyingglass")
                 Label("WASD moves, Q/E raises and lowers", systemImage: "keyboard")
             }
             .font(.caption)
