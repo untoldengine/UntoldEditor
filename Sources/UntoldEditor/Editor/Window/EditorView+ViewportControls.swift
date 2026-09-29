@@ -75,7 +75,7 @@ extension EditorView {
     /// F: frames the selection, keeping the camera's direction.
     func editor_frameSelection() {
         guard experienceMode == .edit, isPlaying == false, ViewportCameras.isLockedPreview == false,
-              let bounds = selectionManager.selectionBounds()
+              let bounds = selectionManager.selectionFramingBounds()
         else { return }
         let camera = findSceneCamera()
         let forward = getCameraTarget(entityId: camera) - getCameraEye(entityId: camera)

@@ -237,12 +237,28 @@ class SelectionManager: ObservableObject {
         }
     }
 
-    /// The world bounds of the selection's renderable hierarchy, for framing it.
+    /// The box in the world around what the selection draws, for framing it.
+    /// Nil with nothing selected, and for a selection that draws nothing,
+    /// such as a light.
     func selectionBounds() -> (min: simd_float3, max: simd_float3)? {
         guard let selected = selectedEntity, selected != .invalid else { return nil }
         let entity = sceneTransformEntity(for: selected)
         guard hasComponent(entityId: entity, componentType: LocalTransformComponent.self) else { return nil }
-        return getRenderableHierarchyBoundingBox(entityId: entity)
+        return worldBoundsOfRenderableHierarchy(entityId: entity)
+    }
+
+    /// What F frames: the selection's box, or for a selection that draws
+    /// nothing a box of `pointExtent` around where it stands.
+    func selectionFramingBounds(pointExtent: Float = 1) -> (min: simd_float3, max: simd_float3)? {
+        if let bounds = selectionBounds() {
+            return bounds
+        }
+        guard let selected = selectedEntity, selected != .invalid else { return nil }
+        let entity = sceneTransformEntity(for: selected)
+        guard hasComponent(entityId: entity, componentType: WorldTransformComponent.self) else { return nil }
+        let position = getPosition(entityId: entity)
+        let half = simd_float3(repeating: pointExtent / 2)
+        return (position - half, position + half)
     }
 
     // MARK: - Hidden and locked entities
