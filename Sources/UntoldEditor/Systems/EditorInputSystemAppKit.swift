@@ -180,6 +180,12 @@
         /// How far the pointer may travel between press and release and still click.
         static let clickSlop: CGFloat = 3
 
+        /// False while the viewport is a locked preview of a game camera: the
+        /// pointer would neither steer nor pick through what is on screen.
+        private var canvasTakesThePointer: Bool {
+            ViewportCameras.isLockedPreview == false
+        }
+
         func canvasLeftMouseDown(_ event: NSEvent, at location: NSPoint) {
             syncModifiers(from: event)
             leftMouseDown(event)
@@ -189,7 +195,7 @@
 
         func canvasLeftMouseDragged(_ event: NSEvent, to location: NSPoint, in view: NSView) {
             leftMouseDragged(simd_float2(Float(event.deltaX), Float(event.deltaY)))
-            guard let start = editorInputTargetViewRef.leftDownLocation else {
+            guard canvasTakesThePointer, let start = editorInputTargetViewRef.leftDownLocation else {
                 return
             }
 
@@ -212,7 +218,7 @@
 
             if wasDragging {
                 endObjectDrag()
-            } else if wasPressedOnTheCanvas {
+            } else if wasPressedOnTheCanvas, canvasTakesThePointer {
                 selectEntity(at: location, in: view)
             }
         }
@@ -220,6 +226,9 @@
         func canvasRightMouseDown(_ event: NSEvent) {
             syncModifiers(from: event)
             keyState.rightMousePressed = true
+            guard canvasTakesThePointer else {
+                return
+            }
             beginCameraDrag()
         }
 
@@ -235,10 +244,16 @@
 
         func canvasScrolled(_ event: NSEvent) {
             syncModifiers(from: event)
+            guard canvasTakesThePointer else {
+                return
+            }
             handleMouseScroll(event)
         }
 
         func canvasMagnified(_ event: NSEvent) {
+            guard canvasTakesThePointer else {
+                return
+            }
             handleMagnify(by: event.magnification, phase: event.phase)
         }
 

@@ -22,6 +22,10 @@ extension UntoldRenderer {
         // Block editor + camera input during play unless the scene camera is active
         if gameMode, CameraSystem.shared.activeCamera != findSceneCamera() { return }
 
+        // A locked preview of a game camera takes no input either: nothing
+        // moves until the editor's camera is chosen again.
+        guard ViewportCameras.isLockedPreview == false else { return }
+
         // Always allow camera WASDQE input, regardless of editor state. The
         // camera speed of the viewport header scales the step.
         let input = (

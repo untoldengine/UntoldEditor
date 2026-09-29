@@ -230,6 +230,12 @@ public struct EditorView: View {
             NotificationCenter.default.addObserver(forName: .editorFrameSelection, object: nil, queue: .main) { _ in
                 editor_frameSelection()
             }
+
+            // View > Camera: the editor's camera, or a game camera as a locked preview.
+            NotificationCenter.default.addObserver(forName: .editorShowViewportCamera, object: nil, queue: .main) { note in
+                let camera = (note.userInfo?["camera"] as? EntityID).map(ViewportCamera.game) ?? .editor
+                editor_showViewportCamera(camera)
+            }
             editor_applyViewportSettings()
         }
         .onChange(of: playbackSettings.useSceneCameraDuringPlay) { _, _ in

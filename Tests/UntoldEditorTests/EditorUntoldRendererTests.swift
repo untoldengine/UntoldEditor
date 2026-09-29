@@ -189,6 +189,20 @@ final class EditorUntoldRendererTests: XCTestCase {
         XCTAssertEqual(flying.after.y, flying.before.y, accuracy: 1e-4)
     }
 
+    func test_flyKeys_moveNothing_whileTheViewportIsALockedPreview() {
+        gameMode = false
+        testCamera = createEntity()
+        registerComponent(entityId: testCamera, componentType: CameraComponent.self)
+        cameraLookAt(entityId: testCamera, eye: simd_float3(3, 3, 3), target: .zero, up: simd_float3(0, 1, 0))
+        let gameEye = position(of: testCamera)
+        XCTAssertTrue(ViewportCameras.show(.game(testCamera)))
+
+        let locked = flyForward()
+
+        XCTAssertEqual(locked.after, locked.before, "The editor's camera stays where it was")
+        XCTAssertEqual(position(of: testCamera), gameEye, "The previewed camera is only looked through")
+    }
+
     func test_aStuckFlyKey_stopsFlying_onceTheKeyboardLetItGo() {
         let savedReader = InputSystem.shared.physicalKeyState
         let savedTrust = InputSystem.shared.isPhysicalKeyStateTrusted

@@ -31,8 +31,9 @@ final class EditorRenderExtension: RenderExtension, @unchecked Sendable {
         _ builder: inout RenderGraphBuilder,
         context _: RenderGraphBuildContext
     ) {
-        // Play mode uses the unmodified runtime graph.
-        guard !gameMode else { return }
+        // Play mode uses the unmodified runtime graph, and so does the locked
+        // preview of a game camera: it shows what that camera will show.
+        guard !gameMode, ViewportCameras.isLockedPreview == false else { return }
 
         builder.addPass(
             id: "untold.editor.highlight",

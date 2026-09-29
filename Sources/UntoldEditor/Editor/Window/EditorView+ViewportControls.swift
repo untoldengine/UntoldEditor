@@ -40,17 +40,35 @@ extension EditorView {
         setRendering(.debugView(viewportSettings.shading.debugView))
     }
 
-    /// Sends the editor's camera to a preset view. Not while playing, when the
-    /// play flow owns the camera.
+    /// Sends the editor's camera to a preset view, which also ends a preview
+    /// of a game camera. Not while playing, when the play flow owns the camera.
     func editor_selectProjection(_ projection: ViewportProjection) {
         guard isPlaying == false else { return }
         viewportSettings.projection = projection
         projection.applyToSceneCamera()
+        viewportSettings.camera = .editor
+    }
+
+    /// View > Camera: shows the editor's camera, or a game camera of the scene
+    /// as a locked preview. Not during a play session, when the play flow owns
+    /// the camera.
+    func editor_showViewportCamera(_ camera: ViewportCamera) {
+        guard experienceMode == .edit, isPlaying == false, ViewportCameras.show(camera) else { return }
+        viewportSettings.camera = camera
+    }
+
+    /// The game camera the viewport is locked on, for its label; nil on the
+    /// editor's camera and during a play session.
+    var editor_previewedCamera: GameCameraChoice? {
+        guard isPlaying == false, case let .game(entityId) = ViewportCameras.current else { return nil }
+        return ViewportCameras.gameCameras().first { $0.entityId == entityId }
     }
 
     /// F: frames the selection, keeping the camera's direction.
     func editor_frameSelection() {
-        guard experienceMode == .edit, isPlaying == false, let bounds = selectionManager.selectionBounds() else { return }
+        guard experienceMode == .edit, isPlaying == false, ViewportCameras.isLockedPreview == false,
+              let bounds = selectionManager.selectionBounds()
+        else { return }
         let camera = findSceneCamera()
         let forward = getCameraTarget(entityId: camera) - getCameraEye(entityId: camera)
         let framing = ViewportFraming.framing(minimum: bounds.min, maximum: bounds.max, forward: forward, fovDegrees: fov)

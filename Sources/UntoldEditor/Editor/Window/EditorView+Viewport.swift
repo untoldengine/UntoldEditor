@@ -52,6 +52,14 @@ extension EditorView {
             .overlay(alignment: .topLeading) {
                 EngineStatsOverlayView()
             }
+            .overlay(alignment: .top) {
+                if experienceMode == .edit, let camera = editor_previewedCamera {
+                    ViewportCameraLabel(cameraName: camera.name) {
+                        editor_showViewportCamera(.editor)
+                    }
+                    .padding(.top, 10)
+                }
+            }
             .overlay {
                 if shouldShowDemoGallery {
                     DemoGalleryView(

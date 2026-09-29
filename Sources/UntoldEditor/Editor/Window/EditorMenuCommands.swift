@@ -35,15 +35,21 @@ extension Notification.Name {
     static let editorSelectTool = Notification.Name("editorSelectTool")
     /// F: frame the selection.
     static let editorFrameSelection = Notification.Name("editorFrameSelection")
+    /// View > Camera: show the game camera in `userInfo["camera"]`, or the
+    /// editor's camera when there is none.
+    static let editorShowViewportCamera = Notification.Name("editorShowViewportCamera")
 }
 
 /// Playback-related settings that must be reachable from both the AppKit menu
-/// bar and SwiftUI views. Currently holds the "use the scene camera while
-/// playing" toggle that used to live in the top toolbar.
+/// bar and SwiftUI views: the "use the scene camera while playing" toggle that
+/// used to live in the top toolbar, and whether a play session is open.
 final class EditorPlaybackSettings: ObservableObject {
     static let shared = EditorPlaybackSettings()
 
     @Published var useSceneCameraDuringPlay: Bool = false
+    /// True from Play to Stop, paused or not: the play flow owns the viewport's
+    /// camera, so the View menu offers no other.
+    @Published var isSessionActive = false
 
     private init() {}
 }

@@ -287,6 +287,22 @@ final class ViewportCanvasEventTests: XCTestCase {
 
         XCTAssertEqual(recorder.clearCount, 1)
     }
+
+    // MARK: - A locked preview
+
+    func test_inALockedPreview_thePointerMovesNothing() throws {
+        let gameCamera = createEntity()
+        registerComponent(entityId: gameCamera, componentType: CameraComponent.self)
+        XCTAssertTrue(ViewportCameras.show(.game(gameCamera)))
+        let before = position, targetBefore = target
+
+        try canvas.rightMouseDown(with: mouse(.rightMouseDown))
+        try canvas.rightMouseDragged(with: mouse(.rightMouseDragged, step: (100, 40)))
+        try canvas.rightMouseUp(with: mouse(.rightMouseUp))
+
+        XCTAssertEqual(simd_length(position - before), 0, accuracy: 1e-6)
+        XCTAssertEqual(simd_length(target - targetBefore), 0, accuracy: 1e-6)
+    }
 }
 
 /// A mouse event that reports the step it is given: AppKit computes the step

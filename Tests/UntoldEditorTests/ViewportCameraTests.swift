@@ -1,0 +1,126 @@
+//
+//  ViewportCameraTests.swift
+//  UntoldEditor
+//
+// Copyright (C) Untold Engine Studios
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+@testable import UntoldEditor
+@testable import UntoldEngine
+import XCTest
+
+/// The camera the viewport shows while editing: the editor's own, or a game
+/// camera of the scene as a locked preview.
+final class ViewportCameraTests: XCTestCase {
+    private var originalScene: Scene!
+    private var originalActiveCamera: EntityID?
+    private var originalGameMode = false
+
+    override func setUp() {
+        super.setUp()
+        originalScene = scene
+        originalActiveCamera = CameraSystem.shared.activeCamera
+        originalGameMode = gameMode
+        scene = Scene()
+        gameMode = false
+        CameraSystem.shared.activeCamera = nil
+    }
+
+    override func tearDown() {
+        scene = originalScene
+        gameMode = originalGameMode
+        CameraSystem.shared.activeCamera = originalActiveCamera
+        originalScene = nil
+        super.tearDown()
+    }
+
+    private func makeGameCamera(named name: String) -> EntityID {
+        let camera = createEntity()
+        setEntityName(entityId: camera, name: name)
+        registerComponent(entityId: camera, componentType: CameraComponent.self)
+        return camera
+    }
+
+    func test_gameCameras_listsEveryGameCameraByName_andNeverTheEditorCamera() {
+        _ = findSceneCamera()
+        let prop = createEntity()
+        setEntityName(entityId: prop, name: "Crate")
+        let intro = makeGameCamera(named: "Intro")
+        let boss = makeGameCamera(named: "Boss")
+
+        XCTAssertEqual(ViewportCameras.gameCameras(), [
+            GameCameraChoice(entityId: intro, name: "Intro"),
+            GameCameraChoice(entityId: boss, name: "Boss"),
+        ])
+    }
+
+    func test_gameCameras_isEmptyAndCreatesNothing_whenTheSceneHasOnlyTheEditorCamera() {
+        let sceneCamera = findSceneCamera()
+        CameraSystem.shared.activeCamera = sceneCamera
+        let entitiesBefore = scene.getAllEntities()
+
+        XCTAssertTrue(ViewportCameras.gameCameras().isEmpty)
+        XCTAssertEqual(ViewportCameras.current, .editor)
+
+        XCTAssertEqual(scene.getAllEntities(), entitiesBefore)
+        XCTAssertEqual(CameraSystem.shared.activeCamera, sceneCamera)
+    }
+
+    func test_show_aGameCamera_locksTheViewportOnIt_andTheEditorCameraUnlocksIt() {
+        let sceneCamera = findSceneCamera()
+        let intro = makeGameCamera(named: "Intro")
+        let boss = makeGameCamera(named: "Boss")
+        ViewportCameras.show(.editor)
+        XCTAssertFalse(ViewportCameras.isLockedPreview)
+
+        XCTAssertTrue(ViewportCameras.show(.game(boss)))
+        XCTAssertEqual(CameraSystem.shared.activeCamera, boss)
+        XCTAssertEqual(ViewportCameras.current, .game(boss))
+        XCTAssertTrue(ViewportCameras.isLockedPreview)
+
+        XCTAssertTrue(ViewportCameras.show(.game(intro)))
+        XCTAssertEqual(ViewportCameras.current, .game(intro))
+
+        XCTAssertTrue(ViewportCameras.show(.editor))
+        XCTAssertEqual(CameraSystem.shared.activeCamera, sceneCamera)
+        XCTAssertEqual(ViewportCameras.current, .editor)
+        XCTAssertFalse(ViewportCameras.isLockedPreview)
+    }
+
+    func test_show_refusesAnEntityThatIsNotAGameCamera() {
+        let sceneCamera = findSceneCamera()
+        let prop = createEntity()
+        ViewportCameras.show(.editor)
+
+        XCTAssertFalse(ViewportCameras.show(.game(prop)))
+        XCTAssertFalse(ViewportCameras.show(.game(sceneCamera)))
+
+        XCTAssertEqual(CameraSystem.shared.activeCamera, sceneCamera)
+        XCTAssertEqual(ViewportCameras.current, .editor)
+    }
+
+    func test_whileTheGameRuns_theViewportIsNeverAPreview() {
+        _ = findSceneCamera()
+        let camera = makeGameCamera(named: "Game Camera")
+        CameraSystem.shared.activeCamera = camera
+
+        gameMode = true
+
+        XCTAssertEqual(ViewportCameras.current, .editor)
+        XCTAssertFalse(ViewportCameras.isLockedPreview)
+    }
+
+    func test_aProjection_returnsTheViewportToTheEditorCamera() {
+        let sceneCamera = findSceneCamera()
+        let camera = makeGameCamera(named: "Game Camera")
+        ViewportCameras.show(.game(camera))
+
+        ViewportProjection.front.applyToSceneCamera()
+
+        XCTAssertEqual(CameraSystem.shared.activeCamera, sceneCamera)
+        XCTAssertFalse(ViewportCameras.isLockedPreview)
+    }
+}

@@ -130,6 +130,7 @@ extension EditorView {
     }
 
     func updateActiveCameraForPlayMode() {
+        playbackSettings.isSessionActive = isPlaying
         // The session, not `gameMode`: a paused session keeps the game camera.
         if isPlaying {
             CameraSystem.shared.activeCamera = playbackSettings.useSceneCameraDuringPlay ? findSceneCamera() : findEditorGameCamera()

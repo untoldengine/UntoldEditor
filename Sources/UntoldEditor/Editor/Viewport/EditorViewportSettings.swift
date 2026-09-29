@@ -39,6 +39,9 @@ final class EditorViewportSettings: ObservableObject {
     }
 
     @Published var projection: ViewportProjection = .perspective
+    /// The camera last chosen for the viewport. It tells the views to draw
+    /// again; which camera is shown is read from `ViewportCameras.current`.
+    @Published var camera: ViewportCamera = .editor
     @Published var cameraSpeed: Int {
         didSet {
             let clamped = min(max(cameraSpeed, Self.speedRange.lowerBound), Self.speedRange.upperBound)

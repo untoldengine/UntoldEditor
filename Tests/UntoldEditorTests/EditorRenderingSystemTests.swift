@@ -16,17 +16,27 @@ import XCTest
 @MainActor
 final class EditorRenderingSystemTests: XCTestCase {
     private var originalGameMode = false
+    private var originalActiveCamera: EntityID?
+    private var previewCamera: EntityID = .invalid
     private var renderer: UntoldRenderer?
 
     override func setUp() {
         super.setUp()
         originalGameMode = gameMode
+        originalActiveCamera = CameraSystem.shared.activeCamera
         renderer = UntoldRenderer.create()
         XCTAssertNotNil(renderer)
         _ = registerEditorRenderExtension()
+        // Editing happens on the editor's camera unless a test says otherwise.
+        ViewportCameras.show(.editor)
     }
 
     override func tearDown() {
+        if previewCamera != .invalid {
+            destroyEntity(entityId: previewCamera)
+            previewCamera = .invalid
+        }
+        CameraSystem.shared.activeCamera = originalActiveCamera
         gameMode = originalGameMode
         RenderExtensionRegistry.shared.unregister(id: EditorRenderExtension.shared.id)
         renderer = nil
@@ -61,6 +71,19 @@ final class EditorRenderingSystemTests: XCTestCase {
 
     func testPlayModeUsesRuntimeGraphWithoutEditorPasses() throws {
         gameMode = true
+
+        let (graph, _) = try buildGameModeGraph()
+
+        XCTAssertNil(graph["untold.editor.highlight"])
+        XCTAssertNil(graph["untold.editor.lightVisuals"])
+        XCTAssertNil(graph["untold.editor.gizmo"])
+    }
+
+    func testLockedPreviewUsesRuntimeGraphWithoutEditorPasses() throws {
+        gameMode = false
+        previewCamera = createEntity()
+        registerComponent(entityId: previewCamera, componentType: CameraComponent.self)
+        XCTAssertTrue(ViewportCameras.show(.game(previewCamera)))
 
         let (graph, _) = try buildGameModeGraph()
 

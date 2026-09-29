@@ -39,6 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var showFPSItem: NSMenuItem?
     private var showFPSAdvancedItem: NSMenuItem?
     private var sceneCamItem: NSMenuItem?
+    private var cameraMenu: NSMenu?
     private var panelMenuItems: [PanelID: [NSMenuItem]] = [:]
     private var dockMenuItem: NSMenuItem?
     private var navigationStyleItems: [CameraNavigationStyle: NSMenuItem] = [:]
@@ -155,6 +156,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showFPSItem = addItem(to: viewMenu, title: "Show FPS", action: #selector(menuToggleFPS), key: "")
         showFPSAdvancedItem = addItem(to: viewMenu, title: "Show FPS Advanced", action: #selector(menuToggleFPSAdvanced), key: "")
         viewMenu.addItem(.separator())
+        // The camera the viewport looks through while editing: the editor's own, or a game
+        // camera of the scene as a locked preview. The scene decides the list, so the
+        // submenu is filled when it opens (menuNeedsUpdate).
+        let cameraItem = NSMenuItem(title: "Camera", action: nil, keyEquivalent: "")
+        let cameraMenu = NSMenu(title: "Camera")
+        cameraMenu.autoenablesItems = false
+        cameraMenu.delegate = self
+        cameraItem.submenu = cameraMenu
+        viewMenu.addItem(cameraItem)
+        self.cameraMenu = cameraMenu
         sceneCamItem = addItem(to: viewMenu, title: "Use Scene Camera During Play", action: #selector(menuToggleSceneCam), key: "")
         viewMenu.addItem(.separator())
 
@@ -332,6 +343,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Keep the View-menu checkmarks in sync with the current overlay / camera state.
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === cameraMenu {
+            fillCameraMenu(menu)
+            return
+        }
+
         // Items that loaded editor extensions added to this menu sync their own state.
         EditorMenuHost.shared.menuNeedsUpdate(menu)
 
@@ -438,6 +454,39 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func menuToggleSceneCam() {
         EditorPlaybackSettings.shared.useSceneCameraDuringPlay.toggle()
+    }
+
+    /// View > Camera: the editor's camera, then every game camera of the scene by name,
+    /// with the checkmark on the one the viewport shows. During a play session the play
+    /// flow owns the camera, so the items only report it.
+    private func fillCameraMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let shown = CameraSystem.shared.activeCamera
+        let canChoose = EditorPlaybackSettings.shared.isSessionActive == false
+        let cameras = ViewportCameras.gameCameras()
+
+        let editorItem = addItem(to: menu, title: "Editor Camera", action: #selector(menuShowViewportCamera(_:)), key: "")
+        editorItem.state = cameras.contains { $0.entityId == shown } ? .off : .on
+        editorItem.isEnabled = canChoose
+        editorItem.toolTip = "The camera the mouse and the keys move"
+
+        guard cameras.isEmpty == false else { return }
+        menu.addItem(.separator())
+        for camera in cameras {
+            let item = addItem(to: menu, title: camera.name, action: #selector(menuShowViewportCamera(_:)), key: "")
+            item.representedObject = camera.entityId
+            item.state = camera.entityId == shown ? .on : .off
+            item.isEnabled = canChoose
+            item.toolTip = "Look through this camera. The view stays locked until Editor Camera is chosen again."
+        }
+    }
+
+    @objc private func menuShowViewportCamera(_ sender: NSMenuItem) {
+        var userInfo: [String: Any] = [:]
+        if let entityId = sender.representedObject as? EntityID {
+            userInfo["camera"] = entityId
+        }
+        NotificationCenter.default.post(name: .editorShowViewportCamera, object: nil, userInfo: userInfo)
     }
 
     @objc private func menuSelectNavigationStyle(_ sender: NSMenuItem) {
