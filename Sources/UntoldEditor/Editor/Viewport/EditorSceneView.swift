@@ -50,5 +50,7 @@ struct EditorSceneView: View, UntoldRendererDelegate {
         // Detect the moment async asset/tile loading finishes and ask the Scene
         // Graph to refresh, so streamed-in entities appear without a manual action.
         SceneGraphLoadWatcher.shared.poll()
+        // The overlays follow the camera and the selection the frame showed.
+        ViewportOverlayStore.shared.frameWasDrawn()
     }
 }

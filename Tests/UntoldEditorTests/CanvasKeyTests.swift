@@ -56,6 +56,20 @@ final class CanvasKeyTests: XCTestCase {
         ))
     }
 
+    // MARK: - Keys over the viewport's own controls
+
+    func test_overANavigationControl_theKeysAreStillTheScenes() {
+        defer { InputSystem.shared.pointerIsOverViewportControl(false) }
+        // No key window here, so the pointer counts as off the canvas.
+        XCTAssertFalse(InputSystem.shared.canvasOwnsKeys)
+
+        InputSystem.shared.pointerIsOverViewportControl(true)
+        XCTAssertTrue(InputSystem.shared.canvasOwnsKeys)
+
+        InputSystem.shared.pointerIsOverViewportControl(false)
+        XCTAssertFalse(InputSystem.shared.canvasOwnsKeys)
+    }
+
     // MARK: - Keys during a drag
 
     func test_aButtonHeldOnTheCanvas_keepsTheKeys_whereverThePointerWent() throws {

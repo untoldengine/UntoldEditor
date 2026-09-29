@@ -13,7 +13,9 @@ import Combine
 import SwiftUI
 import UntoldEngine
 
-enum EngineStatsOverlayMode {
+/// The form of the frame statistics over the viewport: none, the two compact
+/// lines, or every number the engine reports.
+enum EngineStatsOverlayMode: String {
     case off
     case simplified
     case advanced

@@ -380,13 +380,52 @@ final class GizmoSystemTests: XCTestCase {
 
         createGizmo(mode: .translate)
 
+        // Every child is a handle but the dot at the centre, which is only drawn.
         let children = getEntityChildren(parentId: parentEntityIdGizmo)
+            .filter { hasComponent(entityId: $0, componentType: GizmoCenterComponent.self) == false }
         XCTAssertFalse(children.isEmpty)
         XCTAssertTrue(children.allSatisfy { hitGizmoToolAxis(entityId: $0) })
         XCTAssertTrue(children.contains {
             guard let handle = scene.get(component: GizmoHandleComponent.self, for: $0) else { return false }
             return handle.mode == .translate && handle.axis == .x
         })
+    }
+
+    func test_everyGizmo_hasAWhiteCenterThatIsDrawnAndNeverPicked() {
+        let active = makeEntity(name: "Box", pos: SIMD3<Float>(2, 0, 0))
+        activeEntity = active
+
+        for mode in [GizmoMode.translate, .rotate, .scale] {
+            createGizmo(mode: mode)
+
+            let centers = getEntityChildren(parentId: parentEntityIdGizmo)
+                .filter { hasComponent(entityId: $0, componentType: GizmoCenterComponent.self) }
+            XCTAssertEqual(centers.count, 1, "\(mode)")
+            guard let center = centers.first else { continue }
+
+            XCTAssertTrue(hasComponent(entityId: center, componentType: GizmoComponent.self), "drawn with the gizmo")
+            XCTAssertFalse(hitGizmoToolAxis(entityId: center), "no handle")
+            XCTAssertFalse(getEntityPickParticipation(entityId: center), "picking passes through it")
+            assertNearlyEqual(getPosition(entityId: center), getPosition(entityId: parentEntityIdGizmo))
+
+            let material = scene.get(component: RenderComponent.self, for: center)?.mesh.first?.submeshes.first?.material
+            XCTAssertEqual(material?.baseColorValue, GizmoPalette.center)
+            removeGizmo()
+        }
+    }
+
+    func test_theHandles_takeTheColoursOfTheSpec() {
+        let active = makeEntity(name: "Box", pos: SIMD3<Float>(0, 0, 0))
+        activeEntity = active
+        createGizmo(mode: .translate)
+
+        let expected: [TransformAxis: simd_float4] = [.x: GizmoPalette.x, .y: GizmoPalette.y, .z: GizmoPalette.z]
+        for (axis, color) in expected {
+            let handle = findGizmoHandle(mode: .translate, axis: axis)
+            let material = scene.get(component: RenderComponent.self, for: handle)?.mesh.first?.submeshes.first?.material
+            XCTAssertEqual(material?.baseColorValue, color, "\(axis)")
+            XCTAssertEqual(material?.interactWithLight, false, "\(axis)")
+        }
     }
 
     func test_createRotateGizmo_addsHiddenHitProxyHandlesForEveryAxis() {

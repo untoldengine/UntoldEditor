@@ -10,7 +10,8 @@
 //
 import SwiftUI
 
-/// The projection dropdown: the free camera and the preset views along an axis.
+/// The projection dropdown: the free camera, then the preset views along an
+/// axis, from either side of it.
 struct ViewportProjectionMenu: View {
     let projection: ViewportProjection
     let onSelect: (ViewportProjection) -> Void
@@ -28,13 +29,21 @@ struct ViewportProjectionMenu: View {
         .help("Where the camera looks from")
         .popover(isPresented: $showProjections, arrowEdge: .bottom) {
             EditorPopupMenu(width: 180) {
-                ForEach(ViewportProjection.allCases) { candidate in
-                    EditorPopupMenuRow(title: candidate.title, isChecked: candidate == projection) {
-                        showProjections = false
-                        onSelect(candidate)
-                    }
+                row(for: .perspective)
+                Color.editorDivider
+                    .frame(height: 1)
+                    .padding(.vertical, 3)
+                ForEach(ViewportProjection.presets) { candidate in
+                    row(for: candidate)
                 }
             }
+        }
+    }
+
+    private func row(for candidate: ViewportProjection) -> some View {
+        EditorPopupMenuRow(title: candidate.title, isChecked: candidate == projection) {
+            showProjections = false
+            onSelect(candidate)
         }
     }
 }

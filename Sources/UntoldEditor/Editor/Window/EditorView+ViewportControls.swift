@@ -65,6 +65,13 @@ extension EditorView {
         viewportSettings.camera = camera
     }
 
+    /// True while the viewport shows the editor's camera for editing, when
+    /// the editor draws its overlays over the scene: not in explore mode, not
+    /// while playing and not over the locked preview of a game camera.
+    var editor_showsViewportOverlays: Bool {
+        experienceMode == .edit && isPlaying == false && ViewportCameras.isLockedPreview == false
+    }
+
     /// The game camera the viewport is locked on, for its label; nil on the
     /// editor's camera and during a play session.
     var editor_previewedCamera: GameCameraChoice? {

@@ -90,6 +90,7 @@ extension Color {
     static let editorShadow = Color.black.opacity(0.20) // default drop shadows
     static let editorShadowStrong = Color.black.opacity(0.50) // popovers
     static let editorScrim = Color(hex: 0x14151C, opacity: 0.55) // floating cards over the scene
+    static let editorScrimSoft = Color(hex: 0x14151C, opacity: 0.35) // the navigation gizmo's circle
     static let editorBadgeBackground = Color.black.opacity(0.25) // small badges / pills
     static let editorOverlay = Color.black.opacity(0.70) // full-screen dimming overlays
 }

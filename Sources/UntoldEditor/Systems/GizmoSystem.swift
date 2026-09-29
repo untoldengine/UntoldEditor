@@ -27,6 +27,7 @@ private enum GizmoDimensions {
     static let directionHandleRadius: Float = 0.08
     static let directionHandleHitRadius: Float = 0.2
     static let directionHandleOffsetY: Float = -1.0
+    static let centerDiameter: Float = 0.12
 }
 
 enum GizmoMode: String {
@@ -54,6 +55,11 @@ final class GizmoHandleComponent: Component {
 }
 
 final class GizmoHitProxyComponent: Component {
+    required init() {}
+}
+
+/// Marks the dot at the gizmo's centre, which is drawn and never picked.
+final class GizmoCenterComponent: Component {
     required init() {}
 }
 
@@ -558,6 +564,26 @@ private func createGizmoHandle(
     return handle
 }
 
+/// The white dot where the gizmo's axes meet. It shows where the gizmo is
+/// and is no handle: picking passes through it.
+@discardableResult
+private func makeGizmoCenter() -> EntityID {
+    let center = createEntity()
+    setEntityName(entityId: center, name: "gizmoCenter")
+    setEntityMeshDirect(
+        entityId: center,
+        meshes: BasicPrimitives.createSphere(extent: GizmoDimensions.centerDiameter, segments: [24, 12]),
+        assetName: "gizmoCenter"
+    )
+    setParent(childId: center, parentId: parentEntityIdGizmo)
+    translateTo(entityId: center, position: .zero)
+    registerComponent(entityId: center, componentType: GizmoComponent.self)
+    registerComponent(entityId: center, componentType: GizmoCenterComponent.self)
+    setEntityPickParticipation(entityId: center, enabled: false)
+    applyGizmoHandleColor(entityId: center, color: GizmoPalette.center)
+    return center
+}
+
 @discardableResult
 private func makeDirectionHandle() -> EntityID {
     let handleColor = simd_float4(1.0, 1.0, 0.0, 1.0)
@@ -789,9 +815,9 @@ func makeTranslateGizmo() {
     let tipOffset = GizmoDimensions.axisLength + GizmoDimensions.arrowHeight
 
     // X axis
-    let xColor = simd_float4(1.0, 0.0, 0.0, 1.0)
-    let yColor = simd_float4(0.0, 1.0, 0.0, 1.0)
-    let zColor = simd_float4(0.0, 0.0, 1.0, 1.0)
+    let xColor = GizmoPalette.x
+    let yColor = GizmoPalette.y
+    let zColor = GizmoPalette.z
 
     createGizmoHandle(
         parentId: parentEntityIdGizmo,
@@ -870,9 +896,9 @@ func makeScaleGizmo() {
     let cubeCenterOffset = GizmoDimensions.axisLength + (GizmoDimensions.scaleCubeExtent * 0.5)
 
     // X axis
-    let xColor = simd_float4(1.0, 0.0, 0.0, 1.0)
-    let yColor = simd_float4(0.0, 1.0, 0.0, 1.0)
-    let zColor = simd_float4(0.0, 0.0, 1.0, 1.0)
+    let xColor = GizmoPalette.x
+    let yColor = GizmoPalette.y
+    let zColor = GizmoPalette.z
 
     createGizmoHandle(
         parentId: parentEntityIdGizmo,
@@ -931,9 +957,9 @@ func makeScaleGizmo() {
 }
 
 func makeRotationGizmo() {
-    let xColor = simd_float4(1.0, 0.0, 0.0, 1.0)
-    let yColor = simd_float4(0.0, 1.0, 0.0, 1.0)
-    let zColor = simd_float4(0.0, 0.0, 1.0, 1.0)
+    let xColor = GizmoPalette.x
+    let yColor = GizmoPalette.y
+    let zColor = GizmoPalette.z
     let positiveArcStart: Float = 0.0
     let positiveArcSweep = Float.pi * 0.5
 
@@ -1024,6 +1050,7 @@ func createGizmo(mode: GizmoMode) {
     case .scale:
         makeScaleGizmo()
     }
+    makeGizmoCenter()
 
     if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
         directionHandleEntityId = makeDirectionHandle()

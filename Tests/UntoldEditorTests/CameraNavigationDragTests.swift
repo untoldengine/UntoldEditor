@@ -259,6 +259,73 @@ final class CameraNavigationDragTests: XCTestCase {
         XCTAssertEqual(simd_length(target - targetBefore), 0, accuracy: 1e-6)
     }
 
+    // MARK: - The navigation controls over the viewport
+
+    /// A drag on a navigation control, which says itself what it does.
+    private func controlDrag(_ action: CameraDragAction, translation: NSPoint) {
+        let handlers = NavigationDragHandlers.camera(action)
+        handlers.began()
+        handlers.moved(simd_float2(Float(translation.x), Float(translation.y)))
+        handlers.ended()
+    }
+
+    func test_theGizmosDrag_orbitsAsTheRightButtonDoesWithOption() {
+        let eyeBefore = eye
+        let distanceBefore = simd_length(eye - target)
+
+        controlDrag(.orbit, translation: NSPoint(x: 60, y: 0))
+        let byTheControl = eye
+
+        XCTAssertGreaterThan(simd_length(byTheControl - eyeBefore), 0.01)
+        XCTAssertEqual(simd_length(target), 0, accuracy: 1e-3, "orbit keeps the target")
+        XCTAssertEqual(simd_length(byTheControl - target), distanceBefore, accuracy: 1e-3, "orbit keeps the distance")
+
+        cameraLookAt(entityId: findSceneCamera(), eye: eyeBefore, target: .zero, up: simd_float3(0, 1, 0))
+        InputSystem.shared.keyState.altPressed = true
+        drag(translation: NSPoint(x: 60, y: 0))
+        XCTAssertEqual(simd_length(eye - byTheControl), 0, accuracy: 1e-4, "the same turn either way")
+    }
+
+    func test_thePanButton_movesEyeAndTargetTogether() {
+        let eyeBefore = eye, targetBefore = target
+
+        controlDrag(.pan, translation: NSPoint(x: 100, y: 0))
+
+        XCTAssertGreaterThan(simd_length(eye - eyeBefore), 0.01)
+        XCTAssertEqual(simd_length((eye - eyeBefore) - (target - targetBefore)), 0, accuracy: 1e-4)
+    }
+
+    func test_theZoomButton_draggedUp_movesTheCameraIn() {
+        let distanceBefore = simd_length(eye - target)
+
+        controlDrag(.zoom, translation: NSPoint(x: 0, y: 40))
+
+        XCTAssertEqual(simd_length(target), 0, accuracy: 1e-4, "zooming keeps the target")
+        XCTAssertLessThan(simd_length(eye - target), distanceBefore)
+    }
+
+    func test_aControl_doesWhatItSays_whateverKeyIsHeld() {
+        InputSystem.shared.keyState.shiftPressed = true
+        let distanceBefore = simd_length(eye - target)
+
+        controlDrag(.zoom, translation: NSPoint(x: 0, y: 40))
+
+        XCTAssertEqual(simd_length(target), 0, accuracy: 1e-4, "⇧ would have panned, and moved the target")
+        XCTAssertLessThan(simd_length(eye - target), distanceBefore)
+    }
+
+    func test_overALockedPreview_aControlMovesNothing() {
+        let gameCamera = createEntity()
+        registerComponent(entityId: gameCamera, componentType: CameraComponent.self)
+        CameraSystem.shared.activeCamera = gameCamera
+        let eyeBefore = eye, targetBefore = target
+
+        controlDrag(.pan, translation: NSPoint(x: 100, y: 40))
+
+        XCTAssertEqual(simd_length(eye - eyeBefore), 0, accuracy: 1e-6)
+        XCTAssertEqual(simd_length(target - targetBefore), 0, accuracy: 1e-6)
+    }
+
     // MARK: - The left button
 
     func test_leftDragLeavesTheCameraAlone() {

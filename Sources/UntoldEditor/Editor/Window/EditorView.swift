@@ -59,7 +59,6 @@ public struct EditorView: View {
     let panelAnimationDuration = 0.28
     @State var showWelcomeStart = true
     @State var showCameraControlHints = false
-    @State var cameraControlHintsDismissed = false
     @State var showQuickPreviewWarning = false
     @State var quickPreviewEntities: [(EntityID, String)] = []
     @State var sceneAuthoredGameCamera: EntityID?

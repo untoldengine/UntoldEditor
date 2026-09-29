@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // View-menu items whose checkmark / enabled state is synced on open.
     private var showFPSItem: NSMenuItem?
     private var showFPSAdvancedItem: NSMenuItem?
+    private var overlayItems: [ViewportOverlay: NSMenuItem] = [:]
     private var sceneCamItem: NSMenuItem?
     private var cameraMenu: NSMenu?
     private var panelMenuItems: [PanelID: [NSMenuItem]] = [:]
@@ -155,6 +156,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         viewMenu.addItem(.separator())
         showFPSItem = addItem(to: viewMenu, title: "Show FPS", action: #selector(menuToggleFPS), key: "")
         showFPSAdvancedItem = addItem(to: viewMenu, title: "Show FPS Advanced", action: #selector(menuToggleFPSAdvanced), key: "")
+        // What the editor draws over the scene, each with its own switch.
+        let overlaysItem = NSMenuItem(title: "Viewport Overlays", action: nil, keyEquivalent: "")
+        let overlaysMenu = NSMenu(title: "Viewport Overlays")
+        overlaysMenu.autoenablesItems = false
+        for overlay in ViewportOverlay.allCases {
+            let item = addItem(to: overlaysMenu, title: overlay.title, action: #selector(menuToggleViewportOverlay(_:)), key: "")
+            item.representedObject = overlay.rawValue
+            item.toolTip = overlay.summary
+            overlayItems[overlay] = item
+        }
+        overlaysItem.submenu = overlaysMenu
+        viewMenu.addItem(overlaysItem)
         viewMenu.addItem(.separator())
         // The camera the viewport looks through while editing: the editor's own, or a game
         // camera of the scene as a locked preview. The scene decides the list, so the
@@ -385,6 +398,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showFPSItem?.state = store.overlayMode != .off ? .on : .off
         showFPSAdvancedItem?.state = store.overlayMode == .advanced ? .on : .off
         showFPSAdvancedItem?.isEnabled = store.overlayMode != .off
+        for (overlay, item) in overlayItems {
+            item.state = EditorViewportOverlaySettings.shared.isShown(overlay) ? .on : .off
+        }
         sceneCamItem?.state = EditorPlaybackSettings.shared.useSceneCameraDuringPlay ? .on : .off
 
         let layout = EditorDockLayout.shared
@@ -450,6 +466,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             store.setOverlayAdvancedEnabled(true)
         }
+    }
+
+    @objc private func menuToggleViewportOverlay(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let overlay = ViewportOverlay(rawValue: raw) else {
+            return
+        }
+        EditorViewportOverlaySettings.shared.toggle(overlay)
     }
 
     @objc private func menuToggleSceneCam() {

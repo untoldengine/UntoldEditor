@@ -24,6 +24,9 @@
         var isObjectDragActive = false
         /// True while the right button, pressed on the canvas, steers the camera.
         var isCameraDragActive = false
+        /// True while the pointer is over a control the editor draws over the
+        /// canvas, such as the navigation gizmo.
+        var isPointerOverViewportControl = false
         /// What the right button's drag does to the camera. Resolved once when
         /// it begins so a modifier released mid-drag does not flip a pan into a
         /// look halfway through.
@@ -80,13 +83,20 @@
         }
 
         /// Whether the keys the canvas receives are for the scene: the pointer is
-        /// over the canvas, or a button pressed on it is still held, wherever the
-        /// drag went. An overlay such as the project gallery must not drive the
-        /// camera behind it.
+        /// over the canvas or over one of its own controls, or a button pressed
+        /// on it is still held, wherever the drag went. An overlay such as the
+        /// project gallery must not drive the camera behind it.
         internal var canvasOwnsKeys: Bool {
             editorInputTargetViewRef.isCameraDragActive
                 || editorInputTargetViewRef.leftDownLocation != nil
+                || editorInputTargetViewRef.isPointerOverViewportControl
                 || isPointerOverEditorInputView()
+        }
+
+        /// The pointer went over, or left, a control the editor draws over the
+        /// canvas. There the keys still fly the camera, as they do beside it.
+        internal func pointerIsOverViewportControl(_ isOver: Bool) {
+            editorInputTargetViewRef.isPointerOverViewportControl = isOver
         }
 
         /// The keys that fly the camera, by their flag in the key state and their
@@ -969,8 +979,13 @@
         /// until it is released. With nothing held the drag looks around where
         /// the camera stands, as the mouse does in a game; ⇧ pans, ⌘ moves the
         /// camera forward and back, ⌥ orbits the point ahead. The keys keep
-        /// flying the camera meanwhile.
-        func beginCameraDrag() {
+        /// flying the camera meanwhile. A navigation control over the viewport
+        /// begins the same drag and says itself what it does, as `chosen`; over
+        /// a locked preview it begins none.
+        func beginCameraDrag(as chosen: CameraDragAction? = nil) {
+            guard canvasTakesThePointer else {
+                return
+            }
             // While a game plays on its own camera the scene camera is not the view.
             if gameMode, CameraSystem.shared.activeCamera != findSceneCamera() {
                 return
@@ -980,7 +995,7 @@
                 return
             }
 
-            let action = EditorNavigationSettings.dragAction(
+            let action = chosen ?? EditorNavigationSettings.dragAction(
                 shiftPressed: keyState.shiftPressed,
                 commandPressed: keyState.commandPressed,
                 optionPressed: keyState.altPressed
