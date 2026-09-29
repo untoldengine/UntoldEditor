@@ -20,6 +20,9 @@ struct RuntimeExportRequest: Identifiable, Equatable {
     let category: AssetCategory
     let destinationFolder: URL
     let outputURL: URL
+    /// Where the files the result references go (see `runtimeExportLocation`); nil keeps
+    /// them beside the result.
+    var assetsFolder: URL? = nil
 }
 
 struct TilesExportRequest: Identifiable, Equatable {

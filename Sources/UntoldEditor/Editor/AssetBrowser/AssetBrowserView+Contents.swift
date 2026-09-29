@@ -141,11 +141,7 @@ extension AssetBrowserView {
                                let category = AssetCategory(rawValue: asset.category)
                             {
                                 Button {
-                                    queueRuntimeExport(
-                                        sourceURL: asset.path,
-                                        category: category,
-                                        destinationFolder: asset.path.deletingLastPathComponent()
-                                    )
+                                    queueRuntimeExport(sourceURL: asset.path, category: category)
                                 } label: {
                                     Label("Cook to .untold…", systemImage: "sparkles")
                                 }
