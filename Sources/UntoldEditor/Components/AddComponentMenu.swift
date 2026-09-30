@@ -48,17 +48,21 @@ struct AddComponentMenu: View {
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: "plus")
                     Text("Add Component")
-                        .fontWeight(.regular)
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 10)
-                .background(Color.accentColor)
-                .foregroundColor(.editorTextPrimary)
-                .cornerRadius(6)
+                .font(EditorType.title)
+                .foregroundColor(.editorAccent)
+                .frame(maxWidth: .infinity)
+                .frame(height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: EditorType.Radius.field)
+                        .stroke(Color.editorAccent.opacity(0.6), lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .padding(.top, 8)
         }
     }

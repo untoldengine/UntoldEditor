@@ -72,30 +72,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 guard let self else { return }
                 window.title = Self.windowTitle(projectName: EditorAssetBasePath.shared.projectName, appName: appName)
             }
-        // Force dark appearance so AppKit-drawn chrome (title bar, native tab
-        // strips, segmented controls) matches the dark editor theme.
-        window.appearance = NSAppearance(named: .darkAqua)
-        // Tint the title bar with the editor background color instead of the
-        // default near-black. Transparent title bar lets the window background
-        // color (editorBackground) show through.
-        window.titlebarAppearsTransparent = true
-        window.backgroundColor = NSColor(Color.editorBackground)
-        // The editor's toolbar row shares the title bar: the content view runs
-        // under it, the title is hidden, and an empty unified toolbar gives the
-        // title bar the height that centres the traffic lights in the row.
-        window.styleMask.insert(.fullSizeContentView)
-        window.titleVisibility = .hidden
-        let titleBar = NSToolbar(identifier: "EditorTitleBar")
-        titleBar.showsBaselineSeparator = false
-        window.toolbar = titleBar
-        window.toolbarStyle = .unified
-        // The toolbar row drags the window through WindowDragRegion; nothing else
-        // does, so a drag in the viewport or in a panel never moves the window.
-        window.isMovableByWindowBackground = false
+        EditorWindowChrome.apply(to: window)
         window.center()
 
-        let hostingView = NSHostingView(rootView: EditorView())
-        window.contentView = hostingView
+        window.contentView = EditorWindowChrome.hostingView(rootView: EditorView())
 
         window.makeKeyAndOrderFront(nil)
         NSApp.setActivationPolicy(.regular)

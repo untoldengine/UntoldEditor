@@ -16,7 +16,7 @@ import UntoldEngine
 
 extension InspectorView {
     func addComponentToEntity_Editor(componentType: Any.Type) {
-        guard let entityId = selectionManager.selectedEntity else { return }
+        guard let entityId = inspectedEntity else { return }
         guard canAddComponentFromInspector(componentType: componentType, to: entityId) else { return }
 
         EditorSceneDirtyState.shared.markDirty()
@@ -54,7 +54,7 @@ extension InspectorView {
     }
 
     func removeComponentFromEntity_Editor(componentType: Any.Type) {
-        guard let entityId = selectionManager.selectedEntity else { return }
+        guard let entityId = inspectedEntity else { return }
         guard canRemoveComponentFromInspector(componentType: componentType, from: entityId) else { return }
 
         EditorSceneDirtyState.shared.markDirty()
@@ -104,7 +104,7 @@ extension InspectorView {
         if EditorFeatureFlags.enableScriptComponent, EditorAuthoringMode.sceneCompositionOnly == false {
             components.append(scriptComponent_Editor)
         }
-        if let entityId = selectionManager.selectedEntity {
+        if let entityId = inspectedEntity {
             components = components.filter { canAddComponentFromInspector(componentType: $0.type, to: entityId) }
         }
         return components

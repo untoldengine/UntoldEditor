@@ -29,10 +29,6 @@ struct ScriptComponentInspector: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Script Properties")
-                .font(.headline)
-                .padding(.bottom, 4)
-
             // List all scripts attached to this entity
             if let comp = scene.get(component: ScriptComponent.self, for: entityId) {
                 if comp.scripts.isEmpty {

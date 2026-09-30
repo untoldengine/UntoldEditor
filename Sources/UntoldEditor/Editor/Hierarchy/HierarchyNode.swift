@@ -8,7 +8,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 //
-
 import SwiftUI
 import UntoldEngine
 
@@ -18,6 +17,9 @@ struct HierarchyNode: View {
     let depth: Int
     @ObservedObject var sceneGraphModel: SceneGraphModel
     let selectionManager: SelectionManager
+    /// The rows a filter keeps, nil when nothing is filtered. A filtered tree
+    /// shows its matches expanded.
+    var visibleEntities: Set<EntityID>?
     var onParentEntity: (EntityID, EntityID) -> Void = { _, _ in }
     var onUnparentEntity: (EntityID) -> Void = { _ in }
     var onDeleteEntity: (EntityID) -> Void = { _ in }
@@ -30,11 +32,11 @@ struct HierarchyNode: View {
     }
 
     private var nodeContent: some View {
-        let children = sceneGraphModel.getChildren(entityId: entityId)
+        let children = sceneGraphModel.getChildren(entityId: entityId).filter(isShown)
         let hasChildren = children.isEmpty == false
-        let isExpanded = sceneGraphModel.isExpanded(entityId: entityId)
+        let isExpanded = visibleEntities != nil || sceneGraphModel.isExpanded(entityId: entityId)
 
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 2) {
             EntityRow(
                 entityid: entityId,
                 entityName: entityName,
@@ -46,9 +48,8 @@ struct HierarchyNode: View {
                 selectionManager: selectionManager
             )
             .contentShape(Rectangle())
-            // Indent one chevron-slot (chevron width 12 + HStack spacing 8) per
-            // level, so a child's chevron lines up under its parent's icon.
-            .padding(.leading, CGFloat(depth) * 20)
+            // One group indent per level, so a child's caret sits under its parent's icon.
+            .padding(.leading, CGFloat(depth) * 16)
             .onTapGesture {
                 selectionManager.inspectEntity(entityId: entityId)
             }
@@ -73,6 +74,7 @@ struct HierarchyNode: View {
                         depth: depth + 1,
                         sceneGraphModel: sceneGraphModel,
                         selectionManager: selectionManager,
+                        visibleEntities: visibleEntities,
                         onParentEntity: onParentEntity,
                         onUnparentEntity: onUnparentEntity,
                         onDeleteEntity: onDeleteEntity,
@@ -82,6 +84,10 @@ struct HierarchyNode: View {
                 }
             }
         }
+    }
+
+    private func isShown(_ entityId: EntityID) -> Bool {
+        visibleEntities?.contains(entityId) ?? true
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -176,6 +182,16 @@ struct HierarchyNode: View {
                 addEntityMenuItems(isDerivedAssetNode(entityId) ? addActions : parentedAddActions)
             } label: {
                 Label("Add", systemImage: "plus")
+            }
+
+            Divider()
+
+            // The row's eye and lock, for the keyboard-less: same state, same toggles.
+            Button(selectionManager.isHidden(entityId) ? "Show" : "Hide", systemImage: selectionManager.isHidden(entityId) ? "eye" : "eye.slash") {
+                selectionManager.toggleHidden(entityId)
+            }
+            Button(selectionManager.isLocked(entityId) ? "Unlock" : "Lock", systemImage: selectionManager.isLocked(entityId) ? "lock.open" : "lock.fill") {
+                selectionManager.toggleLocked(entityId)
             }
 
             Divider()

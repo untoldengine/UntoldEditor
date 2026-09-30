@@ -19,8 +19,6 @@ struct CameraEditorView: View {
     let refreshView: () -> Void
 
     var body: some View {
-        Text("Camera System")
-
         if hasComponent(entityId: entityId, componentType: CameraComponent.self) {
             let eye: simd_float3 = getCameraEye(entityId: entityId)
             let up: simd_float3 = getCameraUp(entityId: entityId)

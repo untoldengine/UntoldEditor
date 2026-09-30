@@ -34,13 +34,9 @@ extension EditorView {
             return AnyView(SceneHierarchyView(
                 selectionManager: selectionManager,
                 sceneGraphModel: sceneGraphModel,
-                sceneCatalog: sceneCatalog,
-                projectName: editorBasePath.projectName ?? "Untitled Project",
-                activeSceneURL: editorController?.currentSceneURL,
-                onSelectScene: editor_requestLoadScene,
-                entityList: editor_entities,
+                sceneName: SceneTab.name(for: editorController?.currentSceneURL),
+                filter: panelSearchText[.hierarchy] ?? "",
                 onAddEntity_Editor: editor_addNewEntity,
-                onRemoveEntity_Editor: editor_removeEntity,
                 onParentEntity: editor_parentEntity,
                 onUnparentEntity: editor_unparentEntity,
                 onDeleteEntity: editor_removeEntity(_:),
@@ -76,11 +72,17 @@ extension EditorView {
         }
     }
 
-    /// The controls that go with a panel in its tab strip: a filter field, and for
-    /// the console and the tasks their buttons. The strip sizes them: beside the
-    /// tabs in the bottom area, on their own row in a side area.
+    /// The controls that go with a panel in its tab strip: a filter field, the
+    /// hierarchy's add menu, and for the console and the tasks their buttons.
+    /// The strip sizes them: beside the tabs in the bottom area, on their own
+    /// row in a side area.
     func panelAccessories(_ panel: PanelID) -> AnyView? {
         switch panel {
+        case .hierarchy:
+            return AnyView(HStack(spacing: 8) {
+                EditorSearchField(text: panelSearch(.hierarchy), placeholder: "Filter entities")
+                HierarchyAddMenuButton(actions: AddEntityActions(empty: editor_addNewEntity))
+            })
         case .assets, .explore, .plugins:
             return AnyView(EditorSearchField(text: panelSearch(panel), placeholder: "Filter \(panel.title.lowercased())"))
         case .console:
@@ -104,7 +106,7 @@ extension EditorView {
                     taskCenter.clearFinished()
                 }
             })
-        case .hierarchy, .viewport, .inspector:
+        case .viewport, .inspector:
             return nil
         }
     }

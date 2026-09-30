@@ -19,8 +19,6 @@ struct KineticEditorView: View {
     let refreshView: () -> Void
 
     var body: some View {
-        Text("Kinetic System")
-
         if hasComponent(entityId: entityId, componentType: KineticComponent.self) {
             let mass = getMass(entityId: entityId)
             TextInputNumberView(label: "Mass", value: Binding(

@@ -19,8 +19,6 @@ struct PointLightEditorView: View {
     let refreshView: () -> Void
 
     var body: some View {
-        Text("Light Property")
-
         if hasComponent(entityId: entityId, componentType: PointLightComponent.self) {
             VStack {
                 let color: simd_float3 = getLightColor(entityId: entityId)

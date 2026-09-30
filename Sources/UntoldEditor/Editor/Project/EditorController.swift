@@ -96,18 +96,22 @@ class EditorController: SelectionDelegate, ObservableObject {
 
     func didSelectEntity(_ entityId: EntityID) {
         DispatchQueue.main.async {
+            // A locked entity keeps the viewport from selecting it; the hierarchy still can.
+            guard self.selectionManager.isEffectivelyLocked(entityId) == false else { return }
             self.selectionManager.selectEntity(entityId: entityId)
         }
     }
 
     func didInspectEntity(_ entityId: EntityID) {
         DispatchQueue.main.async {
+            guard self.selectionManager.isEffectivelyLocked(entityId) == false else { return }
             self.selectionManager.inspectEntity(entityId: entityId)
         }
     }
 
     func didInspectMesh(_ entityId: EntityID, meshIndex: Int) {
         DispatchQueue.main.async {
+            guard self.selectionManager.isEffectivelyLocked(entityId) == false else { return }
             self.selectionManager.inspectMesh(entityId: entityId, meshIndex: meshIndex)
         }
     }
