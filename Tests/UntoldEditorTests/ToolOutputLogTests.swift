@@ -102,6 +102,102 @@ final class ToolOutputLogTests: XCTestCase {
         XCTAssertEqual(toolOutputLines(stdout: "", stderr: "\n  \n", failed: true), [])
     }
 
+    func testEachToolMarksItsWarningsAndErrorsItsOwnWay() {
+        let stdout = """
+        [basecolor] wall.png
+          [warn] Unknown slot 'paint', falling back to 'data'
+          Written   wall.utex  (87.4 KB)
+        [normal] floor_normal.png
+          [error] astcenc not found
+          WARNING: --kdtree was passed but pre-annotated quadtree metadata was found
+        Error: No valid mesh objects found
+          Warning: mesh 'Floor' has no UV map
+        """
+
+        let lines = toolOutputLines(stdout: stdout, stderr: "", failed: false)
+
+        XCTAssertEqual(lines.map(\.level), [.info, .warning, .info, .info, .error, .warning, .error, .warning])
+    }
+
+    // MARK: - Texture compression after an export
+
+    private let cleanExport = "Wrote /Models/building/building.untold (1024 bytes)\nNodes: 1, Meshes: 1\n"
+    private let cleanPatch = (
+        status: Int32(0),
+        stdout: "Patching refs in  /Models/building/building.untold\n\n  Patching 1 texture reference(s):\n",
+        stderr: ""
+    )
+    private let compressionFailed = "⚠️ ASTC compression had errors — asset imported without compressed textures"
+
+    /// An export that was clean, followed by a texture bake that was not. The task counted
+    /// only what the export printed, and said "Wrote building.untold" as if nothing had happened.
+    func testWarningsOfTheTextureBakeCountForTheTask() {
+        let exportOutput = toolOutputLines(stdout: cleanExport, stderr: "", failed: false)
+        let bake = (
+            status: Int32(0),
+            stdout: "Batch baking 1 texture(s) in /Models/building/Textures\n\n[paint] wall.png\n"
+                + "  [warn] Unknown slot 'paint', falling back to 'data'\n  Written   wall.utex  (87.4 KB)\n\nDone. 1 texture(s) baked.\n",
+            stderr: ""
+        )
+
+        let compressionOutput = textureCompressionLines(bake: bake, patch: cleanPatch, failureWarning: compressionFailed)
+
+        XCTAssertEqual(taskDetail("Wrote building.untold", warningsIn: exportOutput), "Wrote building.untold")
+        XCTAssertEqual(
+            taskDetail("Wrote building.untold", warningsIn: exportOutput + compressionOutput),
+            "Wrote building.untold (1 warning, see Console)"
+        )
+        XCTAssertFalse(compressionOutput.contains { $0.text == compressionFailed })
+    }
+
+    func testFailedTextureBakeIsReportedByTheTask() {
+        let exportOutput = toolOutputLines(stdout: cleanExport, stderr: "", failed: false)
+        let bake = (
+            status: Int32(1),
+            stdout: "[normal] floor_normal.png\n  [error] astcenc not found\n\n\n1 error(s):\n  floor_normal.png: astcenc not found\n",
+            stderr: ""
+        )
+
+        let compressionOutput = textureCompressionLines(bake: bake, patch: cleanPatch, failureWarning: compressionFailed)
+
+        XCTAssertEqual(compressionOutput.first { $0.level == .error }?.text, "  [error] astcenc not found")
+        XCTAssertEqual(compressionOutput.last, ToolOutputLine(level: .warning, text: compressionFailed))
+        XCTAssertEqual(
+            taskDetail("Wrote building.untold", warningsIn: exportOutput + compressionOutput),
+            "Wrote building.untold (1 warning, see Console)"
+        )
+    }
+
+    func testFailedReferencePatchWritesItsErrorStreamAsErrors() {
+        let bake = (status: Int32(0), stdout: "Done. 1 texture(s) baked.\n", stderr: "")
+        let patch = (status: Int32(1), stdout: "", stderr: "error: path not found: /Models/building/building.untold\n")
+
+        let compressionOutput = textureCompressionLines(bake: bake, patch: patch, failureWarning: compressionFailed)
+
+        XCTAssertEqual(compressionOutput, [
+            ToolOutputLine(level: .info, text: "Done. 1 texture(s) baked."),
+            ToolOutputLine(level: .error, text: "error: path not found: /Models/building/building.untold"),
+            ToolOutputLine(level: .warning, text: compressionFailed),
+        ])
+    }
+
+    func testStepThatFailedWithoutPrintingAnythingStillWarns() {
+        let silentFailure = (status: Int32(-1), stdout: "", stderr: "")
+
+        let compressionOutput = textureCompressionLines(bake: silentFailure, patch: silentFailure, failureWarning: compressionFailed)
+
+        XCTAssertEqual(compressionOutput, [ToolOutputLine(level: .warning, text: compressionFailed)])
+    }
+
+    func testCleanTextureCompressionAddsNothingToWhatTheTaskSays() {
+        let exportOutput = toolOutputLines(stdout: cleanExport, stderr: "", failed: false)
+        let bake = (status: Int32(0), stdout: "[basecolor] wall.png\n  Written   wall.utex  (87.4 KB)\n\nDone. 1 texture(s) baked.\n", stderr: "")
+
+        let compressionOutput = textureCompressionLines(bake: bake, patch: cleanPatch, failureWarning: compressionFailed)
+
+        XCTAssertEqual(taskDetail("Wrote building.untold", warningsIn: exportOutput + compressionOutput), "Wrote building.untold")
+    }
+
     func testTaskDetailPointsAtTheConsoleOnlyWhenThereAreWarnings() {
         let warning = ToolOutputLine(level: .warning, text: "Warning: something")
         let info = ToolOutputLine(level: .info, text: "Wrote building.untold")

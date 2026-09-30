@@ -24,25 +24,44 @@ struct ToolOutputLine: Equatable {
 /// entry therefore hides everything after them: its warnings, and the error that stopped it.
 /// Progress lines are left out, since an export prints thousands of them.
 ///
+/// A line is a warning or an error when the tool marked it as one (see `markedLevel`).
 /// What the tool wrote to its error stream is an error when the tool failed, and a warning
 /// when it carried on regardless.
 func toolOutputLines(stdout: String, stderr: String, failed: Bool) -> [ToolOutputLine] {
     var lines: [ToolOutputLine] = []
 
-    var isListingWarnings = false
+    var listLevel: LogLevel?
     for text in printedLines(of: stdout) {
         let content = text.trimmingCharacters(in: .whitespaces)
-        if content.hasPrefix("Warning:") {
-            isListingWarnings = true
+        if let level = markedLevel(of: content) {
+            listLevel = level
         } else if !content.hasPrefix("- ") {
             // A warning may be followed by the list of what it is about.
-            isListingWarnings = false
+            listLevel = nil
         }
-        lines.append(ToolOutputLine(level: isListingWarnings ? .warning : .info, text: text))
+        lines.append(ToolOutputLine(level: listLevel ?? .info, text: text))
     }
 
     for text in printedLines(of: stderr) {
         lines.append(ToolOutputLine(level: failed ? .error : .warning, text: text))
+    }
+    return lines
+}
+
+/// The Console lines of an export's texture compression: what the bake and the reference
+/// patch printed and, when either of them failed, a warning that says what that leaves.
+///
+/// A compression that fails does not fail the export, so that warning is how its task
+/// comes to point at the Console.
+func textureCompressionLines(
+    bake: (status: Int32, stdout: String, stderr: String),
+    patch: (status: Int32, stdout: String, stderr: String),
+    failureWarning: String
+) -> [ToolOutputLine] {
+    var lines = toolOutputLines(stdout: bake.stdout, stderr: bake.stderr, failed: bake.status != 0)
+    lines += toolOutputLines(stdout: patch.stdout, stderr: patch.stderr, failed: patch.status != 0)
+    if bake.status != 0 || patch.status != 0 {
+        lines.append(ToolOutputLine(level: .warning, text: failureWarning))
     }
     return lines
 }
@@ -58,7 +77,8 @@ func logToolOutput(_ lines: [ToolOutputLine]) {
     }
 }
 
-/// What a finished task says, with a pointer to the Console when its tool had warnings.
+/// What a finished task says, with a pointer to the Console when its tools had warnings.
+/// `lines` is the output of every tool the task ran, not only the first.
 func taskDetail(_ detail: String, warningsIn lines: [ToolOutputLine]) -> String {
     let warningCount = lines.count(where: { $0.level == .warning })
     switch warningCount {
@@ -66,6 +86,19 @@ func taskDetail(_ detail: String, warningsIn lines: [ToolOutputLine]) -> String 
     case 1: return "\(detail) (1 warning, see Console)"
     default: return "\(detail) (\(warningCount) warnings, see Console)"
     }
+}
+
+/// How the tools mark a line: the exporters with "Warning:" or "Error:", texbake.py with
+/// "[warn]" or "[error]".
+private func markedLevel(of content: String) -> LogLevel? {
+    let lowercased = content.lowercased()
+    if lowercased.hasPrefix("warning:") || lowercased.hasPrefix("[warn]") {
+        return .warning
+    }
+    if lowercased.hasPrefix("error:") || lowercased.hasPrefix("[error]") {
+        return .error
+    }
+    return nil
 }
 
 private func printedLines(of output: String) -> [String] {

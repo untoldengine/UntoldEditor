@@ -251,6 +251,9 @@ extension AssetBrowserView {
 
                 let exportOutput = toolOutputLines(stdout: stdout, stderr: stderr, failed: process.terminationStatus != 0)
                 DispatchQueue.main.async { logToolOutput(exportOutput) }
+                // Everything the task's tools print, so that what it says at the end counts
+                // the warnings of the texture compression too.
+                var taskOutput = exportOutput
 
                 let wasCancelled = task.isCancelRequested
                 let exportSucceeded = process.terminationStatus == 0 && !wasCancelled
@@ -263,19 +266,18 @@ extension AssetBrowserView {
                         task.setDetail("Baking textures (ASTC)…")
                         DispatchQueue.main.async { showStatus("Baking textures (ASTC)...") }
                         let bakeResult = runTexbakeStep(script: texbakeScript, arguments: ["--dir", texturesDir.path], astcencBin: astcencBin)
-                        DispatchQueue.main.async {
-                            logToolOutput(toolOutputLines(stdout: bakeResult.stdout, stderr: bakeResult.stderr, failed: bakeResult.status != 0))
-                        }
 
                         task.setDetail("Patching texture references…")
                         DispatchQueue.main.async { showStatus("Patching texture references...") }
                         let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputDirURL.path], astcencBin: astcencBin)
-                        DispatchQueue.main.async {
-                            logToolOutput(toolOutputLines(stdout: patchResult.stdout, stderr: patchResult.stderr, failed: patchResult.status != 0))
-                            if bakeResult.status != 0 || patchResult.status != 0 {
-                                Logger.log(message: "⚠️ ASTC compression had errors — tiles imported without compressed textures")
-                            }
-                        }
+
+                        let compressionOutput = textureCompressionLines(
+                            bake: bakeResult,
+                            patch: patchResult,
+                            failureWarning: "⚠️ ASTC compression had errors — tiles imported without compressed textures"
+                        )
+                        taskOutput += compressionOutput
+                        DispatchQueue.main.async { logToolOutput(compressionOutput) }
                     } else {
                         DispatchQueue.main.async {
                             Logger.log(message: "⚠️ ASTC skipped — texbake.py not found or no Textures folder present")
@@ -286,7 +288,7 @@ extension AssetBrowserView {
                 if wasCancelled {
                     task.markCancelled("Cancelled by user")
                 } else if exportSucceeded {
-                    task.succeed(taskDetail("Wrote tiles to \(request.outputDirURL.lastPathComponent)/", warningsIn: exportOutput))
+                    task.succeed(taskDetail("Wrote tiles to \(request.outputDirURL.lastPathComponent)/", warningsIn: taskOutput))
                 } else {
                     task.fail("export-untold-tiles exited with status \(process.terminationStatus) (see Console)")
                 }
