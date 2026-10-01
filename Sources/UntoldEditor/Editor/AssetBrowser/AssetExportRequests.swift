@@ -22,7 +22,7 @@ struct RuntimeExportRequest: Identifiable, Equatable {
     let outputURL: URL
     /// Where the files the result references go (see `runtimeExportLocation`); nil keeps
     /// them beside the result.
-    var assetsFolder: URL? = nil
+    var assetsFolder: URL?
 }
 
 struct TilesExportRequest: Identifiable, Equatable {
