@@ -91,6 +91,7 @@ struct AssetBrowserView: View {
     @State var exportTileSizeY: String = "10000"
     @State var exportTileSizeZ: String = "25"
     @State var exportCompressGeometry = false
+    @State var exportIncludeHidden = false
     @State var exportCompressTextures = false
     @State var astcencBinPath: String = ""
     @State var exportQuadTree = false

@@ -15,16 +15,18 @@ import UntoldComponentKit
 import UntoldEngine
 
 extension AssetBrowserView {
-    func queueRuntimeExport(sourceURL: URL, category: AssetCategory, destinationFolder: URL) {
+    func queueRuntimeExport(sourceURL: URL, category: AssetCategory) {
         let outputExtension = category == .animations ? "untoldanim" : runtimeAssetExtension
-        let outputURL = destinationFolder
+        let location = runtimeExportLocation(for: sourceURL)
+        let outputURL = location.outputFolder
             .appendingPathComponent(sourceURL.deletingPathExtension().lastPathComponent)
             .appendingPathExtension(outputExtension)
         let request = RuntimeExportRequest(
             sourceURL: sourceURL,
             category: category,
-            destinationFolder: destinationFolder,
-            outputURL: outputURL
+            destinationFolder: location.outputFolder,
+            outputURL: outputURL,
+            assetsFolder: location.assetsFolder
         )
 
         runtimeExportQueue.append(request)
@@ -44,7 +46,7 @@ extension AssetBrowserView {
                 .font(.title2)
                 .bold()
 
-            Text("Cook this USD or .blend source into Untold Engine's runtime format to use it in scenes: a single model becomes a .untold file, while a scene with multiple models becomes a .untoldpack bundle (one .untold per model). The source stays next to the output and can be cooked again later.")
+            Text("Cook this USD or .blend source into Untold Engine's runtime format to use it in scenes: a single model becomes a .untold file, while a scene with multiple models becomes a .untoldpack bundle (one .untold per model). The source stays in the project and can be cooked again later.")
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -65,6 +67,16 @@ extension AssetBrowserView {
                 Text("If the source contains multiple models, a .untoldpack manifest is written here instead.")
                     .font(.caption2)
                     .foregroundColor(.editorTextSecondary)
+
+                if let assetsFolder = request.assetsFolder, request.category != .animations {
+                    Text("Textures and model folders")
+                        .font(.caption)
+                        .foregroundColor(.editorTextSecondary)
+                        .padding(.top, 6)
+                    Text(assetsFolder.path)
+                        .font(.system(size: 12, design: .monospaced))
+                        .lineLimit(2)
+                }
             }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -75,6 +87,11 @@ extension AssetBrowserView {
                     Text("Engine oriented").tag("engine-oriented")
                 }
                 .disabled(!exportConvertOrientation)
+
+                if request.category == .models {
+                    Toggle("Include hidden objects", isOn: $exportIncludeHidden)
+                        .help("Also cook objects hidden in Blender's viewport or disabled in renders. Objects in collections excluded from the view layer are never cooked.")
+                }
 
                 Toggle("Compress geometry (LZ4)", isOn: $exportCompressGeometry)
                     .help("Compresses vertex and index data with LZ4. Requires the Python lz4 package.")
@@ -169,7 +186,17 @@ extension AssetBrowserView {
         let convertOrientation = exportConvertOrientation
         let sourceOrientation = exportSourceOrientation
         let compressGeometry = exportCompressGeometry
+        let includeHidden = exportIncludeHidden && request.category == .models
         let compressTextures = exportCompressTextures
+        // An engine older than the --assets-dir option cooks into the source's folder, as before.
+        let exporterPython = exporterPythonScript(besideExportScript: exporterScript)
+        let assetsFolder = request.assetsFolder.flatMap {
+            engineScript(exporterPython, acceptsOption: "--assets-dir") ? $0 : nil
+        }
+        let outputURL = request.assetsFolder != nil && assetsFolder == nil
+            ? request.sourceURL.deletingLastPathComponent().appendingPathComponent(request.outputURL.lastPathComponent)
+            : request.outputURL
+        let exporterAcceptsIncludeHidden = engineScript(exporterPython, acceptsOption: "--include-hidden")
         let astcencBin = astcencBinPath.trimmingCharacters(in: .whitespacesAndNewlines)
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -180,9 +207,9 @@ extension AssetBrowserView {
             task.attach(process: process)
 
             do {
-                try FileManager.default.createDirectory(at: request.destinationFolder, withIntermediateDirectories: true)
-                if FileManager.default.fileExists(atPath: request.outputURL.path) {
-                    try FileManager.default.removeItem(at: request.outputURL)
+                try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                if FileManager.default.fileExists(atPath: outputURL.path) {
+                    try FileManager.default.removeItem(at: outputURL)
                 }
                 FileManager.default.createFile(atPath: outputLogURL.path, contents: nil)
                 FileManager.default.createFile(atPath: errorLogURL.path, contents: nil)
@@ -198,8 +225,20 @@ extension AssetBrowserView {
                 process.executableURL = exporterScript
                 var arguments = [
                     "--input", request.sourceURL.path,
-                    "--output", request.outputURL.path,
+                    "--output", outputURL.path,
                 ]
+                if let assetsFolder, request.category != .animations {
+                    arguments.append(contentsOf: ["--assets-dir", assetsFolder.path])
+                }
+                if includeHidden {
+                    if exporterAcceptsIncludeHidden {
+                        arguments.append("--include-hidden")
+                    } else {
+                        DispatchQueue.main.async {
+                            Logger.log(message: "⚠️ This engine's exporter cannot cook hidden objects; update the engine package to use Include hidden objects")
+                        }
+                    }
+                }
                 if request.category == .animations {
                     arguments.append("--animation")
                 }
@@ -230,17 +269,23 @@ extension AssetBrowserView {
                 let exportSucceeded = process.terminationStatus == 0 && !wasCancelled
 
                 if exportSucceeded, compressTextures {
-                    let texturesDir = request.destinationFolder.appendingPathComponent("Textures")
+                    let texturesDir = (assetsFolder ?? outputURL.deletingLastPathComponent()).appendingPathComponent("Textures")
                     if FileManager.default.fileExists(atPath: texturesDir.path),
                        let texbakeScript = findTexbakeScript()
                     {
                         task.setDetail("Baking textures (ASTC)…")
                         DispatchQueue.main.async { showStatus("Baking textures (ASTC)...") }
-                        let bakeResult = runTexbakeStep(script: texbakeScript, arguments: ["--dir", texturesDir.path], astcencBin: astcencBin)
+                        // Slot hints come from the .untold, which is not beside the textures' folder
+                        // when they live in an assets folder.
+                        var bakeArguments = ["--dir", texturesDir.path]
+                        if assetsFolder != nil, engineScript(texbakeScript, acceptsOption: "--untold") {
+                            bakeArguments.append(contentsOf: ["--untold", outputURL.path])
+                        }
+                        let bakeResult = runTexbakeStep(script: texbakeScript, arguments: bakeArguments, astcencBin: astcencBin)
 
                         task.setDetail("Patching texture references…")
                         DispatchQueue.main.async { showStatus("Patching texture references...") }
-                        let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", request.outputURL.path], astcencBin: astcencBin)
+                        let patchResult = runTexbakeStep(script: texbakeScript, arguments: ["--patch-refs", outputURL.path], astcencBin: astcencBin)
 
                         let compressionOutput = textureCompressionLines(
                             bake: bakeResult,
@@ -258,10 +303,10 @@ extension AssetBrowserView {
 
                 if wasCancelled {
                     // Don't leave a half-written runtime asset behind.
-                    try? FileManager.default.removeItem(at: request.outputURL)
+                    try? FileManager.default.removeItem(at: outputURL)
                     task.markCancelled("Cancelled by user")
                 } else if exportSucceeded {
-                    task.succeed(taskDetail("Wrote \(request.outputURL.lastPathComponent)", warningsIn: taskOutput))
+                    task.succeed(taskDetail("Wrote \(outputURL.lastPathComponent)", warningsIn: taskOutput))
                 } else {
                     task.fail("export-untold exited with status \(process.terminationStatus) (see Console)")
                 }
@@ -272,7 +317,7 @@ extension AssetBrowserView {
                         showStatus("Export cancelled")
                     } else if exportSucceeded {
                         loadAssets()
-                        showStatus("Exported \(request.outputURL.lastPathComponent)")
+                        showStatus("Exported \(outputURL.lastPathComponent)")
                     } else {
                         showStatus("Export failed for \(request.sourceURL.lastPathComponent)", isError: true)
                     }
