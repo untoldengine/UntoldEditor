@@ -86,6 +86,34 @@ enum ViewportCameras {
         current != .editor
     }
 
+    /// An entity is about to leave the scene. A game camera the viewport is
+    /// locked on, or an ancestor of it, which goes with it, gives the viewport
+    /// back to the editor's camera first: the engine never clears its active
+    /// camera, and every pass of it stops at one that no longer exists. True
+    /// when the viewport changed.
+    @discardableResult
+    static func forget(_ entityId: EntityID) -> Bool {
+        guard case let .game(shown) = current, shown == entityId || isAncestor(entityId, of: shown) else {
+            return false
+        }
+        return show(.editor)
+    }
+
+    private static func isAncestor(_ entityId: EntityID, of descendant: EntityID) -> Bool {
+        var current = descendant
+        var depth = 0
+        while hasComponent(entityId: current, componentType: ScenegraphComponent.self),
+              let parent = getEntityParent(entityId: current), parent != .invalid, depth < 64
+        {
+            if parent == entityId {
+                return true
+            }
+            current = parent
+            depth += 1
+        }
+        return false
+    }
+
     /// Shows a camera in the viewport. False, changing nothing, for a game
     /// camera that is no longer in the scene.
     @discardableResult

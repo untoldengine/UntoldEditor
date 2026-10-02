@@ -113,6 +113,33 @@ final class ViewportCameraTests: XCTestCase {
         XCTAssertFalse(ViewportCameras.isLockedPreview)
     }
 
+    func test_deletingThePreviewedCamera_givesTheViewportBackToTheEditor() {
+        let sceneCamera = findSceneCamera()
+        let rig = createEntity()
+        registerTransformComponent(entityId: rig)
+        registerSceneGraphComponent(entityId: rig)
+        let camera = makeGameCamera(named: "Game Camera")
+        registerTransformComponent(entityId: camera)
+        registerSceneGraphComponent(entityId: camera)
+        setParent(childId: camera, parentId: rig)
+        let other = makeGameCamera(named: "Other")
+        ViewportCameras.show(.game(camera))
+
+        XCTAssertFalse(ViewportCameras.forget(other), "another entity leaves the preview alone")
+        XCTAssertEqual(ViewportCameras.current, .game(camera))
+
+        XCTAssertTrue(ViewportCameras.forget(camera))
+        XCTAssertEqual(CameraSystem.shared.activeCamera, sceneCamera)
+        XCTAssertEqual(ViewportCameras.current, .editor)
+
+        // Deleting the rig takes the camera with it.
+        ViewportCameras.show(.game(camera))
+        XCTAssertTrue(ViewportCameras.forget(rig))
+        XCTAssertEqual(CameraSystem.shared.activeCamera, sceneCamera)
+
+        XCTAssertFalse(ViewportCameras.forget(camera), "on the editor's camera there is nothing to forget")
+    }
+
     func test_aProjection_returnsTheViewportToTheEditorCamera() {
         let sceneCamera = findSceneCamera()
         let camera = makeGameCamera(named: "Game Camera")
