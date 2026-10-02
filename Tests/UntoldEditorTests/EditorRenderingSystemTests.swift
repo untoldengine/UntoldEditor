@@ -90,6 +90,40 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNil(graph["untold.editor.highlight"])
         XCTAssertNil(graph["untold.editor.lightVisuals"])
         XCTAssertNil(graph["untold.editor.gizmo"])
+        // The engine composites the gizmo layer whenever the game is not
+        // playing: cleared, nothing of the last editor frame stays on screen.
+        XCTAssertNotNil(graph["untold.editor.clearGizmoLayer"])
+        let order = try topologicalSortGraph(graph: graph).map(\.id)
+        XCTAssertLessThan(try XCTUnwrap(order.firstIndex(of: "untold.editor.clearGizmoLayer")), try XCTUnwrap(order.firstIndex(of: "precomp")))
+    }
+
+    func testPausedSessionOnAGameCameraDrawsNoEditorPasses() throws {
+        // Paused: the game is not playing, but the session is open and the
+        // viewport shows the game's camera.
+        gameMode = false
+        previewCamera = createEntity()
+        registerComponent(entityId: previewCamera, componentType: CameraComponent.self)
+        CameraSystem.shared.activeCamera = previewCamera
+        let playback = EditorPlaybackSettings(defaults: nil)
+        playback.isSessionActive = true
+        let originalPlayback = ViewportCameras.playback
+        ViewportCameras.playback = playback
+        defer { ViewportCameras.playback = originalPlayback }
+
+        let (graph, _) = try buildGameModeGraph()
+
+        XCTAssertNil(graph["untold.editor.highlight"], "drawn from the editor's camera, it would sit in the wrong place")
+        XCTAssertNil(graph["untold.editor.lightVisuals"])
+        XCTAssertNil(graph["untold.editor.gizmo"])
+        XCTAssertNotNil(graph["untold.editor.clearGizmoLayer"])
+    }
+
+    func testEditingAddsNoClearingPassOfItsOwn() throws {
+        gameMode = false
+
+        let (graph, _) = try buildGameModeGraph()
+
+        XCTAssertNil(graph["untold.editor.clearGizmoLayer"], "the highlight pass clears the layer itself")
     }
 
     func testEditorGraphCompilesWithoutCycles() throws {

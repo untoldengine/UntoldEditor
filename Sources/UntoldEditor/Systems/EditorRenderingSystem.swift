@@ -31,9 +31,22 @@ final class EditorRenderExtension: RenderExtension, @unchecked Sendable {
         _ builder: inout RenderGraphBuilder,
         context _: RenderGraphBuildContext
     ) {
-        // Play mode uses the unmodified runtime graph, and so does the locked
-        // preview of a game camera: it shows what that camera will show.
-        guard !gameMode, ViewportCameras.isLockedPreview == false else { return }
+        // Play mode uses the unmodified runtime graph.
+        guard !gameMode else { return }
+
+        // So does the locked preview of a game camera, which shows what that
+        // camera will show, and a paused session. But while the game is not
+        // playing the engine still composites the gizmo layer over the scene,
+        // so it is cleared: nothing the editor drew into it stays on screen.
+        guard ViewportCameras.isLockedPreview == false, ViewportCameras.isPlaying == false else {
+            builder.addPass(
+                id: "untold.editor.clearGizmoLayer",
+                stage: .beforeComposite
+            ) { context in
+                RenderPasses.clearGizmoLayerExecution(context.commandBuffer)
+            }
+            return
+        }
 
         builder.addPass(
             id: "untold.editor.highlight",
