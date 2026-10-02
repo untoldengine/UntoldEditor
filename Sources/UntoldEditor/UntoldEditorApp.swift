@@ -536,7 +536,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         else {
             return
         }
-        TextureDebugOption.current = option
+        // Through the viewport's settings, so the header shows the same choice.
+        EditorViewportSettings.shared.show(option)
     }
 
     @objc private func menuToggleSpatialDebug(_ sender: NSMenuItem) {
@@ -739,6 +740,10 @@ enum TextureDebugOption: String, CaseIterable {
         get { allCases.first(where: { $0.engineMode == renderDebugViewMode }) ?? .lit }
         set { setRendering(.debugView(newValue.engineMode)) }
     }
+
+    /// The views the viewport header offers, the ones looked at most; the
+    /// View menu has them all.
+    static let viewportChoices: [TextureDebugOption] = [.lit, .albedo, .normal, .depth, .position]
 }
 
 /// The engine's non-render-target scene debug visualizations (`SpatialDebugVisualization`),

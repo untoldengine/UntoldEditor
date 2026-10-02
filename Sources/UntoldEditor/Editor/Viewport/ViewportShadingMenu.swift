@@ -13,8 +13,8 @@ import SwiftUI
 /// The shading dropdown: a sphere swatch and the current shading; the menu
 /// lists the lit view and the engine's debug views.
 struct ViewportShadingMenu: View {
-    let shading: ViewportShading
-    let onSelect: (ViewportShading) -> Void
+    let shading: TextureDebugOption
+    let onSelect: (TextureDebugOption) -> Void
 
     @State private var showShadings = false
 
@@ -33,7 +33,7 @@ struct ViewportShadingMenu: View {
         .help("What the viewport draws")
         .popover(isPresented: $showShadings, arrowEdge: .bottom) {
             EditorPopupMenu(width: 180) {
-                ForEach(ViewportShading.allCases) { candidate in
+                ForEach(TextureDebugOption.viewportChoices, id: \.rawValue) { candidate in
                     EditorPopupMenuRow(title: candidate.title, isChecked: candidate == shading) {
                         showShadings = false
                         onSelect(candidate)

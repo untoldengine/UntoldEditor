@@ -33,10 +33,21 @@ final class EditorViewportSettings: ObservableObject {
         }
     }
 
-    @Published var shading: ViewportShading {
+    /// What the viewport draws: the lit scene or one of the engine's debug
+    /// views, the same choice View > Texture Debug makes. Set through `show`,
+    /// which tells the engine; this is the copy that is kept across launches
+    /// and that the header reads.
+    @Published private(set) var shading: TextureDebugOption {
         didSet {
             defaults?.set(shading.rawValue, forKey: Self.shadingKey)
         }
+    }
+
+    /// Shows `option` in the viewport, from the header or from View > Texture
+    /// Debug: the one place both go through, so they never disagree.
+    func show(_ option: TextureDebugOption) {
+        shading = option
+        TextureDebugOption.current = option
     }
 
     @Published var transformSpace: TransformSpace {
@@ -66,7 +77,7 @@ final class EditorViewportSettings: ObservableObject {
     init(defaults: UserDefaults?) {
         self.defaults = defaults
         tool = defaults?.string(forKey: Self.toolKey).flatMap(TransformTool.init(rawValue:)) ?? .move
-        shading = defaults?.string(forKey: Self.shadingKey).flatMap(ViewportShading.init(rawValue:)) ?? .lit
+        shading = defaults?.string(forKey: Self.shadingKey).flatMap(TextureDebugOption.init(rawValue:)) ?? .lit
         transformSpace = defaults?.string(forKey: Self.spaceKey).flatMap(TransformSpace.init(rawValue:)) ?? .world
         let speed = defaults?.object(forKey: Self.cameraSpeedKey) as? Int ?? Self.defaultCameraSpeed
         cameraSpeed = Self.speedRange.contains(speed) ? speed : Self.defaultCameraSpeed

@@ -25,12 +25,12 @@ final class ViewportSettingsTests: XCTestCase {
         XCTAssertEqual(settings.cameraSpeed, EditorViewportSettings.defaultCameraSpeed)
 
         settings.tool = .rotate
-        settings.shading = .normals
+        settings.show(.normal)
         settings.cameraSpeed = 7
 
         let reloaded = EditorViewportSettings(defaults: defaults)
         XCTAssertEqual(reloaded.tool, .rotate)
-        XCTAssertEqual(reloaded.shading, .normals)
+        XCTAssertEqual(reloaded.shading, .normal)
         XCTAssertEqual(reloaded.cameraSpeed, 7)
     }
 
@@ -59,12 +59,23 @@ final class ViewportSettingsTests: XCTestCase {
         XCTAssertNil(TransformTool.tool(forKeyCode: 13))
     }
 
-    func test_shadings_mapToTheEngineDebugViews() {
-        XCTAssertEqual(ViewportShading.lit.debugView, .lit)
-        XCTAssertEqual(ViewportShading.albedo.debugView, .albedo)
-        XCTAssertEqual(ViewportShading.normals.debugView, .normal)
-        XCTAssertEqual(ViewportShading.depth.debugView, .depth)
-        XCTAssertEqual(ViewportShading.position.debugView, .position)
+    func test_theHeader_offersTheViewsLookedAtMost_fromTheMenusChoices() {
+        XCTAssertEqual(TextureDebugOption.viewportChoices, [.lit, .albedo, .normal, .depth, .position])
+        XCTAssertTrue(TextureDebugOption.viewportChoices.allSatisfy { TextureDebugOption.allCases.contains($0) })
+    }
+
+    func test_show_tellsTheEngine_andTheHeaderFollowsTheMenu() {
+        let settings = EditorViewportSettings(defaults: nil)
+        let before = TextureDebugOption.current
+        defer { TextureDebugOption.current = before }
+
+        settings.show(.roughness)
+        XCTAssertEqual(TextureDebugOption.current, .roughness, "the engine draws it")
+        XCTAssertEqual(settings.shading, .roughness, "and the header says so, though it does not list it")
+
+        settings.show(.lit)
+        XCTAssertEqual(TextureDebugOption.current, .lit)
+        XCTAssertEqual(settings.shading, .lit)
     }
 
     func test_presetViews_lookAtThePivotAlongTheirAxis() {

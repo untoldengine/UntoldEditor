@@ -38,14 +38,13 @@ extension EditorView {
         syncGizmoOrientation()
     }
 
-    func editor_selectShading(_ shading: ViewportShading) {
-        viewportSettings.shading = shading
-        setRendering(.debugView(shading.debugView))
+    func editor_selectShading(_ option: TextureDebugOption) {
+        viewportSettings.show(option)
     }
 
     /// Applies the persisted shading when the editor starts.
     func editor_applyViewportSettings() {
-        setRendering(.debugView(viewportSettings.shading.debugView))
+        viewportSettings.show(viewportSettings.shading)
     }
 
     /// Sends the editor's camera to a preset view, which also ends a preview

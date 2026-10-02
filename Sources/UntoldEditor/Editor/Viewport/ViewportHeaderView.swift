@@ -20,7 +20,7 @@ struct ViewportHeaderView: View {
     @ObservedObject var snap: EditorSnapSettings
     let onSelectTool: (TransformTool) -> Void
     let onSelectSpace: (TransformSpace) -> Void
-    let onSelectShading: (ViewportShading) -> Void
+    let onSelectShading: (TextureDebugOption) -> Void
     let onSelectProjection: (ViewportProjection) -> Void
 
     var body: some View {
