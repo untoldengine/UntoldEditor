@@ -9,6 +9,8 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 //
 
+import Metal
+import ModelIO
 import simd
 @testable import UntoldComponentKit
 @testable import UntoldEditor
@@ -372,6 +374,39 @@ final class EntityPluginEditorTests: XCTestCase {
         XCTAssertEqual(EditorRepresentationHandles.active, handle, "back on the entity, the handle is still the one selected")
         EditorRepresentationHandles.select(nil)
         XCTAssertNil(EditorRepresentationHandles.active)
+    }
+
+    func test_aSelectedHandleGetsTheMoveGizmo_whateverTheTool() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("Metal device is not available.")
+        }
+        renderInfo.device = device
+        vertexDescriptor.model = MDLVertexDescriptor()
+        let originalTool = EditorViewportSettings.shared.tool
+        defer {
+            removeGizmo()
+            EditorViewportSettings.shared.tool = originalTool
+        }
+        let path = try XCTUnwrap(EntityPluginRegistry.shared.instantiate(ProbePathEntity.self))
+        let handle = EditorRepresentationHandles.Handle(entityId: path.entity, property: "end")
+        activeEntity = path.entity
+        EditorRepresentationHandles.select(handle)
+
+        for tool in [TransformTool.rotate, .scale, .select] {
+            EditorViewportSettings.shared.tool = tool
+            createGizmo(forTool: tool)
+
+            XCTAssertEqual(EditorRepresentationHandles.active, handle, "\(tool) keeps the handle selected")
+            XCTAssertTrue(gizmoActive, "\(tool) puts a gizmo on it")
+            let handles = getEntityChildren(parentId: parentEntityIdGizmo).compactMap { scene.get(component: GizmoHandleComponent.self, for: $0) }
+            XCTAssertTrue(handles.contains { $0.mode == .translate }, "\(tool): the move gizmo, which is the only one that can sit on a handle")
+            XCTAssertFalse(handles.contains { $0.mode == .rotate || $0.mode == .scale }, "\(tool)")
+        }
+
+        EditorRepresentationHandles.select(nil)
+        createGizmo(forTool: .rotate)
+        let handles = getEntityChildren(parentId: parentEntityIdGizmo).compactMap { scene.get(component: GizmoHandleComponent.self, for: $0) }
+        XCTAssertTrue(handles.contains { $0.mode == .rotate }, "off the handle, the tool's gizmo")
     }
 
     func test_aHandleDragIsOneUndoStep() throws {

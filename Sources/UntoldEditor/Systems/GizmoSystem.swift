@@ -1074,9 +1074,14 @@ func createGizmo(mode: GizmoMode) {
     }
 }
 
-/// The gizmo for a tool of the viewport header: the tool's, or none for Select.
+/// The gizmo for a tool of the viewport header: the tool's, or none for
+/// Select. A handle of an entity written in code (a spline's control point)
+/// is only ever moved, so a selection that sits on one gets the move gizmo
+/// whatever the tool, as every selection did before the tools.
 func createGizmo(forTool tool: TransformTool) {
-    if let mode = tool.gizmoMode {
+    if EditorRepresentationHandles.active != nil {
+        createGizmo(mode: .translate)
+    } else if let mode = tool.gizmoMode {
         createGizmo(mode: mode)
     } else {
         removeGizmo()
