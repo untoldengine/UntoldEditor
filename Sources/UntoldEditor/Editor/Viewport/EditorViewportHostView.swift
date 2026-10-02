@@ -162,6 +162,17 @@ final class EditorViewportHostView: NSView {
         return super.resignFirstResponder()
     }
 
+    /// A key pressed with ⌘ is offered here, to every view of the window,
+    /// before the menus see it and before any `keyDown`. A fly key pressed
+    /// with ⌘ while the right button steers the camera is the canvas's: taken
+    /// here, ⌘Q flies instead of quitting and ⌘S instead of saving.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if InputSystem.shared.takesCommandKeyDuringCameraDrag(event) {
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     override func keyDown(with event: NSEvent) {
         if InputSystem.shared.canvasKeyDown(event) == false {
             super.keyDown(with: event)

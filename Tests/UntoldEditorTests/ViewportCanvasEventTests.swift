@@ -203,6 +203,20 @@ final class ViewportCanvasEventTests: XCTestCase {
         try canvas.rightMouseUp(with: mouse(.rightMouseUp))
     }
 
+    func test_commandWithAFlyKey_duringACommandDrag_isTakenBeforeTheMenu() throws {
+        // ⌘ with the right button moves the camera; Q then flies up.
+        try canvas.rightMouseDown(with: mouse(.rightMouseDown, modifiers: .command))
+
+        // AppKit offers a ⌘ key-down to the window's views as a key equivalent
+        // before the main menu sees it, where Q is Quit and S is Save Scene.
+        XCTAssertTrue(try window.performKeyEquivalent(with: key(.keyDown, 12, .command)), "⌘Q is the canvas's during the drag")
+        XCTAssertTrue(try window.performKeyEquivalent(with: key(.keyDown, 1, .command)), "⌘S too")
+        XCTAssertFalse(try window.performKeyEquivalent(with: key(.keyDown, 6, .command)), "⌘Z stays the undo it is")
+
+        try canvas.rightMouseUp(with: mouse(.rightMouseUp, modifiers: .command))
+        XCTAssertFalse(try window.performKeyEquivalent(with: key(.keyDown, 12, .command)), "without the drag ⌘Q is the menu's")
+    }
+
     func test_shiftHeldWhenTheDragBegins_pans() throws {
         let before = position, targetBefore = target
 

@@ -269,7 +269,9 @@
             syncModifiers(from: event)
 
             // ⌘ with the right button held moves the camera. A fly key pressed
-            // then must not reach the menu, where ⌘Q would quit the editor.
+            // then is the canvas's, not the menu's, where ⌘Q would quit the
+            // editor: the view takes it as a key equivalent before the menu
+            // sees it, and here as well should it still arrive as a key-down.
             if takesCommandKeyDuringCameraDrag(event) {
                 return true
             }
