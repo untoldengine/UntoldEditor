@@ -23,10 +23,13 @@ import UntoldEngine
 /// did is not guessed: the scene is saved again at Stop and compared, apart
 /// from the placements, with how it was saved at Play.
 struct PlaySessionState {
-    /// Where an entity stands in its parent.
+    /// Where an entity stands in its parent. The rotation is kept twice, as
+    /// the entity keeps it: the quaternion that is drawn, and the angles about
+    /// the axes that the Inspector shows and the saved scene carries.
     struct Placement: Equatable {
         var position: simd_float3
         var rotation: simd_quatf
+        var axisRotations: simd_float3
         var scale: simd_float3
     }
 
@@ -69,7 +72,12 @@ struct PlaySessionState {
         var cameras: [EntityID: CameraPlacement] = [:]
         for entityId in alive {
             if let local = scene.get(component: LocalTransformComponent.self, for: entityId) {
-                placements[entityId] = Placement(position: local.position, rotation: local.rotation, scale: local.scale)
+                placements[entityId] = Placement(
+                    position: local.position,
+                    rotation: local.rotation,
+                    axisRotations: simd_float3(local.rotationX, local.rotationY, local.rotationZ),
+                    scale: local.scale
+                )
             }
             if let camera = CameraPlacement.capture(of: entityId) {
                 cameras[entityId] = camera
@@ -127,6 +135,14 @@ struct PlaySessionState {
             }
             if local.rotation != placement.rotation {
                 rotateTo(entityId: entityId, rotation: placement.rotation)
+                moved = true
+            }
+            // The engine's rotateTo writes the quaternion alone; the angles
+            // about the axes are a second record of the same turn.
+            if simd_float3(local.rotationX, local.rotationY, local.rotationZ) != placement.axisRotations {
+                local.rotationX = placement.axisRotations.x
+                local.rotationY = placement.axisRotations.y
+                local.rotationZ = placement.axisRotations.z
                 moved = true
             }
             if local.scale != placement.scale {

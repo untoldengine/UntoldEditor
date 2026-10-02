@@ -169,6 +169,22 @@ final class PlaySessionStateTests: XCTestCase {
         assertNearlyEqual(getPosition(entityId: lid), lidWorldBefore)
     }
 
+    func test_aTurnTypedAsAngles_isPutBackWithItsAngles() {
+        applyAxisRotations(entityId: crate, axis: simd_float3(0, 30, 0))
+        let state = capture()
+        XCTAssertEqual(state.placements[crate]?.axisRotations, simd_float3(0, 30, 0))
+
+        // The Inspector's rotation fields while playing: the angles and the
+        // quaternion both change.
+        applyAxisRotations(entityId: crate, axis: simd_float3(10, 75, 0))
+
+        let restored = state.restoreInPlace()
+
+        XCTAssertEqual(restored, 1)
+        XCTAssertEqual(getAxisRotations(entityId: crate), simd_float3(0, 30, 0), "the angles the Inspector shows")
+        XCTAssertEqual(getRotationQuaternion(entityId: crate), state.placements[crate]?.rotation, "and the turn that is drawn")
+    }
+
     func test_aCameraThatWasSteered_isPutBack() throws {
         let state = capture()
         let before = try XCTUnwrap(CameraPlacement.capture(of: gameCamera))
