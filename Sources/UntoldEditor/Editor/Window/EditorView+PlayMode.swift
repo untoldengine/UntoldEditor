@@ -177,6 +177,7 @@ extension EditorView {
 
     func updateActiveCameraForPlayMode() {
         playbackSettings.isSessionActive = isPlaying
+        EditorUndoManager.shared.playStateDidChange()
         // The session, not `gameMode`: a paused session keeps the game camera.
         if isPlaying {
             let staysOnTheEditorCamera = EditorPlaybackSettings.playStaysOnTheEditorCamera(

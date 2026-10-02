@@ -233,8 +233,19 @@ final class EditorUndoManager: ObservableObject {
 
     var onStateRestored: (() -> Void)?
 
+    /// Whether the scene may be edited now: not from Play to Stop, when what
+    /// the session changes is put back or loaded again at Stop, so nothing is
+    /// registered, undone or redone meanwhile and the history stays the one
+    /// the scene comes back to. Tests put their own answer here.
+    var isEditingAllowed: () -> Bool = { ViewportCameras.playback.isSessionActive == false }
+
+    /// The play state changed: what can be undone follows it.
+    func playStateDidChange() {
+        updateAvailability()
+    }
+
     func register(_ command: EditorUndoCommand) {
-        guard isReplaying == false else {
+        guard isReplaying == false, isEditingAllowed() else {
             return
         }
 
@@ -261,7 +272,7 @@ final class EditorUndoManager: ObservableObject {
     }
 
     func beginTransformEdit(entityId: EntityID) {
-        guard isReplaying == false,
+        guard isReplaying == false, isEditingAllowed(),
               hasComponent(entityId: entityId, componentType: LocalTransformComponent.self),
               transformEditStart[entityId] == nil
         else {
@@ -307,7 +318,7 @@ final class EditorUndoManager: ObservableObject {
     }
 
     func undo() {
-        guard let command = undoStack.popLast() else {
+        guard isEditingAllowed(), let command = undoStack.popLast() else {
             return
         }
 
@@ -319,7 +330,7 @@ final class EditorUndoManager: ObservableObject {
     }
 
     func redo() {
-        guard let command = redoStack.popLast() else {
+        guard isEditingAllowed(), let command = redoStack.popLast() else {
             return
         }
 
@@ -359,8 +370,9 @@ final class EditorUndoManager: ObservableObject {
     }
 
     private func updateAvailability() {
-        canUndo = undoStack.isEmpty == false
-        canRedo = redoStack.isEmpty == false
+        let allowed = isEditingAllowed()
+        canUndo = allowed && undoStack.isEmpty == false
+        canRedo = allowed && redoStack.isEmpty == false
         undoHistory = undoStack.reversed().map(\.name)
         redoHistory = redoStack.reversed().map(\.name)
     }
