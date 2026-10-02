@@ -74,7 +74,7 @@ extension EditorView {
     /// The game camera the viewport is locked on, for its label; nil on the
     /// editor's camera and during a play session.
     var editor_previewedCamera: GameCameraChoice? {
-        guard isPlaying == false, case let .game(entityId) = ViewportCameras.current else { return nil }
+        guard isPlaying == false, isRestoringPlayMode == false, case let .game(entityId) = ViewportCameras.current else { return nil }
         return ViewportCameras.gameCameras().first { $0.entityId == entityId }
     }
 

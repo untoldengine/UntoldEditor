@@ -140,6 +140,26 @@ final class ViewportCameraTests: XCTestCase {
         XCTAssertFalse(ViewportCameras.forget(camera), "on the editor's camera there is nothing to forget")
     }
 
+    func test_theCameraForPlay_isTheScenes_andNoneIsCreated() {
+        let sceneCamera = findSceneCamera()
+        CameraSystem.shared.activeCamera = sceneCamera
+        let entitiesBefore = scene.getAllEntities()
+
+        XCTAssertNil(ViewportCameras.gameCameraForPlay(authored: nil), "a scene without a game camera")
+        XCTAssertEqual(scene.getAllEntities(), entitiesBefore, "and none was created for it")
+
+        let first = makeGameCamera(named: "First")
+        let second = makeGameCamera(named: "Second")
+        XCTAssertEqual(ViewportCameras.gameCameraForPlay(authored: nil), first, "the scene's first")
+
+        CameraSystem.shared.activeCamera = second
+        XCTAssertEqual(ViewportCameras.gameCameraForPlay(authored: nil), second, "the one the viewport is on")
+
+        XCTAssertEqual(ViewportCameras.gameCameraForPlay(authored: first), first, "the one the scene was authored with, first of all")
+        XCTAssertEqual(ViewportCameras.gameCameraForPlay(authored: sceneCamera), second, "unless it is no game camera")
+        XCTAssertEqual(ViewportCameras.gameCameraForPlay(authored: 424_242), second, "or no longer there")
+    }
+
     func test_aProjection_returnsTheViewportToTheEditorCamera() {
         let sceneCamera = findSceneCamera()
         let camera = makeGameCamera(named: "Game Camera")

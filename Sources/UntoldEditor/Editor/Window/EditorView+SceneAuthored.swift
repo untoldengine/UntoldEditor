@@ -42,28 +42,14 @@ extension EditorView {
         CameraSystem.shared.activeCamera = sceneCamera
     }
 
+    /// The game camera of the scene, as Play shows it; nil when there is none.
+    func gameCameraOfTheScene() -> EntityID? {
+        ViewportCameras.gameCameraForPlay(authored: sceneAuthoredGameCamera)
+    }
+
+    /// The game camera of the scene, created when there is none.
     func findEditorGameCamera() -> EntityID {
-        let entities = getAllGameEntities()
-
-        if let sceneAuthoredGameCamera,
-           entities.contains(sceneAuthoredGameCamera),
-           isGameCamera(sceneAuthoredGameCamera)
-        {
-            return sceneAuthoredGameCamera
-        }
-
-        if let activeCamera = CameraSystem.shared.activeCamera,
-           entities.contains(activeCamera),
-           isGameCamera(activeCamera)
-        {
-            return activeCamera
-        }
-
-        if let existingGameCamera = entities.first(where: isGameCamera) {
-            return existingGameCamera
-        }
-
-        return findGameCamera()
+        gameCameraOfTheScene() ?? findGameCamera()
     }
 
     func isGameCamera(_ entityId: EntityID) -> Bool {

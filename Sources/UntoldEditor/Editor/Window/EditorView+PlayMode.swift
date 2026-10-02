@@ -48,6 +48,9 @@ extension EditorView {
                 let snapshot = serializeScene()
                 playModeSnapshot = snapshot
                 playSessionState = PlaySessionState.capture(saved: snapshot)
+                if playsOnTheEditorCamera == false, gameCameraOfTheScene() == nil {
+                    Logger.log(message: "Play: the scene has no game camera, so it plays on the editor's.")
+                }
             }
             isPlaying = true
             gameMode = true
@@ -58,6 +61,10 @@ extension EditorView {
         } else {
             isPlaying = false
             gameMode = false
+            // The session is over now, not when a reload completes: the keys
+            // and the mouse must not steer the game camera a reload brings
+            // back, which the engine makes the active one as it loads.
+            playbackSettings.isSessionActive = false
             AnimationSystem.shared.isEnabled = false
             USCSystem.shared.stopPlayMode()
 
@@ -175,16 +182,22 @@ extension EditorView {
         }
     }
 
+    /// Whether Play keeps the viewport on the editor's camera: in explore
+    /// mode, or by View > Use Scene Camera During Play.
+    var playsOnTheEditorCamera: Bool {
+        EditorPlaybackSettings.playStaysOnTheEditorCamera(
+            isExploring: experienceMode == .explore,
+            userChoice: playbackSettings.useSceneCameraDuringPlay
+        )
+    }
+
     func updateActiveCameraForPlayMode() {
         playbackSettings.isSessionActive = isPlaying
         EditorUndoManager.shared.playStateDidChange()
         // The session, not `gameMode`: a paused session keeps the game camera.
-        if isPlaying {
-            let staysOnTheEditorCamera = EditorPlaybackSettings.playStaysOnTheEditorCamera(
-                isExploring: experienceMode == .explore,
-                userChoice: playbackSettings.useSceneCameraDuringPlay
-            )
-            CameraSystem.shared.activeCamera = staysOnTheEditorCamera ? findSceneCamera() : findEditorGameCamera()
+        // A scene without a game camera plays on the editor's; none is created.
+        if isPlaying, playsOnTheEditorCamera == false, let gameCamera = gameCameraOfTheScene() {
+            CameraSystem.shared.activeCamera = gameCamera
         } else {
             CameraSystem.shared.activeCamera = findSceneCamera()
         }

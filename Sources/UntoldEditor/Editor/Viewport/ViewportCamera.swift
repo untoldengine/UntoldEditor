@@ -49,6 +49,22 @@ enum ViewportCameras {
     /// The settings of play the cameras follow; tests put their own here.
     static var playback = EditorPlaybackSettings.shared
 
+    /// The game camera Play shows: the one the scene was authored with when
+    /// it is still there, else the active camera when it is a game camera,
+    /// else the first game camera of the scene; nil when the scene has none.
+    /// Nothing is created: the engine's `findGameCamera()` would, after the
+    /// session took its snapshot, and Stop would always find an entity more.
+    static func gameCameraForPlay(authored: EntityID?) -> EntityID? {
+        let entities = getAllGameEntities()
+        if let authored, entities.contains(authored), isGameCamera(authored) {
+            return authored
+        }
+        if let active = CameraSystem.shared.activeCamera, entities.contains(active), isGameCamera(active) {
+            return active
+        }
+        return entities.first(where: isGameCamera)
+    }
+
     /// True from Play to Stop, paused or not.
     static var isPlaying: Bool {
         gameMode || playback.isSessionActive
