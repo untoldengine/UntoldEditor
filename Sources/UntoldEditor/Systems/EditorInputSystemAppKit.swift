@@ -549,14 +549,22 @@
 
         /// Orbits the scene camera around its target from a scroll delta that the
         /// caller has already locked to its dominant axis, with X negated the way
-        /// the drag orbit does. Each event re-anchors the orbit on the current
-        /// target, as a drag does when it begins, so pans and zooms in between are
-        /// respected.
+        /// the drag orbit does. Each event orbits around the current target, as
+        /// a drag does when it begins, so pans and zooms in between are respected.
         func orbitSceneCamera(byScroll delta: simd_float2, precise: Bool) {
             guard delta.x.isFinite, delta.y.isFinite, delta.x != 0 || delta.y != 0 else {
                 return
             }
+            let speed = (precise ? InputSystem.scrollOrbitSpeedPrecise : InputSystem.scrollOrbitSpeedWheel) * EditorViewportSettings.shared.speedMultiplier
+            orbitSteeredCamera(by: delta * speed)
+        }
 
+        /// Turns the steered camera around its target by `angles` radians: the
+        /// first about the world's up axis, the second tilting it. The engine's
+        /// `orbitAround` is not used: it has no right axis where the camera
+        /// stands straight over or under its target, which the Top and Bottom
+        /// presets put it, and writes NaN into the camera from there.
+        private func orbitSteeredCamera(by angles: simd_float2) {
             guard let camera = steeredCamera else {
                 return
             }
@@ -564,14 +572,78 @@
                 handleError(.noActiveCamera)
                 return
             }
+            let pivot = getCameraTarget(entityId: camera)
+            guard let step = InputSystem.orbitStep(
+                eye: cameraComponent.localPosition,
+                pivot: pivot,
+                cameraUp: upDirectionVector(from: cameraComponent.rotation),
+                angles: angles
+            ) else {
+                return
+            }
+            cameraLookAt(entityId: camera, eye: step.eye, target: pivot, up: step.up)
+        }
 
-            let orbitDistance = simd_length(cameraComponent.localPosition - getCameraTarget(entityId: camera))
-            setOrbitOffset(
-                entityId: camera,
-                uTargetOffset: orbitDistance > 0.001 ? orbitDistance : simd_length(cameraComponent.localPosition)
-            )
-            let speed = (precise ? InputSystem.scrollOrbitSpeedPrecise : InputSystem.scrollOrbitSpeedWheel) * EditorViewportSettings.shared.speedMultiplier
-            orbitAround(entityId: camera, uPosition: delta * speed)
+        /// How close to straight over or under the pivot a view counts as
+        /// vertical, as the sine of its elevation: there the world's up axis
+        /// gives no right axis and the camera's own is used instead.
+        static let verticalViewSine: Float = 0.9999
+
+        /// Where an orbit step takes the eye around `pivot`, and which up vector
+        /// to look at the pivot with from there. `angles.x` turns the eye about
+        /// the world's up axis and `angles.y` tilts it about the right axis, in
+        /// radians, the way the engine's `orbitAround` does; the tilt stops at
+        /// straight above or below the pivot instead of passing over it. The
+        /// right axis is the world's up crossed with the view, or where the
+        /// view is vertical and that cross is nothing, the camera's own, which
+        /// is horizontal too. The up vector is the world's, or where the view is
+        /// vertical the camera's own, `cameraUp`, turned the same way; the
+        /// world's would be along the view there and give no frame.
+        static func orbitStep(
+            eye: simd_float3,
+            pivot: simd_float3,
+            cameraUp: simd_float3,
+            angles: simd_float2
+        ) -> (eye: simd_float3, up: simd_float3)? {
+            let offset = eye - pivot
+            let distance = simd_length(offset)
+            guard distance > 0.0001, distance.isFinite, angles.x.isFinite, angles.y.isFinite,
+                  simd_length_squared(cameraUp) > 0.0001
+            else {
+                return nil
+            }
+            let worldUp = simd_float3(0, 1, 0)
+
+            let yaw = simd_quatf(angle: angles.x, axis: worldUp)
+            var direction = simd_normalize(simd_act(yaw, offset / distance))
+            var up = simd_normalize(simd_act(yaw, cameraUp))
+
+            var right = simd_cross(worldUp, direction)
+            if simd_length_squared(right) < 1e-6 {
+                right = simd_cross(up, direction)
+            }
+            guard simd_length_squared(right) > 1e-12 else {
+                return nil
+            }
+            right = simd_normalize(right)
+
+            // The tilt moves the elevation by its angle, up or down according
+            // to which way the right axis points; it may reach a pole and not
+            // pass it. At a pole every tilt leads away from it.
+            let elevation = asin(Swift.min(Swift.max(direction.y, -1), 1))
+            let rise = simd_cross(right, direction).y
+            var tilt = angles.y
+            if abs(rise) > 1e-6 {
+                let sign: Float = rise > 0 ? 1 : -1
+                let reached = Swift.min(Swift.max(elevation + sign * tilt, -.pi / 2), .pi / 2)
+                tilt = (reached - elevation) * sign
+            }
+            let pitch = simd_quatf(angle: tilt, axis: right)
+            direction = simd_normalize(simd_act(pitch, direction))
+            up = simd_normalize(simd_act(pitch, up))
+
+            let lookUp = abs(direction.y) < InputSystem.verticalViewSine ? worldUp : up
+            return (pivot + direction * distance, lookUp)
         }
 
         /// Whether the pointer currently sits over the visible canvas of the key
@@ -1140,11 +1212,7 @@
             guard deltaX != 0 || deltaY != 0 else {
                 return
             }
-
-            guard let camera = steeredCamera else {
-                return
-            }
-            orbitAround(entityId: camera, uPosition: simd_float2(deltaX, deltaY) * InputSystem.dragOrbitSpeed)
+            orbitSteeredCamera(by: simd_float2(deltaX, deltaY) * InputSystem.dragOrbitSpeed)
         }
 
         func leftMouseDragged(_ delta: simd_float2) {
