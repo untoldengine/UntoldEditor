@@ -230,7 +230,8 @@ func updateGizmoDrag(ray: GizmoDragRay) {
 
     case .scale:
         if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
-            handleLightScaleInput(projectedAmount: incrementalAmount, axis: state.axisWorldDirection)
+            // The engine takes the axis as which components of the scale to change.
+            handleLightScaleInput(projectedAmount: incrementalAmount, axis: worldDirection(for: state.axis))
         } else {
             // The engine takes the axis as the entity's parent sees it.
             applyWorldSpaceScaleDelta(
@@ -381,14 +382,30 @@ func gizmoAxisDirection(for axis: TransformAxis, entityId: EntityID, space: Tran
     return simd_normalize(simd_act(entityWorldRotation(entityId: entityId), direction))
 }
 
+/// The rotation the gizmo root has: the entity's own in Local space, so the
+/// handles lie along the entity's axes, and none in World space.
+func gizmoRootRotation() -> simd_quatf {
+    guard activeEntity != .invalid, EditorViewportSettings.shared.transformSpace == .local else {
+        return simd_quatf(real: 1, imag: .zero)
+    }
+    return entityWorldRotation(entityId: activeEntity)
+}
+
 /// Turns the gizmo to the entity's own axes in Local space, and back to the
 /// world's in World space.
 func syncGizmoOrientation() {
     guard parentEntityIdGizmo != .invalid, activeEntity != .invalid else { return }
-    let rotation = EditorViewportSettings.shared.transformSpace == .local
-        ? entityWorldRotation(entityId: activeEntity)
-        : simd_quatf(real: 1, imag: .zero)
-    rotateTo(entityId: parentEntityIdGizmo, rotation: rotation)
+    rotateTo(entityId: parentEntityIdGizmo, rotation: gizmoRootRotation())
+}
+
+/// The gizmo follows a turn of its entity made elsewhere than on the gizmo:
+/// the Inspector's fields, the sun's elevation and azimuth, a reset. Its
+/// axes turn with the entity in Local space, and the direction handle of a
+/// light goes along the new emission. Nothing happens for another entity.
+func syncGizmoToTurn(of entityId: EntityID) {
+    guard entityId != .invalid, entityId == activeEntity, gizmoActive else { return }
+    syncGizmoOrientation()
+    syncLightDirectionHandleToActiveLight(entityId: entityId)
 }
 
 /// Starts accumulating a rotation drag, so snapping can quantize the whole
@@ -414,7 +431,9 @@ func snappedGizmoRotationDelta(degrees: Float) -> Float {
     return delta
 }
 
-private func worldDirection(for axis: TransformAxis) -> simd_float3 {
+/// The world's axis for a handle's axis; also what names a component of a
+/// scale to the engine's light scale handler.
+func worldDirection(for axis: TransformAxis) -> simd_float3 {
     switch axis {
     case .x:
         return simd_float3(1.0, 0.0, 0.0)
@@ -610,29 +629,20 @@ private func makeDirectionHandle() -> EntityID {
     return visibleHandle
 }
 
+/// Where the light direction handle sits under the gizmo root: along the
+/// light's emission, which its rotation turns the local -Z into, in the
+/// root's own frame. In World space the root is not turned and the offset is
+/// the emission itself; in Local space the root is turned with the entity,
+/// so the offset is the emission as the entity sees it, straight along -Z.
 private func initialLightDirectionHandleOffset() -> simd_float3 {
     guard activeEntity != .invalid else {
         return simd_float3(0.0, GizmoDimensions.directionHandleOffsetY, 0.0)
     }
 
-    let emissionDirection = localLightEmissionDirection(entityId: activeEntity)
-    let handleDirection = simd_length_squared(emissionDirection) > 0.0001 ? simd_normalize(emissionDirection) : simd_float3(0.0, -1.0, 0.0)
+    let emission = simd_act(entityWorldRotation(entityId: activeEntity), simd_float3(0.0, 0.0, -1.0))
+    let offset = simd_act(gizmoRootRotation().inverse, emission)
+    let handleDirection = simd_length_squared(offset) > 0.0001 ? simd_normalize(offset) : simd_float3(0.0, -1.0, 0.0)
     return handleDirection * abs(GizmoDimensions.directionHandleOffsetY)
-}
-
-private func localLightEmissionDirection(entityId: EntityID) -> simd_float3 {
-    guard entityId != .invalid,
-          let localTransform = scene.get(component: LocalTransformComponent.self, for: entityId)
-    else {
-        return simd_float3(0.0, -1.0, 0.0)
-    }
-
-    let orientation = transformQuaternionToMatrix3x3(q: normalizedRotationOrIdentity(localTransform.rotation))
-    return -simd_float3(
-        orientation.columns.2.x,
-        orientation.columns.2.y,
-        orientation.columns.2.z
-    )
 }
 
 /// Repositions the light direction handle (and its hit proxy) to match the given light

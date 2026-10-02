@@ -158,6 +158,8 @@ public struct EditorView: View {
 
             EditorUndoManager.shared.onStateRestored = {
                 editor_entities = getAllGameEntities()
+                // The gizmo goes where the entity now stands, along its axes.
+                selectionManager.refreshGizmo()
                 selectionManager.objectWillChange.send()
                 sceneGraphModel.refreshHierarchy()
             }

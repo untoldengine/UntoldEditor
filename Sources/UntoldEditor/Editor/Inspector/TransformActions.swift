@@ -23,7 +23,7 @@ func editTransform(of entityId: EntityID, _ change: () -> Void) {
         }
     }
     change()
-    syncLightDirectionHandleToActiveLight(entityId: entityId)
+    syncGizmoToTurn(of: entityId)
     EditorUndoManager.shared.registerTransformChange(
         entityId: entityId,
         before: before,

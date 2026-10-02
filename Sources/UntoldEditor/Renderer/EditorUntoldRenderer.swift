@@ -218,7 +218,8 @@ extension UntoldRenderer {
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
             if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
-                handleLightScaleInput(projectedAmount: amt, axis: axis)
+                // The engine takes the axis as which components of the scale to change.
+                handleLightScaleInput(projectedAmount: amt, axis: worldDirection(for: .x))
             } else {
                 // The engine takes the axis as the entity's parent sees it.
                 applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
@@ -236,7 +237,8 @@ extension UntoldRenderer {
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
             if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
-                handleLightScaleInput(projectedAmount: amt, axis: axis)
+                // The engine takes the axis as which components of the scale to change.
+                handleLightScaleInput(projectedAmount: amt, axis: worldDirection(for: .y))
             } else {
                 // The engine takes the axis as the entity's parent sees it.
                 applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
@@ -254,7 +256,8 @@ extension UntoldRenderer {
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
             if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
-                handleLightScaleInput(projectedAmount: amt, axis: axis)
+                // The engine takes the axis as which components of the scale to change.
+                handleLightScaleInput(projectedAmount: amt, axis: worldDirection(for: .z))
             } else {
                 // The engine takes the axis as the entity's parent sees it.
                 applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
@@ -299,7 +302,9 @@ extension UntoldRenderer {
                                                  viewportSize: renderInfo.viewPort)
 
             let t = axis1 * p1 + axis2 * p2
-            translateBy(entityId: lightDirEntity, position: t)
+            // The handle's position is in the gizmo root's frame, which Local
+            // space turns with the entity.
+            translateBy(entityId: lightDirEntity, position: simd_act(gizmoRootRotation().inverse, t))
 
             let lightPos = getPosition(entityId: parentEntityIdGizmo)
             let gizmoPos = getPosition(entityId: lightDirEntity)
