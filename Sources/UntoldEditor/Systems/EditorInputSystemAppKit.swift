@@ -826,7 +826,7 @@
 
             let rayContext = raycastContext(currentLocation: currentLocation, view: view)
 
-            let (entityId, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
+            let (entityId, hit) = entityForClick(at: currentLocation, in: view)
 
             if hitGizmoToolAxis(entityId: entityId) {
                 return
@@ -909,6 +909,41 @@
             EditorRepresentationHandles.select(nil)
             removeGizmo()
             selectionDelegate?.didClearSelection()
+        }
+
+        /// What a click picks: the handle of the gizmo under the pointer, and
+        /// with none there the entity of the scene. While a gizmo shows the
+        /// engine picks nothing but the gizmo, so a click on another entity
+        /// found nothing and cleared the selection; a second click selected it.
+        func entityForClick(at location: NSPoint, in view: NSView) -> (entityId: EntityID, hit: Bool) {
+            let picked = getRaycastedEntity(currentLocation: location, view: view)
+            guard picked.hit == false, gizmoActive, keyState.shiftPressed == false else {
+                return picked
+            }
+            return sceneEntity(at: location, in: view)
+        }
+
+        /// The entity of the scene under the pointer, whether a gizmo shows or not.
+        func sceneEntity(at location: NSPoint, in view: NSView) -> (entityId: EntityID, hit: Bool) {
+            guard let rayContext = raycastContext(currentLocation: location, view: view) else {
+                return (.invalid, false)
+            }
+            let sceneHit = pickEntity(
+                rayOrigin: rayContext.rayOrigin,
+                rayDirection: rayContext.rayDirection,
+                options: ScenePickOptions(isGizmoActive: false, backend: .octreeGPUPreferred)
+            )
+            let gaussianHit = InputSystem.gaussianBoundsHit(
+                rayOrigin: rayContext.rayOrigin,
+                rayDirection: rayContext.rayDirection
+            )
+            if let gaussianHit, gaussianHit.distance < (sceneHit?.distance ?? .greatestFiniteMagnitude) {
+                return (gaussianHit.entityId, true)
+            }
+            if let sceneHit {
+                return (sceneHit.entityId, true)
+            }
+            return (.invalid, false)
         }
 
         // MARK: - The scene on the left button

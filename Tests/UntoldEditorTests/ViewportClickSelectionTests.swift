@@ -41,6 +41,7 @@ final class ViewportClickSelectionTests: XCTestCase {
     private var savedDelegate: SelectionDelegate?
     private var savedController: EditorController?
     private var savedActiveEntity: EntityID!
+    private var savedGameMode = false
     private let delegate = RecordingSelectionDelegate()
     private var view: NSView!
 
@@ -61,11 +62,16 @@ final class ViewportClickSelectionTests: XCTestCase {
         savedDelegate = selectionDelegate
         savedController = editorController
         savedActiveEntity = activeEntity
+        savedGameMode = gameMode
         selectionDelegate = delegate
+        // A click selects while editing, not while the game plays, which the
+        // engine's default says it does.
+        gameMode = false
         view = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
     }
 
     override func tearDown() {
+        gameMode = savedGameMode
         selectionDelegate = savedDelegate
         editorController = savedController
         activeEntity = savedActiveEntity
