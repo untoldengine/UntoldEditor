@@ -28,6 +28,8 @@ struct SceneHierarchyView: View {
     /// An asset browser or Lights shelf row dropped on the tree: on the root row
     /// the parent is `nil` (scene root), on an entity row it is that entity.
     var onDropRow: (DroppedRowPayload, EntityID?) -> Void = { _, _ in }
+    /// From Play to Stop the hierarchy selects nothing.
+    @ObservedObject var playback = EditorPlaybackSettings.shared
 
     @State private var isTreeExpanded = true
 
@@ -50,10 +52,7 @@ struct SceneHierarchyView: View {
     }
 
     private var selectedCount: Int {
-        guard let selected = selectionManager.selectedEntity, selected != .invalid else {
-            return 0
-        }
-        return 1
+        selectionManager.selectedEntities.count
     }
 
     var body: some View {
@@ -67,7 +66,11 @@ struct SceneHierarchyView: View {
                         name: sceneName,
                         isExpanded: $isTreeExpanded,
                         isSelected: selectionManager.sceneSelected,
-                        onSelect: { selectionManager.selectScene() },
+                        onSelect: {
+                            if playback.isSessionActive == false {
+                                selectionManager.selectScene()
+                            }
+                        },
                         onDropRow: { payload in onDropRow(payload, nil) }
                     )
 
@@ -84,7 +87,8 @@ struct SceneHierarchyView: View {
                                 onUnparentEntity: onUnparentEntity,
                                 onDeleteEntity: onDeleteEntity,
                                 onDropRow: onDropRow,
-                                addActions: addActions
+                                addActions: addActions,
+                                isPlaying: playback.isSessionActive
                             )
                         }
                     }
@@ -95,7 +99,7 @@ struct SceneHierarchyView: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            HierarchyFooterView(entityCount: entityCount, selectedCount: selectedCount)
+            HierarchyFooterView(entityCount: entityCount, selectedCount: selectedCount, isPlaying: playback.isSessionActive)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.editorPanelBackground)

@@ -12,14 +12,12 @@ import SwiftUI
 import UntoldEngine
 
 extension EditorView {
-    /// H: hides the selected entity, the row the hierarchy shows selected, with
-    /// everything under it. With nothing selected, nothing happens, and
+    /// H: hides the selection, the rows the hierarchy shows selected, with
+    /// everything under them. With nothing selected, nothing happens, and
     /// while the game plays the key is the game's.
     func editor_hideSelectedEntity() {
-        guard experienceMode == .edit, isPlaying == false,
-              let selected = selectionManager.selectedEntity, selected != .invalid
-        else { return }
-        selectionManager.setHidden(selected, true)
+        guard experienceMode == .edit, isPlaying == false else { return }
+        selectionManager.hideSelection()
     }
 
     /// ⌥H: shows every hidden entity again.

@@ -47,6 +47,27 @@ protocol SelectionDelegate: AnyObject {
     /// A click on empty viewport space: nothing is selected any more.
     func didClearSelection()
     func resetActiveAxis()
+    /// These entities stood inside the rectangle dragged over the viewport,
+    /// the nearest one last: they are the selection.
+    func didSelectEntities(_ entityIds: [EntityID])
+    /// A ⇧ click on an entity: it joins the selection, or leaves it.
+    func didToggleEntity(_ entityId: EntityID)
+}
+
+/// A delegate that knows of one selected entity takes the nearest of
+/// several, and a toggled one as selected.
+extension SelectionDelegate {
+    func didSelectEntities(_ entityIds: [EntityID]) {
+        if let nearest = entityIds.last {
+            didSelectEntity(nearest)
+        } else {
+            didClearSelection()
+        }
+    }
+
+    func didToggleEntity(_ entityId: EntityID) {
+        didSelectEntity(entityId)
+    }
 }
 
 struct MeshInspectionSelection: Equatable {
@@ -103,7 +124,25 @@ class SceneGraphModel: ObservableObject {
 }
 
 class SelectionManager: ObservableObject {
-    @Published var selectedEntity: EntityID? = .invalid
+    /// The selected entity, which the Inspector shows. With several selected
+    /// it is the last of them. Whoever sets it selects that entity alone.
+    @Published var selectedEntity: EntityID? = .invalid {
+        didSet {
+            guard isSelectingSeveral == false else { return }
+            let alone = selectedEntity.flatMap { $0 == .invalid ? nil : [$0] } ?? []
+            if selectedEntities != alone {
+                selectedEntities = alone
+            }
+            forgetSeveral()
+        }
+    }
+
+    /// Every selected entity, in the order they were selected. One entity
+    /// alone is a selection of one; `selectEntities` and `toggleSelection`
+    /// select several.
+    @Published private(set) var selectedEntities: [EntityID] = []
+    /// True while `selectedEntity` is set as one of several.
+    private var isSelectingSeveral = false
     @Published var inspectedMesh: MeshInspectionSelection?
     /// True when the project itself is selected in the Scene Graph panel. Drives
     /// the right panel to show Environment/Effects instead of the Inspector.
@@ -237,28 +276,57 @@ class SelectionManager: ObservableObject {
         }
     }
 
-    /// The box in the world around what the selection draws, for framing it.
-    /// Nil with nothing selected, and for a selection that draws nothing,
-    /// such as a light.
-    func selectionBounds() -> (min: simd_float3, max: simd_float3)? {
-        guard let selected = selectedEntity, selected != .invalid else { return nil }
-        let entity = sceneTransformEntity(for: selected)
-        guard hasComponent(entityId: entity, componentType: LocalTransformComponent.self) else { return nil }
-        return worldBoundsOfRenderableHierarchy(entityId: entity)
+    /// Makes `entities`, two or more of them, the selection. The last one is
+    /// `selectedEntity`. The gizmo goes to the middle of those it can move.
+    func setSelection(toSeveral entities: [EntityID]) {
+        projectSelected = false
+        sceneSelected = false
+        inspectedMesh = nil
+        isSelectingSeveral = true
+        selectedEntities = entities
+        selectedEntity = entities.last
+        isSelectingSeveral = false
+        activateSeveral()
     }
 
-    /// What F frames: the selection's box, or for a selection that draws
-    /// nothing a box of `pointExtent` around where it stands.
-    func selectionFramingBounds(pointExtent: Float = 1) -> (min: simd_float3, max: simd_float3)? {
-        if let bounds = selectionBounds() {
-            return bounds
+    /// Whether the gizmo may go on an entity: it has a place in the scene, it
+    /// is neither hidden nor locked, and it shows in the viewport.
+    func takesGizmo(_ entityId: EntityID) -> Bool {
+        guard canEditSceneTransform(entityId: entityId), canMove(entityId) else { return false }
+        return entityOrChildrenHaveRenderableRepresentation(entityId: entityId)
+            || EditorRepresentationRenderer.drawing(for: entityId) != nil
+    }
+
+    /// The box in the world around what the selection draws, for framing it:
+    /// around all of it when several entities are selected. Nil with nothing
+    /// selected, and for a selection that draws nothing, such as a light.
+    func selectionBounds() -> (min: simd_float3, max: simd_float3)? {
+        var bounds: (min: simd_float3, max: simd_float3)?
+        for selected in selectedEntities {
+            let entity = sceneTransformEntity(for: selected)
+            guard hasComponent(entityId: entity, componentType: LocalTransformComponent.self),
+                  let box = worldBoundsOfRenderableHierarchy(entityId: entity)
+            else { continue }
+            bounds = bounds.map { (simd_min($0.min, box.min), simd_max($0.max, box.max)) } ?? box
         }
-        guard let selected = selectedEntity, selected != .invalid else { return nil }
-        let entity = sceneTransformEntity(for: selected)
-        guard hasComponent(entityId: entity, componentType: WorldTransformComponent.self) else { return nil }
-        let position = getPosition(entityId: entity)
+        return bounds
+    }
+
+    /// What F frames: the selection's box, with a box of `pointExtent` where
+    /// each selected entity that draws nothing stands.
+    func selectionFramingBounds(pointExtent: Float = 1) -> (min: simd_float3, max: simd_float3)? {
+        var bounds = selectionBounds()
         let half = simd_float3(repeating: pointExtent / 2)
-        return (position - half, position + half)
+        for selected in selectedEntities {
+            let entity = sceneTransformEntity(for: selected)
+            guard hasComponent(entityId: entity, componentType: WorldTransformComponent.self),
+                  worldBoundsOfRenderableHierarchy(entityId: entity) == nil
+            else { continue }
+            let position = getPosition(entityId: entity)
+            let box = (min: position - half, max: position + half)
+            bounds = bounds.map { (simd_min($0.min, box.min), simd_max($0.max, box.max)) } ?? box
+        }
+        return bounds
     }
 
     // MARK: - Hidden and locked entities
@@ -303,6 +371,17 @@ class SelectionManager: ObservableObject {
 
     func toggleHidden(_ entityId: EntityID) {
         setHidden(entityId, isHidden(entityId) == false)
+    }
+
+    /// Hides every selected entity, with everything under each: what H does.
+    func hideSelection() {
+        let selected = selectedEntities.filter { $0 != .invalid }
+        guard selected.isEmpty == false else { return }
+        for entityId in selected {
+            hiddenEntities.insert(entityId)
+            applyVisibility(under: entityId)
+        }
+        refreshGizmo()
     }
 
     /// Shows every hidden entity again.
@@ -375,7 +454,9 @@ class SelectionManager: ObservableObject {
     /// the tool when that changes.
     func refreshGizmo() {
         guard let selected = selectedEntity, selected != .invalid else { return }
-        if let mesh = inspectedMesh {
+        if hasSeveralSelected {
+            activateSeveral()
+        } else if let mesh = inspectedMesh {
             inspectMesh(entityId: mesh.entityId, meshIndex: mesh.meshIndex)
         } else {
             selectEntity(entityId: sceneTransformEntity(for: selected), inspectEntityId: selected)

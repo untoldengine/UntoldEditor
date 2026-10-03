@@ -78,7 +78,9 @@ private struct GizmoDragState {
     let axis: TransformAxis
     let axisWorldDirection: simd_float3
     let startAxisParameter: Float
-    let startActiveLocalPosition: simd_float3
+    /// What the drag works on, as it stood when the drag began: the active
+    /// entity, or with several selected every one the gizmo moves.
+    let targets: [GizmoTargetStart]
     let startGizmoWorldPosition: simd_float3
     /// When the gizmo sits on a handle of an entity written in code, the drag moves the
     /// handle (writes its property) instead of the entity.
@@ -186,7 +188,7 @@ func beginGizmoDrag(ray: GizmoDragRay) {
         axis: handleComponent.axis,
         axisWorldDirection: axisDirection,
         startAxisParameter: startParameter,
-        startActiveLocalPosition: getLocalPosition(entityId: activeEntity),
+        targets: gizmoTransformTargets().map(GizmoTargetStart.init(entityId:)),
         startGizmoWorldPosition: gizmoRootWorldPosition(),
         handle: handleComponent.mode == .translate ? EditorRepresentationHandles.active : nil
     )
@@ -222,14 +224,21 @@ func updateGizmoDrag(ray: GizmoDragRay) {
         if let handle = state.handle {
             EditorRepresentationHandles.move(handle, toWorld: state.startGizmoWorldPosition + translation)
         } else {
-            // The gizmo moves in world space; the entity's position is its parent's.
-            let localTranslation = localTranslation(ofWorld: translation, for: activeEntity)
-            translateTo(entityId: activeEntity, position: state.startActiveLocalPosition + localTranslation)
+            // The gizmo moves in world space; an entity's position is its parent's.
+            translateGizmoTargets(state.targets, byWorld: translation)
         }
         translateTo(entityId: parentEntityIdGizmo, position: state.startGizmoWorldPosition + translation)
 
     case .scale:
-        if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
+        if state.targets.count > 1 {
+            // Several entities grow together, from where they stood.
+            scaleGizmoTargets(
+                state.targets,
+                from: state.startGizmoWorldPosition,
+                axis: state.axisWorldDirection,
+                factor: gizmoGroupScaleFactor(forAmount: axisAmount)
+            )
+        } else if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
             // The engine takes the axis as which components of the scale to change.
             handleLightScaleInput(projectedAmount: incrementalAmount, axis: worldDirection(for: state.axis))
         } else {
@@ -268,6 +277,7 @@ func endGizmoDrag() {
     gizmoDragState = nil
     pendingGizmoDragRay = nil
     gizmoRotationDrag = nil
+    reanchorGizmoOnTargets()
 }
 
 func hasActiveAxisGizmoDrag() -> Bool {
@@ -317,7 +327,7 @@ private func syncStoredAxisRotationsFromQuaternion(entityId: EntityID) {
 
 /// The entity's parent, or nil for a root. An entity outside the scene graph
 /// has none, which the engine's `getEntityParent` would report as an error.
-private func parentInSceneGraph(of entityId: EntityID) -> EntityID? {
+func parentInSceneGraph(of entityId: EntityID) -> EntityID? {
     guard hasComponent(entityId: entityId, componentType: ScenegraphComponent.self),
           let parent = getEntityParent(entityId: entityId),
           parent != .invalid
@@ -1049,7 +1059,11 @@ func createGizmo(mode: GizmoMode) {
     registerSceneGraphComponent(entityId: parentEntityIdGizmo)
     registerComponent(entityId: parentEntityIdGizmo, componentType: GizmoComponent.self)
 
-    let anchor = EditorRepresentationHandles.active.flatMap(EditorRepresentationHandles.worldPosition) ?? gizmoAnchorWorldPosition(entityId: activeEntity)
+    // With several selected the gizmo stands in the middle of them.
+    let targets = gizmoTransformTargets()
+    let anchor = EditorRepresentationHandles.active.flatMap(EditorRepresentationHandles.worldPosition)
+        ?? (targets.count > 1 ? gizmoGroupAnchorWorldPosition(of: targets) : nil)
+        ?? gizmoAnchorWorldPosition(entityId: activeEntity)
     translateTo(entityId: parentEntityIdGizmo, position: anchor)
 
     switch mode {
@@ -1062,7 +1076,8 @@ func createGizmo(mode: GizmoMode) {
     }
     makeGizmoCenter()
 
-    if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
+    // The handle that aims a light is for that light alone.
+    if targets.count <= 1, hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
         directionHandleEntityId = makeDirectionHandle()
     }
 
