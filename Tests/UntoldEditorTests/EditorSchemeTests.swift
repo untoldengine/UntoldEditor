@@ -87,6 +87,7 @@ final class EditorSchemeTests: XCTestCase {
 
     func test_scrimIsTheSpecScrim() {
         assertHex(.editorScrim, 0x14151C, opacity: 0.55)
+        assertHex(.editorScrimSoft, 0x14151C, opacity: 0.35)
         assertHex(.editorShadowStrong, 0x000000, opacity: 0.50)
     }
 }

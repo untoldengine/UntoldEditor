@@ -13,7 +13,6 @@ import UntoldEngine
 
 var editorController: EditorController?
 
-var visualDebug: Bool = false
 var hotReload: Bool = false
 
 var selectionDelegate: SelectionDelegate?
@@ -29,14 +28,6 @@ let gizmoDesiredScreenSize: Float = 75.0 // pixels
 var editorColorGradeLUTPath: String?
 
 var spawnDistance: Float = 2.0
-
-/// Visual Debugger
-enum DebugSelection: Int {
-    case normalOutput
-    case iblOutput
-}
-
-var currentDebugSelection: DebugSelection = .normalOutput
 
 // light debug meshes
 var spotLightDebugMesh: [Mesh] = []

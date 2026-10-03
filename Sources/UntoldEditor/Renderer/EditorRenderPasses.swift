@@ -507,31 +507,39 @@ extension RenderPasses {
         renderEncoder.updateFence(renderInfo.fence, after: .fragment)
     }
 
+    /// Clears the gizmo layer, into which the highlight, the light icons and
+    /// the gizmo are drawn and which the engine composites over the scene
+    /// whenever the game is not playing. Run when nothing draws into it, so
+    /// nothing drawn before stays on screen: by the highlight pass when there
+    /// is no selection, and alone when the editor's passes are left out.
+    static let clearGizmoLayerExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
+        renderInfo.gizmoRenderPassDescriptor.colorAttachments[Int(colorTarget.rawValue)]
+            .loadAction = .clear
+
+        renderInfo.gizmoRenderPassDescriptor.depthAttachment.loadAction = .clear
+
+        let encoderDescriptor = renderInfo.gizmoRenderPassDescriptor!
+
+        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: encoderDescriptor)
+        else {
+            handleError(.renderPassCreationFailed, "Clear Gizmo Layer Pass")
+            return
+        }
+
+        renderEncoder.label = "Clear Gizmo Layer Pass"
+
+        renderEncoder.pushDebugGroup("Clear Gizmo Layer Pass")
+
+        renderEncoder.waitForFence(renderInfo.fence, before: .vertex)
+
+        renderEncoder.updateFence(renderInfo.fence, after: .fragment)
+        renderEncoder.popDebugGroup()
+        renderEncoder.endEncoding()
+    }
+
     static let highlightExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
         if activeEntity == .invalid {
-            renderInfo.gizmoRenderPassDescriptor.colorAttachments[Int(colorTarget.rawValue)]
-                .loadAction = .clear
-
-            renderInfo.gizmoRenderPassDescriptor.depthAttachment.loadAction = .clear
-
-            let encoderDescriptor = renderInfo.gizmoRenderPassDescriptor!
-
-            guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: encoderDescriptor)
-            else {
-                handleError(.renderPassCreationFailed, "Highlight Pass")
-                return
-            }
-
-            renderEncoder.label = "Highlight Pass"
-
-            renderEncoder.pushDebugGroup("Highlight Pass")
-
-            renderEncoder.waitForFence(renderInfo.fence, before: .vertex)
-
-            renderEncoder.updateFence(renderInfo.fence, after: .fragment)
-            renderEncoder.popDebugGroup()
-            renderEncoder.endEncoding()
-
+            clearGizmoLayerExecution(commandBuffer)
             return
         }
 

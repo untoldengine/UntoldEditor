@@ -15,10 +15,14 @@ import simd
 import XCTest
 
 final class EditorUndoManagerTests: XCTestCase {
+    private var originalIsEditingAllowed: (() -> Bool)!
+
     override func setUp() {
         super.setUp()
         scene = Scene()
         editorColorGradeLUTPath = nil
+        originalIsEditingAllowed = EditorUndoManager.shared.isEditingAllowed
+        EditorUndoManager.shared.isEditingAllowed = { true }
         EditorUndoManager.shared.clear()
         EditorUndoManager.shared.onStateRestored = nil
     }
@@ -26,8 +30,43 @@ final class EditorUndoManagerTests: XCTestCase {
     override func tearDown() {
         EditorUndoManager.shared.clear()
         EditorUndoManager.shared.onStateRestored = nil
+        EditorUndoManager.shared.isEditingAllowed = originalIsEditingAllowed
         editorColorGradeLUTPath = nil
         super.tearDown()
+    }
+
+    // MARK: - From Play to Stop
+
+    func test_fromPlayToStop_nothingIsRegisteredUndoneOrRedone() {
+        let entity = createEntity()
+        setEntityName(entityId: entity, name: "Before")
+        setEntityName(entityId: entity, name: "After")
+        EditorUndoManager.shared.registerNameChange(entityId: entity, oldName: "Before", newName: "After")
+        XCTAssertTrue(EditorUndoManager.shared.canUndo)
+
+        // Play. What the session changes is put back at Stop, so the history
+        // must stay the one the scene comes back to.
+        EditorUndoManager.shared.isEditingAllowed = { false }
+        EditorUndoManager.shared.playStateDidChange()
+        XCTAssertFalse(EditorUndoManager.shared.canUndo, "the toolbar's Undo is off")
+        XCTAssertEqual(EditorUndoManager.shared.undoHistory, ["Rename Entity"], "but the history is kept")
+
+        EditorUndoManager.shared.undo()
+        XCTAssertEqual(getEntityName(entityId: entity), "After", "⌘Z does nothing while playing")
+        XCTAssertFalse(EditorUndoManager.shared.canRedo)
+
+        setEntityName(entityId: entity, name: "While playing")
+        EditorUndoManager.shared.registerNameChange(entityId: entity, oldName: "After", newName: "While playing")
+        EditorUndoManager.shared.beginTransformEdit(entityId: entity)
+        EditorUndoManager.shared.commitTransformEdit(entityId: entity)
+        XCTAssertEqual(EditorUndoManager.shared.undoHistory, ["Rename Entity"], "an edit made while playing is not a step")
+
+        // Stop.
+        EditorUndoManager.shared.isEditingAllowed = { true }
+        EditorUndoManager.shared.playStateDidChange()
+        XCTAssertTrue(EditorUndoManager.shared.canUndo)
+        EditorUndoManager.shared.undo()
+        XCTAssertEqual(getEntityName(entityId: entity), "Before", "the step from before Play undoes as it did")
     }
 
     func test_nameChangeUndoRedo_restoresEntityName() {

@@ -17,7 +17,14 @@ final class EditorEngineStatsStore: ObservableObject {
     static let shared = EditorEngineStatsStore()
 
     @Published private(set) var snapshot: EngineStatsSnapshot = .init()
-    @Published var overlayMode: EngineStatsOverlayMode = .off
+    /// The form of the statistics over the viewport. The compact form shows
+    /// until another is chosen in the View menu, and the choice is kept.
+    @Published var overlayMode: EngineStatsOverlayMode {
+        didSet {
+            EditorViewportOverlaySettings.shared.storeStatsMode(overlayMode)
+        }
+    }
+
     @Published var loggingEnabled: Bool
     @Published var loggingProfile: EngineStatsLoggingProfile
     @Published var loggingIntervalSeconds: Double
@@ -25,6 +32,7 @@ final class EditorEngineStatsStore: ObservableObject {
     private var pollCancellable: AnyCancellable?
 
     private init() {
+        overlayMode = EditorViewportOverlaySettings.shared.storedStatsMode
         loggingEnabled = EngineStatsMonitor.shared.enableLogging
         loggingProfile = EngineStatsMonitor.shared.loggingProfile
         loggingIntervalSeconds = EngineStatsMonitor.shared.loggingIntervalSeconds

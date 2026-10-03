@@ -27,6 +27,7 @@ private enum GizmoDimensions {
     static let directionHandleRadius: Float = 0.08
     static let directionHandleHitRadius: Float = 0.2
     static let directionHandleOffsetY: Float = -1.0
+    static let centerDiameter: Float = 0.12
 }
 
 enum GizmoMode: String {
@@ -54,6 +55,11 @@ final class GizmoHandleComponent: Component {
 }
 
 final class GizmoHitProxyComponent: Component {
+    required init() {}
+}
+
+/// Marks the dot at the gizmo's centre, which is drawn and never picked.
+final class GizmoCenterComponent: Component {
     required init() {}
 }
 
@@ -86,6 +92,18 @@ private struct GizmoDragState {
 
 private var gizmoDragState: GizmoDragState?
 private var pendingGizmoDragRay: GizmoDragRay?
+
+/// A rotation drag in progress: the whole turn so far, and the part of it
+/// already applied, so snapping quantizes the turn rather than each frame.
+private struct GizmoRotationDrag {
+    var accumulatedDegrees: Float = 0
+    var appliedDegrees: Float = 0
+}
+
+private var gizmoRotationDrag: GizmoRotationDrag?
+
+/// The snap settings the drags read; tests put their own here.
+var gizmoSnapSettings = EditorSnapSettings.shared
 
 func gizmoRootWorldPosition() -> simd_float3 {
     guard parentEntityIdGizmo != .invalid else {
@@ -141,7 +159,10 @@ func beginGizmoDrag(ray: GizmoDragRay) {
         return
     }
 
-    let axisDirection = worldDirection(for: handleComponent.axis)
+    let axisDirection = gizmoAxisDirection(for: handleComponent.axis, entityId: activeEntity, space: EditorViewportSettings.shared.transformSpace)
+    if handleComponent.mode == .rotate {
+        beginGizmoRotationDrag()
+    }
     guard handleComponent.mode == .translate || handleComponent.mode == .scale,
           simd_length_squared(axisDirection) > 0.0001
     else {
@@ -188,7 +209,8 @@ func updateGizmoDrag(ray: GizmoDragRay) {
         return
     }
 
-    let axisAmount = currentParameter - state.startAxisParameter
+    // With snapping on, the whole drag lands on a step; the increments follow.
+    let axisAmount = gizmoSnapSettings.snapped(currentParameter - state.startAxisParameter, for: state.mode)
     let incrementalAmount = axisAmount - state.appliedAxisAmount
     guard incrementalAmount.isFinite else {
         return
@@ -200,17 +222,21 @@ func updateGizmoDrag(ray: GizmoDragRay) {
         if let handle = state.handle {
             EditorRepresentationHandles.move(handle, toWorld: state.startGizmoWorldPosition + translation)
         } else {
-            translateTo(entityId: activeEntity, position: state.startActiveLocalPosition + translation)
+            // The gizmo moves in world space; the entity's position is its parent's.
+            let localTranslation = localTranslation(ofWorld: translation, for: activeEntity)
+            translateTo(entityId: activeEntity, position: state.startActiveLocalPosition + localTranslation)
         }
         translateTo(entityId: parentEntityIdGizmo, position: state.startGizmoWorldPosition + translation)
 
     case .scale:
         if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
-            handleLightScaleInput(projectedAmount: incrementalAmount, axis: state.axisWorldDirection)
+            // The engine takes the axis as which components of the scale to change.
+            handleLightScaleInput(projectedAmount: incrementalAmount, axis: worldDirection(for: state.axis))
         } else {
+            // The engine takes the axis as the entity's parent sees it.
             applyWorldSpaceScaleDelta(
                 entityId: activeEntity,
-                worldAxis: state.axisWorldDirection,
+                worldAxis: localAxis(ofWorld: state.axisWorldDirection, for: activeEntity),
                 projectedAmount: incrementalAmount
             )
         }
@@ -241,6 +267,7 @@ func applyPendingGizmoDragUpdate() -> Bool {
 func endGizmoDrag() {
     gizmoDragState = nil
     pendingGizmoDragRay = nil
+    gizmoRotationDrag = nil
 }
 
 func hasActiveAxisGizmoDrag() -> Bool {
@@ -256,11 +283,16 @@ func applyGizmoRotationDelta(entityId: EntityID, axis: simd_float3, degrees: Flo
         return
     }
 
-    let delta = simd_quatf(angle: degreesToRadians(degrees: degrees), axis: simd_normalize(axis))
+    // `axis` is the world's; the rotation is stored relative to the parent.
+    let axisForParent = localAxis(ofWorld: simd_normalize(axis), for: entityId)
+    let delta = simd_quatf(angle: degreesToRadians(degrees: degrees), axis: simd_normalize(axisForParent))
     let currentRotation = normalizedRotationOrIdentity(localTransform.rotation)
     localTransform.rotation = simd_normalize(simd_mul(delta, currentRotation))
     translateTo(entityId: entityId, position: localTransform.position)
     syncStoredAxisRotationsFromQuaternion(entityId: entityId)
+    if entityId == activeEntity {
+        syncGizmoOrientation()
+    }
 }
 
 private func normalizedRotationOrIdentity(_ rotation: simd_quatf) -> simd_quatf {
@@ -283,7 +315,125 @@ private func syncStoredAxisRotationsFromQuaternion(entityId: EntityID) {
     localTransform.rotationZ = euler.roll
 }
 
-private func worldDirection(for axis: TransformAxis) -> simd_float3 {
+/// The entity's parent, or nil for a root. An entity outside the scene graph
+/// has none, which the engine's `getEntityParent` would report as an error.
+private func parentInSceneGraph(of entityId: EntityID) -> EntityID? {
+    guard hasComponent(entityId: entityId, componentType: ScenegraphComponent.self),
+          let parent = getEntityParent(entityId: entityId),
+          parent != .invalid
+    else {
+        return nil
+    }
+    return parent
+}
+
+/// A movement in world space as the entity's parent measures it. An entity's
+/// position is relative to its parent, so under a parent that is turned or
+/// scaled the same movement has other numbers: half a turn around Y reverses
+/// its X and Z, a parent twice the size halves it.
+func localTranslation(ofWorld translation: simd_float3, for entityId: EntityID) -> simd_float3 {
+    guard let parent = parentInSceneGraph(of: entityId),
+          let parentSpace = scene.get(component: WorldTransformComponent.self, for: parent)?.space
+    else {
+        return translation
+    }
+
+    let determinant = simd_determinant(parentSpace)
+    guard determinant.isFinite, abs(determinant) > 1e-12 else {
+        // A parent squashed flat has no way back; its turn alone still has.
+        return simd_act(entityWorldRotation(entityId: parent).inverse, translation)
+    }
+    let local = simd_mul(parentSpace.inverse, simd_float4(translation, 0))
+    return simd_float3(local.x, local.y, local.z)
+}
+
+/// An axis of the world as the entity's parent sees it, for a turn that is
+/// stored relative to the parent.
+func localAxis(ofWorld axis: simd_float3, for entityId: EntityID) -> simd_float3 {
+    guard let parent = parentInSceneGraph(of: entityId) else {
+        return axis
+    }
+    return simd_act(entityWorldRotation(entityId: parent).inverse, axis)
+}
+
+/// The entity's rotation in world space: its own composed with its ancestors',
+/// from the local transforms, so it is right before the frame's world update.
+func entityWorldRotation(entityId: EntityID) -> simd_quatf {
+    var rotation = simd_quatf(real: 1, imag: .zero)
+    var current: EntityID? = entityId
+    var depth = 0
+    while let id = current, id != .invalid, depth < 64 {
+        if let local = scene.get(component: LocalTransformComponent.self, for: id) {
+            rotation = simd_normalize(simd_mul(normalizedRotationOrIdentity(local.rotation), rotation))
+        }
+        current = parentInSceneGraph(of: id)
+        depth += 1
+    }
+    return rotation
+}
+
+/// The world direction of a gizmo axis: the world's axis, or in Local space
+/// the entity's own, which its world rotation turns the world axis into.
+func gizmoAxisDirection(for axis: TransformAxis, entityId: EntityID, space: TransformSpace) -> simd_float3 {
+    let direction = worldDirection(for: axis)
+    guard space == .local, entityId != .invalid, simd_length_squared(direction) > 0 else {
+        return direction
+    }
+    return simd_normalize(simd_act(entityWorldRotation(entityId: entityId), direction))
+}
+
+/// The rotation the gizmo root has: the entity's own in Local space, so the
+/// handles lie along the entity's axes, and none in World space.
+func gizmoRootRotation() -> simd_quatf {
+    guard activeEntity != .invalid, EditorViewportSettings.shared.transformSpace == .local else {
+        return simd_quatf(real: 1, imag: .zero)
+    }
+    return entityWorldRotation(entityId: activeEntity)
+}
+
+/// Turns the gizmo to the entity's own axes in Local space, and back to the
+/// world's in World space.
+func syncGizmoOrientation() {
+    guard parentEntityIdGizmo != .invalid, activeEntity != .invalid else { return }
+    rotateTo(entityId: parentEntityIdGizmo, rotation: gizmoRootRotation())
+}
+
+/// The gizmo follows a turn of its entity made elsewhere than on the gizmo:
+/// the Inspector's fields, the sun's elevation and azimuth, a reset. Its
+/// axes turn with the entity in Local space, and the direction handle of a
+/// light goes along the new emission. Nothing happens for another entity.
+func syncGizmoToTurn(of entityId: EntityID) {
+    guard entityId != .invalid, entityId == activeEntity, gizmoActive else { return }
+    syncGizmoOrientation()
+    syncLightDirectionHandleToActiveLight(entityId: entityId)
+}
+
+/// Starts accumulating a rotation drag, so snapping can quantize the whole
+/// turn rather than each frame's part of it.
+func beginGizmoRotationDrag() {
+    gizmoRotationDrag = GizmoRotationDrag()
+}
+
+/// The rotation to apply for this frame's `degrees`: the amount itself, or
+/// with rotation snapping on, the steps the accumulated turn has crossed.
+func snappedGizmoRotationDelta(degrees: Float) -> Float {
+    guard degrees.isFinite else {
+        return 0
+    }
+    guard var drag = gizmoRotationDrag, let step = gizmoSnapSettings.step(for: .rotate) else {
+        return degrees
+    }
+    drag.accumulatedDegrees += degrees
+    let target = EditorSnapSettings.quantize(drag.accumulatedDegrees, step: step)
+    let delta = target - drag.appliedDegrees
+    drag.appliedDegrees = target
+    gizmoRotationDrag = drag
+    return delta
+}
+
+/// The world's axis for a handle's axis; also what names a component of a
+/// scale to the engine's light scale handler.
+func worldDirection(for axis: TransformAxis) -> simd_float3 {
     switch axis {
     case .x:
         return simd_float3(1.0, 0.0, 0.0)
@@ -433,6 +583,26 @@ private func createGizmoHandle(
     return handle
 }
 
+/// The white dot where the gizmo's axes meet. It shows where the gizmo is
+/// and is no handle: picking passes through it.
+@discardableResult
+private func makeGizmoCenter() -> EntityID {
+    let center = createEntity()
+    setEntityName(entityId: center, name: "gizmoCenter")
+    setEntityMeshDirect(
+        entityId: center,
+        meshes: BasicPrimitives.createSphere(extent: GizmoDimensions.centerDiameter, segments: [24, 12]),
+        assetName: "gizmoCenter"
+    )
+    setParent(childId: center, parentId: parentEntityIdGizmo)
+    translateTo(entityId: center, position: .zero)
+    registerComponent(entityId: center, componentType: GizmoComponent.self)
+    registerComponent(entityId: center, componentType: GizmoCenterComponent.self)
+    setEntityPickParticipation(entityId: center, enabled: false)
+    applyGizmoHandleColor(entityId: center, color: GizmoPalette.center)
+    return center
+}
+
 @discardableResult
 private func makeDirectionHandle() -> EntityID {
     let handleColor = simd_float4(1.0, 1.0, 0.0, 1.0)
@@ -459,29 +629,20 @@ private func makeDirectionHandle() -> EntityID {
     return visibleHandle
 }
 
+/// Where the light direction handle sits under the gizmo root: along the
+/// light's emission, which its rotation turns the local -Z into, in the
+/// root's own frame. In World space the root is not turned and the offset is
+/// the emission itself; in Local space the root is turned with the entity,
+/// so the offset is the emission as the entity sees it, straight along -Z.
 private func initialLightDirectionHandleOffset() -> simd_float3 {
     guard activeEntity != .invalid else {
         return simd_float3(0.0, GizmoDimensions.directionHandleOffsetY, 0.0)
     }
 
-    let emissionDirection = localLightEmissionDirection(entityId: activeEntity)
-    let handleDirection = simd_length_squared(emissionDirection) > 0.0001 ? simd_normalize(emissionDirection) : simd_float3(0.0, -1.0, 0.0)
+    let emission = simd_act(entityWorldRotation(entityId: activeEntity), simd_float3(0.0, 0.0, -1.0))
+    let offset = simd_act(gizmoRootRotation().inverse, emission)
+    let handleDirection = simd_length_squared(offset) > 0.0001 ? simd_normalize(offset) : simd_float3(0.0, -1.0, 0.0)
     return handleDirection * abs(GizmoDimensions.directionHandleOffsetY)
-}
-
-private func localLightEmissionDirection(entityId: EntityID) -> simd_float3 {
-    guard entityId != .invalid,
-          let localTransform = scene.get(component: LocalTransformComponent.self, for: entityId)
-    else {
-        return simd_float3(0.0, -1.0, 0.0)
-    }
-
-    let orientation = transformQuaternionToMatrix3x3(q: normalizedRotationOrIdentity(localTransform.rotation))
-    return -simd_float3(
-        orientation.columns.2.x,
-        orientation.columns.2.y,
-        orientation.columns.2.z
-    )
 }
 
 /// Repositions the light direction handle (and its hit proxy) to match the given light
@@ -664,9 +825,9 @@ func makeTranslateGizmo() {
     let tipOffset = GizmoDimensions.axisLength + GizmoDimensions.arrowHeight
 
     // X axis
-    let xColor = simd_float4(1.0, 0.0, 0.0, 1.0)
-    let yColor = simd_float4(0.0, 1.0, 0.0, 1.0)
-    let zColor = simd_float4(0.0, 0.0, 1.0, 1.0)
+    let xColor = GizmoPalette.x
+    let yColor = GizmoPalette.y
+    let zColor = GizmoPalette.z
 
     createGizmoHandle(
         parentId: parentEntityIdGizmo,
@@ -745,9 +906,9 @@ func makeScaleGizmo() {
     let cubeCenterOffset = GizmoDimensions.axisLength + (GizmoDimensions.scaleCubeExtent * 0.5)
 
     // X axis
-    let xColor = simd_float4(1.0, 0.0, 0.0, 1.0)
-    let yColor = simd_float4(0.0, 1.0, 0.0, 1.0)
-    let zColor = simd_float4(0.0, 0.0, 1.0, 1.0)
+    let xColor = GizmoPalette.x
+    let yColor = GizmoPalette.y
+    let zColor = GizmoPalette.z
 
     createGizmoHandle(
         parentId: parentEntityIdGizmo,
@@ -806,9 +967,9 @@ func makeScaleGizmo() {
 }
 
 func makeRotationGizmo() {
-    let xColor = simd_float4(1.0, 0.0, 0.0, 1.0)
-    let yColor = simd_float4(0.0, 1.0, 0.0, 1.0)
-    let zColor = simd_float4(0.0, 0.0, 1.0, 1.0)
+    let xColor = GizmoPalette.x
+    let yColor = GizmoPalette.y
+    let zColor = GizmoPalette.z
     let positiveArcStart: Float = 0.0
     let positiveArcSweep = Float.pi * 0.5
 
@@ -899,15 +1060,32 @@ func createGizmo(mode: GizmoMode) {
     case .scale:
         makeScaleGizmo()
     }
+    makeGizmoCenter()
 
     if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
         directionHandleEntityId = makeDirectionHandle()
     }
 
     gizmoActive = true
+    syncGizmoOrientation()
 
     if let cameraEntityId = CameraSystem.shared.activeCamera {
         updateGizmoScreenSpaceScale(cameraEntityId: cameraEntityId)
+    }
+}
+
+/// The gizmo for a tool of the viewport header: the tool's, or none for
+/// Select. A handle of an entity written in code (a spline's control point)
+/// is only ever moved, so a selection that sits on one gets the move gizmo
+/// whatever the tool, as every selection did before the tools.
+func createGizmo(forTool tool: TransformTool) {
+    if EditorRepresentationHandles.active != nil {
+        createGizmo(mode: .translate)
+    } else if let mode = tool.gizmoMode {
+        createGizmo(mode: mode)
+    } else {
+        removeGizmo()
+        gizmoActive = false
     }
 }
 

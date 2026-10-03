@@ -16,6 +16,9 @@ import UniformTypeIdentifiers
 import UntoldEngine
 
 extension EditorView {
+    /// The room the bar of explore mode takes along the top of the viewport.
+    static let exploreBarHeight: CGFloat = 60
+
     /// The viewport panel: the scene tabs along the top in edit mode, then the
     /// Metal view with its overlays.
     var editorSceneViewport: some View {
@@ -27,6 +30,7 @@ extension EditorView {
                     onSelectScene: editor_requestLoadScene,
                     onAddScene: { NotificationCenter.default.post(name: .editorMenuNewScene, object: nil) }
                 )
+                viewportHeader
             }
             editorMetalView
         }
@@ -48,8 +52,24 @@ extension EditorView {
                         .allowsHitTesting(false)
                 }
             }
-            .overlay(alignment: .topLeading) {
-                EngineStatsOverlayView()
+            .overlay {
+                ViewportOverlaysView(
+                    showsEditorOverlays: editor_showsViewportOverlays,
+                    showsStats: shouldShowDemoGallery == false && shouldShowPreviewImportGallery == false,
+                    showsHints: editor_showsViewportOverlays || (experienceMode == .explore && shouldShowCameraControlHints),
+                    topInset: shouldShowExploreSceneOverlay || shouldShowQuickPreviewSceneOverlay ? Self.exploreBarHeight : 0,
+                    mode: viewportSettings.interactionMode,
+                    hasSelection: editor_showsViewportOverlays && (selectionManager.selectedEntity ?? .invalid) != .invalid,
+                    onSelectView: editor_selectProjection
+                )
+            }
+            .overlay(alignment: .top) {
+                if experienceMode == .edit, let camera = editor_previewedCamera {
+                    ViewportCameraLabel(cameraName: camera.name) {
+                        editor_showViewportCamera(.editor)
+                    }
+                    .padding(.top, 10)
+                }
             }
             .overlay {
                 if shouldShowDemoGallery {
@@ -97,20 +117,6 @@ extension EditorView {
                     )
                     .padding(.top, 12)
                     .padding(.horizontal, 16)
-                }
-            }
-            .overlay(alignment: .bottom) {
-                if shouldShowCameraControlHints {
-                    CameraControlHintsView {
-                        dismissCameraControlHints()
-                    }
-                    .padding(.bottom, 14)
-                }
-            }
-            .overlay(alignment: .top) {
-                if experienceMode == .edit, let controller = editorController {
-                    TransformModeCluster(controller: controller)
-                        .padding(.top, 12)
                 }
             }
             .overlay(alignment: .bottomTrailing) {

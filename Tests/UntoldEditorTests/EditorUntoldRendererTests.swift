@@ -23,6 +23,7 @@ final class EditorUntoldRendererTests: XCTestCase {
     private var originalActiveEntity: EntityID!
     private var originalParentGizmo: EntityID!
     private var originalGizmoActive: Bool!
+    private var originalActiveCamera: EntityID?
     private var testEntity: EntityID!
     private var testCamera: EntityID!
 
@@ -50,8 +51,10 @@ final class EditorUntoldRendererTests: XCTestCase {
         originalActiveEntity = activeEntity
         originalParentGizmo = parentEntityIdGizmo
         originalGizmoActive = gizmoActive
+        originalActiveCamera = CameraSystem.shared.activeCamera
 
-        // Reset to clean state
+        // Reset to clean state: editing, on the editor's camera
+        CameraSystem.shared.activeCamera = findSceneCamera()
         gameMode = false
         activeEntity = .invalid
         parentEntityIdGizmo = .invalid
@@ -76,6 +79,7 @@ final class EditorUntoldRendererTests: XCTestCase {
         activeEntity = originalActiveEntity
         parentEntityIdGizmo = originalParentGizmo
         gizmoActive = originalGizmoActive
+        CameraSystem.shared.activeCamera = originalActiveCamera
 
         super.tearDown()
     }
@@ -153,6 +157,129 @@ final class EditorUntoldRendererTests: XCTestCase {
         for (keyName, _) in allCameraKeys {
             XCTAssertTrue(true, "\(keyName) key should be processed for camera movement")
         }
+    }
+
+    // MARK: - Fly keys and the viewport's camera
+
+    /// Where a camera is now. `getCameraEye` answers where the last look-at put it.
+    private func position(of camera: EntityID) -> simd_float3 {
+        scene.get(component: CameraComponent.self, for: camera)?.localPosition ?? .zero
+    }
+
+    /// Presses W for one frame and reports where the editor's camera was and is.
+    private func flyForward() -> (before: simd_float3, after: simd_float3) {
+        let camera = findSceneCamera()
+        cameraLookAt(entityId: camera, eye: simd_float3(0, 0, 5), target: .zero, up: simd_float3(0, 1, 0))
+        let before = position(of: camera)
+
+        InputSystem.shared.keyState.wPressed = true
+        renderer.handleSceneInput()
+
+        return (before, position(of: camera))
+    }
+
+    func test_flyKeys_moveTheEditorCamera_withNoButtonHeld() {
+        gameMode = false
+        InputSystem.shared.keyState.rightMousePressed = false
+
+        let flying = flyForward()
+
+        XCTAssertLessThan(flying.after.z, flying.before.z, "W flies the camera forward, toward the origin")
+        XCTAssertEqual(flying.after.x, flying.before.x, accuracy: 1e-4)
+        XCTAssertEqual(flying.after.y, flying.before.y, accuracy: 1e-4)
+    }
+
+    func test_flyKeys_moveNothing_whileTheViewportIsALockedPreview() {
+        gameMode = false
+        testCamera = createEntity()
+        registerComponent(entityId: testCamera, componentType: CameraComponent.self)
+        cameraLookAt(entityId: testCamera, eye: simd_float3(3, 3, 3), target: .zero, up: simd_float3(0, 1, 0))
+        let gameEye = position(of: testCamera)
+        XCTAssertTrue(ViewportCameras.show(.game(testCamera)))
+
+        let locked = flyForward()
+
+        XCTAssertEqual(locked.after, locked.before, "The editor's camera stays where it was")
+        XCTAssertEqual(position(of: testCamera), gameEye, "The previewed camera is only looked through")
+    }
+
+    /// Play on a camera of the game, with the settings of play the test chooses.
+    private func playOnAGameCamera(steering: Bool) -> EntityID {
+        let playback = EditorPlaybackSettings(defaults: nil)
+        playback.steersCameraWhilePlaying = steering
+        playback.isSessionActive = true
+        ViewportCameras.playback = playback
+
+        testCamera = createEntity()
+        registerComponent(entityId: testCamera, componentType: CameraComponent.self)
+        cameraLookAt(entityId: testCamera, eye: simd_float3(3, 3, 3), target: .zero, up: simd_float3(0, 1, 0))
+        CameraSystem.shared.activeCamera = testCamera
+        gameMode = true
+        return testCamera
+    }
+
+    func test_flyKeys_moveTheGamesCamera_whilePlaying() {
+        let savedPlayback = ViewportCameras.playback
+        defer { ViewportCameras.playback = savedPlayback }
+        let gameCamera = playOnAGameCamera(steering: true)
+        let gameBefore = position(of: gameCamera)
+
+        let editor = flyForward()
+
+        XCTAssertEqual(editor.after, editor.before, "the editor's camera is not the one on screen")
+        XCTAssertGreaterThan(simd_length(position(of: gameCamera) - gameBefore), 0.001, "W flies the camera the viewport shows")
+    }
+
+    func test_flyKeys_moveNothing_whileAGameSteersItsCameraAlone() {
+        let savedPlayback = ViewportCameras.playback
+        defer { ViewportCameras.playback = savedPlayback }
+        let gameCamera = playOnAGameCamera(steering: false)
+        let gameBefore = position(of: gameCamera)
+
+        let editor = flyForward()
+
+        XCTAssertEqual(editor.after, editor.before)
+        XCTAssertEqual(position(of: gameCamera), gameBefore)
+        XCTAssertTrue(InputSystem.shared.keyState.wPressed, "the key is still the game's to read")
+    }
+
+    func test_theGizmo_movesNoEntity_whilePlaying() {
+        let savedPlayback = ViewportCameras.playback
+        defer { ViewportCameras.playback = savedPlayback }
+        testEntity = createEntity()
+        registerTransformComponent(entityId: testEntity)
+        activeEntity = testEntity
+        gizmoActive = true
+        editorController = EditorController(selectionManager: SelectionManager())
+        editorController?.isEnabled = true
+        editorController?.activeMode = .translate
+        editorController?.activeAxis = .x
+        _ = playOnAGameCamera(steering: true)
+        let before = getLocalPosition(entityId: testEntity)
+
+        InputSystem.shared.mouseActive = true
+        InputSystem.shared.mouseDeltaX = 40
+        renderer.handleSceneInput()
+
+        XCTAssertEqual(getLocalPosition(entityId: testEntity), before)
+    }
+
+    func test_aStuckFlyKey_stopsFlying_onceTheKeyboardLetItGo() {
+        let savedReader = InputSystem.shared.physicalKeyState
+        let savedTrust = InputSystem.shared.isPhysicalKeyStateTrusted
+        defer {
+            InputSystem.shared.physicalKeyState = savedReader
+            InputSystem.shared.isPhysicalKeyStateTrusted = savedTrust
+        }
+        gameMode = false
+        // W was released during a drag and its key-up never arrived.
+        InputSystem.shared.isPhysicalKeyStateTrusted = true
+        InputSystem.shared.physicalKeyState = { _ in false }
+
+        let stuck = flyForward()
+
+        XCTAssertEqual(stuck.after, stuck.before, "the camera does not keep flying")
+        XCTAssertFalse(InputSystem.shared.keyState.wPressed)
     }
 
     // MARK: - Editor Gating Tests

@@ -8,8 +8,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 //
-//  A left click on empty viewport space clears the selection on both the
-//  engine side (active entity, gizmo) and the editor side (via the delegate).
+//  A left click selects what is under the pointer; on empty viewport space
+//  it clears the selection on both the engine side (active entity, gizmo)
+//  and the editor side (via the delegate).
 //
 
 import AppKit
@@ -35,18 +36,12 @@ private final class RecordingSelectionDelegate: SelectionDelegate {
     func resetActiveAxis() {}
 }
 
-/// A click recogniser that reports a fixed location.
-private final class StubClickGesture: NSClickGestureRecognizer {
-    override func location(in _: NSView?) -> NSPoint {
-        NSPoint(x: 200, y: 150)
-    }
-}
-
 final class ViewportClickSelectionTests: XCTestCase {
     private var originalScene: Scene!
     private var savedDelegate: SelectionDelegate?
     private var savedController: EditorController?
     private var savedActiveEntity: EntityID!
+    private var savedGameMode = false
     private let delegate = RecordingSelectionDelegate()
     private var view: NSView!
 
@@ -67,11 +62,16 @@ final class ViewportClickSelectionTests: XCTestCase {
         savedDelegate = selectionDelegate
         savedController = editorController
         savedActiveEntity = activeEntity
+        savedGameMode = gameMode
         selectionDelegate = delegate
+        // A click selects while editing, not while the game plays, which the
+        // engine's default says it does.
+        gameMode = false
         view = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
     }
 
     override func tearDown() {
+        gameMode = savedGameMode
         selectionDelegate = savedDelegate
         editorController = savedController
         activeEntity = savedActiveEntity
@@ -96,7 +96,7 @@ final class ViewportClickSelectionTests: XCTestCase {
         selectionDelegate = delegate
         activeEntity = createEntity()
 
-        InputSystem.shared.clearSelectionOnEmptyClick(gestureRecognizer: StubClickGesture(), in: view)
+        InputSystem.shared.selectEntity(at: NSPoint(x: 200, y: 150), in: view)
 
         XCTAssertEqual(activeEntity, .invalid)
         XCTAssertEqual(delegate.clearCount, 1)
@@ -109,7 +109,7 @@ final class ViewportClickSelectionTests: XCTestCase {
         let selected = createEntity()
         activeEntity = selected
 
-        InputSystem.shared.clearSelectionOnEmptyClick(gestureRecognizer: StubClickGesture(), in: view)
+        InputSystem.shared.selectEntity(at: NSPoint(x: 200, y: 150), in: view)
 
         XCTAssertEqual(activeEntity, selected)
         XCTAssertEqual(delegate.clearCount, 0)

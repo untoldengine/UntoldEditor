@@ -77,17 +77,10 @@ extension EditorView {
         }
     }
 
+    /// A scene to explore was loaded: the shortcut hints show over it, unless
+    /// View > Viewport Overlays hides them.
     func revealCameraControlHintsIfNeeded() {
-        guard cameraControlHintsDismissed == false else {
-            return
-        }
-
         showCameraControlHints = true
-    }
-
-    func dismissCameraControlHints() {
-        cameraControlHintsDismissed = true
-        showCameraControlHints = false
     }
 
     func syncEditorAvailabilityForExperienceMode() {

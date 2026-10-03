@@ -58,6 +58,10 @@ extension EditorView {
             return
         }
 
+        // A game camera the viewport is locked on goes back to the editor's first.
+        if ViewportCameras.forget(entityId) {
+            viewportSettings.camera = .editor
+        }
         destroyEntity(entityId: entityId)
         EditorSceneDirtyState.shared.markDirty()
 

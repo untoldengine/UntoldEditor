@@ -30,6 +30,9 @@ public struct EditorView: View {
     /// Captured via `serializeScene()` the instant Play starts; consumed by
     /// `beginPlayModeRestore` on Stop to revert physics/animation/script drift.
     @State var playModeSnapshot: SceneData?
+    /// Taken with the snapshot: where everything stood, so that Stop can put
+    /// a scene back in place when loading it again is not needed.
+    @State var playSessionState: PlaySessionState?
     /// True from Stop-press until the async post-Play restore completes.
     @State var isRestoringPlayMode: Bool = false
     @State var showBlockedDuringPlayAlert = false
@@ -59,7 +62,6 @@ public struct EditorView: View {
     let panelAnimationDuration = 0.28
     @State var showWelcomeStart = true
     @State var showCameraControlHints = false
-    @State var cameraControlHintsDismissed = false
     @State var showQuickPreviewWarning = false
     @State var quickPreviewEntities: [(EntityID, String)] = []
     @State var sceneAuthoredGameCamera: EntityID?
@@ -82,6 +84,7 @@ public struct EditorView: View {
     @State var dropStatusMessage: String?
     @State var dropStatusIsError = false
     @ObservedObject var buildTargetSettings = EditorBuildTargetSettings.shared
+    @ObservedObject var viewportSettings = EditorViewportSettings.shared
 
     var renderer: UntoldRenderer?
 
@@ -101,7 +104,8 @@ public struct EditorView: View {
         if let r = renderer, let v = renderer?.metalView {
             r.setupCallbacks(gameUpdate: { _ in }, handleInput: r.handleSceneInput)
 
-            InputSystem.shared.setupGestureRecognizers(view: v)
+            // The viewport's host view receives the canvas's events itself and
+            // names itself to the input system; only the undo shortcut is set here.
             InputSystem.shared.setupEventMonitors()
 
             // The render loop pauses while the viewport is resized (live window
@@ -154,6 +158,8 @@ public struct EditorView: View {
 
             EditorUndoManager.shared.onStateRestored = {
                 editor_entities = getAllGameEntities()
+                // The gizmo goes where the entity now stands, along its axes.
+                selectionManager.refreshGizmo()
                 selectionManager.objectWillChange.send()
                 sceneGraphModel.refreshHierarchy()
             }
@@ -219,6 +225,22 @@ public struct EditorView: View {
             NotificationCenter.default.addObserver(forName: .editorShowAllEntities, object: nil, queue: .main) { _ in
                 editor_showAllEntities()
             }
+
+            // ⌥1 to ⌥4 pick a tool; F frames the selection.
+            NotificationCenter.default.addObserver(forName: .editorSelectTool, object: nil, queue: .main) { note in
+                guard let raw = note.userInfo?["tool"] as? String, let tool = TransformTool(rawValue: raw) else { return }
+                editor_selectTool(tool)
+            }
+            NotificationCenter.default.addObserver(forName: .editorFrameSelection, object: nil, queue: .main) { _ in
+                editor_frameSelection()
+            }
+
+            // View > Camera: the editor's camera, or a game camera as a locked preview.
+            NotificationCenter.default.addObserver(forName: .editorShowViewportCamera, object: nil, queue: .main) { note in
+                let camera = (note.userInfo?["camera"] as? EntityID).map(ViewportCamera.game) ?? .editor
+                editor_showViewportCamera(camera)
+            }
+            editor_applyViewportSettings()
         }
         .onChange(of: playbackSettings.useSceneCameraDuringPlay) { _, _ in
             updateActiveCameraForPlayMode()

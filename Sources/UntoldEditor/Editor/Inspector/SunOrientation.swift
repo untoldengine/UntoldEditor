@@ -21,7 +21,7 @@ func editorSetSunElevation(entityId: EntityID, elevation: Float) {
         elevation: elevation,
         azimuth: angles.azimuth
     )
-    syncLightDirectionHandleToActiveLight(entityId: entityId)
+    syncGizmoToTurn(of: entityId)
 }
 
 func editorSetSunAzimuth(entityId: EntityID, azimuth: Float) {
@@ -31,5 +31,5 @@ func editorSetSunAzimuth(entityId: EntityID, azimuth: Float) {
         elevation: angles.elevation,
         azimuth: azimuth
     )
-    syncLightDirectionHandleToActiveLight(entityId: entityId)
+    syncGizmoToTurn(of: entityId)
 }
