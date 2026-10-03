@@ -34,6 +34,15 @@
         /// Set when a left-button drag began as a ⇧-drag with a selection, which
         /// moves that entity from the mouse deltas and takes no gizmo handle.
         var isEntityDragReserved = false
+        /// Where a left-button drag that took no gizmo handle began: it draws
+        /// the rectangle that selects what is inside it. Nil while none is drawn.
+        var marqueeStart: NSPoint?
+        /// The rectangle as the drag last left it, in the canvas's points from
+        /// its bottom left, the size of the canvas it is measured in, and the
+        /// canvas's pixels to a point.
+        var marqueeRect: CGRect = .zero
+        var marqueeViewSize: CGSize = .zero
+        var marqueeScale: CGFloat = 1
         /// Whether the keyboard itself holds a key down, asked of the system and
         /// not of the events. Tests replace it.
         var isKeyPhysicallyDown: (UInt16) -> Bool = { keyCode in
@@ -323,6 +332,8 @@
             keyState.rightMousePressed = false
             mouseActive = false
 
+            // A rectangle left half drawn selects nothing.
+            cancelMarquee()
             if editorInputTargetViewRef.isObjectDragActive {
                 endObjectDrag()
             }
@@ -811,9 +822,10 @@
         }
 
         /// A left click: selects what is under the pointer, or clears the
-        /// selection when nothing is there, so the Inspector empties. A click on
-        /// a gizmo handle is left to the drag that moves it. While the game plays
-        /// a click is the game's and selects nothing.
+        /// selection when nothing is there, so the Inspector empties. With ⇧
+        /// held what is under the pointer joins the selection, or leaves it. A
+        /// click on a gizmo handle is left to the drag that moves it. While the
+        /// game plays a click is the game's and selects nothing.
         func selectEntity(at currentLocation: NSPoint, in view: NSView) {
             guard editorController?.isEnabled == true, ViewportCameras.isPlaying == false else {
                 return
@@ -821,6 +833,11 @@
 
             guard scene.get(component: CameraComponent.self, for: findSceneCamera()) != nil else {
                 handleError(.noActiveCamera)
+                return
+            }
+
+            if keyState.shiftPressed {
+                toggleEntity(at: currentLocation, in: view)
                 return
             }
 
@@ -946,6 +963,25 @@
             return (.invalid, false)
         }
 
+        /// A ⇧ click: the entity under the pointer joins the selection, or
+        /// leaves it when it was selected; with ⌘ held too, the asset it
+        /// belongs to. On a gizmo handle and on empty space nothing changes.
+        func toggleEntity(at location: NSPoint, in view: NSView) {
+            let (entityId, hit) = getRaycastedEntity(currentLocation: location, view: view)
+            guard hit, entityId != .invalid,
+                  hasComponent(entityId: entityId, componentType: GizmoComponent.self) == false
+            else {
+                return
+            }
+            let toggled = keyState.commandPressed ? editableAssetRootEntity(for: entityId) : entityId
+            guard canEditSceneTransform(entityId: sceneTransformEntity(for: toggled)) else {
+                return
+            }
+            EditorRepresentationHandles.select(nil)
+            selectionDelegate?.didToggleEntity(toggled)
+            selectionDelegate?.resetActiveAxis()
+        }
+
         // MARK: - The scene on the left button
 
         /// True while the editor is there, enabled and editing; it only gates
@@ -982,9 +1018,10 @@
             currentPanGestureState = .began
 
             // Editor-only: hit-test gizmo if editor/gizmo mode is active
+            activeHitGizmoEntity = .invalid
             if gizmoActive, isEditorEnabled {
                 let (hitEntityId, hit) = getRaycastedEntity(currentLocation: currentLocation, view: view)
-                if hit {
+                if hit, hitGizmoToolAxis(entityId: hitEntityId) {
                     activeHitGizmoEntity = hitEntityId
                     processGizmoAction(entityId: activeHitGizmoEntity)
                     if let rayContext = raycastContext(currentLocation: currentLocation, view: view) {
@@ -996,7 +1033,7 @@
                         )
                     }
                     if activeEntity != .invalid {
-                        EditorUndoManager.shared.beginTransformEdit(entityId: activeEntity)
+                        EditorUndoManager.shared.beginTransformEdit(entityIds: gizmoTransformTargets())
                     }
                     EditorRepresentationHandles.dragDidBegin()
                 } else {
@@ -1004,6 +1041,12 @@
                     editorController?.activeMode = .none
                     editorController?.activeAxis = .none
                 }
+            }
+
+            // A drag that took no handle draws the rectangle that selects
+            // what is inside it.
+            if isEditorEnabled, activeHitGizmoEntity == .invalid, canvasTakesThePointer {
+                beginMarquee(at: currentLocation, in: view)
             }
         }
 
@@ -1015,6 +1058,11 @@
             }
             guard scene.get(component: CameraComponent.self, for: findSceneCamera()) != nil else {
                 handleError(.noActiveCamera)
+                return
+            }
+            if editorInputTargetViewRef.marqueeStart != nil {
+                // While the rectangle is drawn the drag is the rectangle's alone
+                continueMarquee(to: currentLocation, in: view)
                 return
             }
             let isEditorEnabled = isEditorEnabled
@@ -1071,12 +1119,13 @@
                 return
             }
             let isEditorEnabled = isEditorEnabled
+            endMarquee()
 
             if isEditorEnabled,
                activeHitGizmoEntity != .invalid,
                activeEntity != .invalid
             {
-                EditorUndoManager.shared.commitTransformEdit(entityId: activeEntity)
+                EditorUndoManager.shared.commitTransformEdit(entityIds: gizmoTransformTargets())
                 EditorRepresentationHandles.dragDidEnd()
             }
 
@@ -1085,6 +1134,88 @@
             initialPanLocation = nil
             currentPanGestureState = .ended
             endGizmoDrag()
+        }
+
+        // MARK: - The rectangle on the left button
+
+        /// True while a drag of the left button draws the rectangle.
+        internal var isMarqueeActive: Bool {
+            editorInputTargetViewRef.marqueeStart != nil
+        }
+
+        /// A drag began where no gizmo handle is: it draws a rectangle.
+        func beginMarquee(at location: NSPoint, in view: NSView) {
+            editorInputTargetViewRef.marqueeStart = location
+            editorInputTargetViewRef.marqueeRect = CGRect(origin: location, size: .zero)
+            editorInputTargetViewRef.marqueeViewSize = view.bounds.size
+            editorInputTargetViewRef.marqueeScale = view.window?.backingScaleFactor ?? 1
+        }
+
+        /// The drag went on to `location`: the rectangle follows it, and the
+        /// viewport draws it.
+        func continueMarquee(to location: NSPoint, in view: NSView) {
+            guard let start = editorInputTargetViewRef.marqueeStart else {
+                return
+            }
+            let rect = MarqueeGeometry.rect(from: start, to: location)
+            editorInputTargetViewRef.marqueeRect = rect
+            editorInputTargetViewRef.marqueeViewSize = view.bounds.size
+            ViewportMarqueeStore.shared.show(MarqueeGeometry.flipped(rect, inHeight: view.bounds.height))
+        }
+
+        /// The button was released: what stands inside the rectangle is the
+        /// selection, with ⌘ held the assets it belongs to, and nothing when
+        /// nothing is inside. What reaches out of the rectangle, as the floor
+        /// under it does, is left out, and so is what is hidden behind
+        /// something else.
+        func endMarquee() {
+            guard editorInputTargetViewRef.marqueeStart != nil else {
+                return
+            }
+            let rect = editorInputTargetViewRef.marqueeRect
+            let size = editorInputTargetViewRef.marqueeViewSize
+            let scale = editorInputTargetViewRef.marqueeScale
+            cancelMarquee()
+
+            guard editorController?.isEnabled == true, ViewportCameras.isPlaying == false,
+                  let cameraComponent = scene.get(component: CameraComponent.self, for: findSceneCamera())
+            else {
+                return
+            }
+
+            let inside = MarqueeSelection.entities(
+                inside: rect,
+                view: MarqueeGeometry.View(
+                    viewSpace: cameraComponent.viewSpace,
+                    perspectiveSpace: renderInfo.perspectiveSpace,
+                    size: size
+                ),
+                selectionManager: editorController?.selectionManager,
+                seen: { rect, view, drawn in
+                    SelectionVisibilityPass.entitiesSeen(in: rect, view: view, scale: scale, drawn: drawn)
+                }
+            )
+            let chosen = keyState.commandPressed ? MarqueeSelection.assetRoots(of: inside) : inside
+
+            gizmoActive = false
+            removeGizmo()
+            editorController?.activeMode = .none
+            editorController?.activeAxis = .none
+            activeHitGizmoEntity = .invalid
+            EditorRepresentationHandles.select(nil)
+
+            guard chosen.isEmpty == false else {
+                clearViewportSelection()
+                return
+            }
+            selectionDelegate?.didSelectEntities(chosen)
+            selectionDelegate?.resetActiveAxis()
+        }
+
+        /// Takes the rectangle away without selecting anything.
+        func cancelMarquee() {
+            editorInputTargetViewRef.marqueeStart = nil
+            ViewportMarqueeStore.shared.hide()
         }
 
         // MARK: - The camera on the right button

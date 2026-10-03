@@ -271,20 +271,21 @@ final class ViewportCanvasEventTests: XCTestCase {
         XCTAssertFalse(InputSystem.shared.keyState.leftMousePressed)
     }
 
-    func test_leftDrag_isNotAClick_andLeavesTheCameraAlone() throws {
+    func test_leftDrag_drawsTheRectangle_andLeavesTheCameraAlone() throws {
         editorController = EditorController(selectionManager: SelectionManager())
         editorController?.isEnabled = true
         selectionDelegate = recorder
-        let selected = createEntity()
-        activeEntity = selected
+        activeEntity = createEntity()
         let before = position, targetBefore = target
 
         try canvas.mouseDown(with: mouse(.leftMouseDown, at: NSPoint(x: 200, y: 150)))
-        try canvas.mouseDragged(with: mouse(.leftMouseDragged, at: NSPoint(x: 240, y: 150), step: (40, 0)))
-        try canvas.mouseUp(with: mouse(.leftMouseUp, at: NSPoint(x: 240, y: 150)))
+        try canvas.mouseDragged(with: mouse(.leftMouseDragged, at: NSPoint(x: 240, y: 120), step: (40, 30)))
+        XCTAssertEqual(ViewportMarqueeStore.shared.rect, CGRect(x: 200, y: 150, width: 40, height: 30), "measured from the top of the canvas")
+        try canvas.mouseUp(with: mouse(.leftMouseUp, at: NSPoint(x: 240, y: 120)))
 
-        XCTAssertEqual(recorder.clearCount, 0, "a drag selects nothing and clears nothing")
-        XCTAssertEqual(activeEntity, selected)
+        XCTAssertNil(ViewportMarqueeStore.shared.rect)
+        XCTAssertEqual(recorder.clearCount, 1, "the rectangle touched nothing, as a click on empty space")
+        XCTAssertEqual(activeEntity, .invalid)
         XCTAssertEqual(simd_length(position - before), 0, accuracy: 1e-6)
         XCTAssertEqual(simd_length(target - targetBefore), 0, accuracy: 1e-6)
     }

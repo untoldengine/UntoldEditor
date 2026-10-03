@@ -11,8 +11,9 @@
 import SwiftUI
 
 /// What the editor draws over the scene: the mode badge and the frame
-/// statistics at the top left, the navigation controls at the top right and
-/// the shortcut hints along the bottom. Only the navigation controls take the
+/// statistics at the top left, the navigation controls at the top right, the
+/// shortcut hints along the bottom, and the rectangle while one is dragged
+/// to select what is inside it. Only the navigation controls take the
 /// pointer; everywhere else a click reaches the scene.
 struct ViewportOverlaysView: View {
     /// True while the viewport shows the editor's camera for editing: the
@@ -30,11 +31,22 @@ struct ViewportOverlaysView: View {
     @ObservedObject var overlays = EditorViewportOverlaySettings.shared
     @ObservedObject var store = ViewportOverlayStore.shared
     @ObservedObject var navigation = EditorNavigationSettings.shared
+    @ObservedObject var marquee = ViewportMarqueeStore.shared
 
     static let margin: CGFloat = 12
 
+    /// Selecting is hinted where the editor's overlays show: there the
+    /// viewport selects.
+    private var hints: [ViewportHint] {
+        ViewportHints.hints(style: navigation.style, hasSelection: hasSelection, canSelect: showsEditorOverlays)
+    }
+
     var body: some View {
         ZStack {
+            if showsEditorOverlays, let rect = marquee.rect {
+                MarqueeView(rect: rect)
+            }
+
             VStack(alignment: .leading, spacing: 6) {
                 if showsEditorOverlays, overlays.isShown(.modeBadge) {
                     ModeBadgeView(mode: mode)
@@ -54,7 +66,7 @@ struct ViewportOverlaysView: View {
             }
 
             if showsHints, overlays.isShown(.hints) {
-                ViewportHintChips(hints: ViewportHints.hints(style: navigation.style, hasSelection: hasSelection))
+                ViewportHintChips(hints: hints)
                     .padding(Self.margin)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
