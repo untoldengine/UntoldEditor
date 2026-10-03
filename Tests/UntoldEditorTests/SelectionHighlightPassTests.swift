@@ -220,7 +220,19 @@ final class SelectionHighlightPassTests: XCTestCase {
         let image = try drawHighlights()
 
         let half = SelectionHighlightBox.pointExtent / 2
-        XCTAssertTrue(try isDrawn(near: pixel(of: simd_float3(2 - half, 0, half), width: image.width, height: image.height), in: image))
-        XCTAssertFalse(try isDrawn(near: pixel(of: simd_float3(2, 0, half), width: image.width, height: image.height), in: image), "lines, not a filled box")
+        let edge = try pixel(of: simd_float3(2 - half, 0, half), width: image.width, height: image.height)
+        XCTAssertTrue(isDrawn(near: edge, in: image))
+
+        // Lines, not a filled box: nothing is drawn inside its near face. The
+        // box stands to the right of the view, so its far face shows through
+        // the near one a little to the left: the middle of the near face is
+        // next to the far face's right edge, two pixels from it where a point
+        // of the window is one pixel. The place looked at is further right,
+        // between that edge and the near face's own, and clear of both.
+        let inside = try pixel(of: simd_float3(2 + half * 0.6, 0, half), width: image.width, height: image.height)
+        let nearEdge = try pixel(of: simd_float3(2 + half, 0, half), width: image.width, height: image.height)
+        let farEdge = try pixel(of: simd_float3(2 + half, 0, -half), width: image.width, height: image.height)
+        try XCTSkipIf(min(nearEdge.x - inside.x, inside.x - farEdge.x) < 3, "the box is too few pixels wide here to tell lines from a fill")
+        XCTAssertFalse(isDrawn(near: inside, in: image, reach: 1), "lines, not a filled box")
     }
 }
