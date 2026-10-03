@@ -12,8 +12,8 @@ import SwiftUI
 import UntoldEngine
 
 /// One entity in the hierarchy: caret, type icon, name, then the eye and the
-/// lock. A hidden entity, or one under a hidden parent, is greyed; the selected
-/// row is on the accent.
+/// lock. A hidden entity, or one under a hidden parent, is greyed; a selected
+/// row is on the accent, and with several selected each of them is.
 struct EntityRow: View {
     let entityid: EntityID
     let entityName: String
@@ -23,7 +23,7 @@ struct EntityRow: View {
     @ObservedObject var selectionManager: SelectionManager
 
     private var isSelected: Bool {
-        entityid == selectionManager.selectedEntity
+        selectionManager.isSelected(entityid)
     }
 
     private var isAssetNode: Bool {

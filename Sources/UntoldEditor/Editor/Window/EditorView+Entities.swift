@@ -66,7 +66,10 @@ extension EditorView {
         EditorSceneDirtyState.shared.markDirty()
 
         editor_entities = getAllGameEntities()
-        if selectionManager.selectedEntity == entityId {
+        if selectionManager.hasSeveralSelected {
+            // The rest of the selection stays, with the gizmo in its middle.
+            selectionManager.forgetEntitiesThatLeftTheScene()
+        } else if selectionManager.selectedEntity == entityId {
             selectionManager.selectedEntity = nil
             activeEntity = .invalid
             removeGizmo()

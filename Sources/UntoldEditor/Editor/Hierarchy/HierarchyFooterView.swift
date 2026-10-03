@@ -11,14 +11,15 @@
 import SwiftUI
 
 /// The line under the hierarchy tree: how many entities the scene has and how
-/// many are selected.
+/// many are selected. From Play to Stop it says why a click selects nothing.
 struct HierarchyFooterView: View {
     let entityCount: Int
     let selectedCount: Int
+    var isPlaying = false
 
     var body: some View {
         HStack {
-            Text(Self.summary(entityCount: entityCount, selectedCount: selectedCount))
+            Text(Self.summary(entityCount: entityCount, selectedCount: selectedCount, isPlaying: isPlaying))
                 .font(EditorType.hint)
                 .foregroundColor(.editorTextSecondary)
                 .lineLimit(1)
@@ -31,8 +32,12 @@ struct HierarchyFooterView: View {
         }
     }
 
-    /// "5 entities · 1 selected", with the status bar's entity wording.
-    static func summary(entityCount: Int, selectedCount: Int) -> String {
-        "\(EditorStatusModel.entities(entityCount)) · \(selectedCount) selected"
+    /// "5 entities · 1 selected", with the status bar's entity wording; while
+    /// the game plays, "5 entities · no selecting while playing".
+    static func summary(entityCount: Int, selectedCount: Int, isPlaying: Bool = false) -> String {
+        if isPlaying {
+            return "\(EditorStatusModel.entities(entityCount)) · no selecting while playing"
+        }
+        return "\(EditorStatusModel.entities(entityCount)) · \(selectedCount) selected"
     }
 }
