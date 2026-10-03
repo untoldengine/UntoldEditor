@@ -78,14 +78,20 @@ extension UntoldRenderer {
             InputSystem.shared.mouseActive = false
         }
 
-        /// Remove static batching when entity is transformed via gizmo
+        /// Remove static batching when entity is transformed via gizmo: from the
+        /// active entity and, with several selected, from all the gizmo moves.
         @inline(__always)
         func handleStaticBatchOnTransform(entityId: EntityID) {
-            if hasComponent(entityId: entityId, componentType: StaticBatchComponent.self) {
-                removeEntityStaticBatchComponent(entityId: entityId)
-                if isBatchingEnabled() {
-                    generateBatches()
-                }
+            let transformed = entityId == activeEntity ? gizmoTransformTargets() : [entityId]
+            let batched = transformed.filter { hasComponent(entityId: $0, componentType: StaticBatchComponent.self) }
+            guard batched.isEmpty == false else {
+                return
+            }
+            for entity in batched {
+                removeEntityStaticBatchComponent(entityId: entity)
+            }
+            if isBatchingEnabled() {
+                generateBatches()
             }
         }
 
@@ -112,8 +118,8 @@ extension UntoldRenderer {
                 viewportSize: renderInfo.viewPort
             )
             let t = axis * amt
-            // The gizmo moves in world space; the entity's position is its parent's.
-            translateBy(entityId: activeEntity, position: localTranslation(ofWorld: t, for: activeEntity))
+            // The gizmo moves in world space; an entity's position is its parent's.
+            applyGizmoTranslation(byWorld: t)
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
             consumeMouseDragDelta()
@@ -128,8 +134,8 @@ extension UntoldRenderer {
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
             let t = axis * amt
-            // The gizmo moves in world space; the entity's position is its parent's.
-            translateBy(entityId: activeEntity, position: localTranslation(ofWorld: t, for: activeEntity))
+            // The gizmo moves in world space; an entity's position is its parent's.
+            applyGizmoTranslation(byWorld: t)
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
             consumeMouseDragDelta()
@@ -144,8 +150,8 @@ extension UntoldRenderer {
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
             let t = axis * amt
-            // The gizmo moves in world space; the entity's position is its parent's.
-            translateBy(entityId: activeEntity, position: localTranslation(ofWorld: t, for: activeEntity))
+            // The gizmo moves in world space; an entity's position is its parent's.
+            applyGizmoTranslation(byWorld: t)
             translateBy(entityId: parentEntityIdGizmo, position: t)
             refreshInspector()
             consumeMouseDragDelta()
@@ -165,7 +171,7 @@ extension UntoldRenderer {
                 viewportSize: renderInfo.viewPort,
                 sensitivity: 100.0
             )
-            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: snappedGizmoRotationDelta(degrees: -angle * 10))
+            applyGizmoRotation(axis: axis, degrees: snappedGizmoRotationDelta(degrees: -angle * 10))
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
             consumeMouseDragDelta()
@@ -183,7 +189,7 @@ extension UntoldRenderer {
                 viewportSize: renderInfo.viewPort,
                 sensitivity: 100.0
             )
-            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: snappedGizmoRotationDelta(degrees: angle * 10))
+            applyGizmoRotation(axis: axis, degrees: snappedGizmoRotationDelta(degrees: angle * 10))
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
             consumeMouseDragDelta()
@@ -201,7 +207,7 @@ extension UntoldRenderer {
                 viewportSize: renderInfo.viewPort,
                 sensitivity: 100.0
             )
-            applyGizmoRotationDelta(entityId: activeEntity, axis: axis, degrees: snappedGizmoRotationDelta(degrees: angle * 10))
+            applyGizmoRotation(axis: axis, degrees: snappedGizmoRotationDelta(degrees: angle * 10))
             syncLightDirectionHandleToActiveLight(entityId: activeEntity)
             refreshInspector()
             consumeMouseDragDelta()
@@ -217,13 +223,7 @@ extension UntoldRenderer {
                                                   viewMatrix: cameraComponent.viewSpace,
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
-            if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
-                // The engine takes the axis as which components of the scale to change.
-                handleLightScaleInput(projectedAmount: amt, axis: worldDirection(for: .x))
-            } else {
-                // The engine takes the axis as the entity's parent sees it.
-                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
-            }
+            applyGizmoScale(axis: axis, amount: amt, handle: .x)
             refreshInspector()
             consumeMouseDragDelta()
 
@@ -236,13 +236,7 @@ extension UntoldRenderer {
                                                   viewMatrix: cameraComponent.viewSpace,
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
-            if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
-                // The engine takes the axis as which components of the scale to change.
-                handleLightScaleInput(projectedAmount: amt, axis: worldDirection(for: .y))
-            } else {
-                // The engine takes the axis as the entity's parent sees it.
-                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
-            }
+            applyGizmoScale(axis: axis, amount: amt, handle: .y)
             refreshInspector()
             consumeMouseDragDelta()
 
@@ -255,13 +249,7 @@ extension UntoldRenderer {
                                                   viewMatrix: cameraComponent.viewSpace,
                                                   projectionMatrix: renderInfo.perspectiveSpace,
                                                   viewportSize: renderInfo.viewPort)
-            if hasComponent(entityId: activeEntity, componentType: LightComponent.self) {
-                // The engine takes the axis as which components of the scale to change.
-                handleLightScaleInput(projectedAmount: amt, axis: worldDirection(for: .z))
-            } else {
-                // The engine takes the axis as the entity's parent sees it.
-                applyWorldSpaceScaleDelta(entityId: activeEntity, worldAxis: localAxis(ofWorld: axis, for: activeEntity), projectedAmount: amt)
-            }
+            applyGizmoScale(axis: axis, amount: amt, handle: .z)
             refreshInspector()
             consumeMouseDragDelta()
 

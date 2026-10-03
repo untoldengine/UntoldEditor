@@ -55,3 +55,40 @@ func worldBoundsOfRenderableHierarchy(entityId: EntityID) -> (min: simd_float3, 
 
     return found ? (minimum, maximum) : nil
 }
+
+/// The box around what an entity and everything under it draw, in the
+/// entity's own space: drawn with the entity's world transform it stands
+/// around the entity wherever that is, turned and scaled with it. Nil when
+/// nothing under the entity draws anything.
+func renderableBoundsInOwnSpace(entityId: EntityID) -> (min: simd_float3, max: simd_float3)? {
+    var minimum = simd_float3(repeating: .greatestFiniteMagnitude)
+    var maximum = simd_float3(repeating: -.greatestFiniteMagnitude)
+    var found = false
+    var pending = [entityId]
+    var visited = 0
+
+    while let current = pending.popLast(), visited < 100_000 {
+        visited += 1
+        pending.append(contentsOf: getEntityChildren(parentId: current))
+
+        guard hasComponent(entityId: current, componentType: RenderComponent.self)
+            || hasComponent(entityId: current, componentType: GaussianComponent.self),
+            let local = scene.get(component: LocalTransformComponent.self, for: current),
+            let toEntity = localTransformMatrix(from: current, to: entityId)
+        else {
+            continue
+        }
+
+        let box = transformedBoundingBox(min: local.boundingBox.min, max: local.boundingBox.max, transform: toEntity)
+        guard box.min.x.isFinite, box.min.y.isFinite, box.min.z.isFinite,
+              box.max.x.isFinite, box.max.y.isFinite, box.max.z.isFinite
+        else {
+            continue
+        }
+        minimum = simd_min(minimum, box.min)
+        maximum = simd_max(maximum, box.max)
+        found = true
+    }
+
+    return found ? (minimum, maximum) : nil
+}
