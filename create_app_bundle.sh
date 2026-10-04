@@ -16,6 +16,7 @@ APP_NAME="Untold Engine Studio"
 EXECUTABLE_NAME="UntoldEditor"
 BUNDLE_ID="com.untoldengine.studio"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-Developer ID Application: UNTOLD ENGINE STUDIOS LLC (PXXZLXYJ26)}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Determine version (env -> release/* branch -> latest tag vX.Y.Z -> fallback)
 detect_version() {
@@ -100,22 +101,33 @@ flatten_resource_bundle "$BUILD_DIR/UntoldEditor_UntoldEditor.bundle" "UntoldEdi
 # compiled against exactly these modules, with exactly this compiler (recorded in sdk.json).
 SDK_DIR="$APP_BUNDLE/Contents/Resources/ComponentSDK"
 echo "🧩 Packaging the Component SDK..."
-mkdir -p "$SDK_DIR/Modules" "$SDK_DIR/CShaderTypes"
+mkdir -p "$SDK_DIR/Modules"
 if [ -d "$BUILD_DIR/Modules" ]; then
     MODULES_SRC="$BUILD_DIR/Modules"
 else
     MODULES_SRC="$BUILD_DIR"
 fi
+# The engine is built without library evolution, so a component that imports UntoldEngine makes
+# the compiler load every module the engine imports. So ship every Swift module the editor was
+# built with: the engine, the kit, a plugin the editor links, and any module of another package
+# that one of them imports.
 PROVIDED_MODULES=()
-for module in UntoldEngine UntoldComponentKit UntoldGaussianTwins; do
-    if [ -e "$MODULES_SRC/$module.swiftmodule" ]; then
-        # A file in the classic layout, a per-architecture directory in the newer one.
-        cp -R "$MODULES_SRC/$module.swiftmodule" "$SDK_DIR/Modules/"
-        if [ -f "$MODULES_SRC/$module.swiftdoc" ]; then
-            cp "$MODULES_SRC/$module.swiftdoc" "$SDK_DIR/Modules/"
-        fi
-        PROVIDED_MODULES+=("$module")
-    else
+for module_path in "$MODULES_SRC"/*.swiftmodule; do
+    [ -e "$module_path" ] || continue
+    module="$(basename "$module_path" .swiftmodule)"
+    # Not the editor itself, nor a test module an earlier `swift build --build-tests` left.
+    case "$module" in
+        "$EXECUTABLE_NAME" | *Tests) continue ;;
+    esac
+    # A file in the classic layout, a per-architecture directory in the newer one.
+    cp -R "$module_path" "$SDK_DIR/Modules/"
+    if [ -f "$MODULES_SRC/$module.swiftdoc" ]; then
+        cp "$MODULES_SRC/$module.swiftdoc" "$SDK_DIR/Modules/"
+    fi
+    PROVIDED_MODULES+=("$module")
+done
+for module in UntoldEngine UntoldComponentKit; do
+    if [ ! -e "$SDK_DIR/Modules/$module.swiftmodule" ]; then
         echo "⚠️  Warning: $module.swiftmodule not found in $MODULES_SRC — code components will not compile in this build"
     fi
 done
@@ -123,25 +135,20 @@ done
 find "$SDK_DIR/Modules" \( -name '*.swiftsourceinfo' -o -name '*.abi.json' \) -delete
 find "$SDK_DIR/Modules" -type d -empty -delete
 
-# UntoldEngine imports the CShaderTypes clang module. SwiftPM's generated module map points
-# at the checkout with an absolute path, so ship the headers with a relocatable one.
-CSHADER_SRC=".build/checkouts/UntoldEngine/Sources/CShaderTypes"
-if [ -d "$CSHADER_SRC" ]; then
-    cp "$CSHADER_SRC"/*.h "$SDK_DIR/CShaderTypes/"
-    cat > "$SDK_DIR/CShaderTypes/module.modulemap" << 'MODULEMAP'
-module CShaderTypes {
-    umbrella "."
-    export *
-}
-MODULEMAP
-else
-    echo "⚠️  Warning: CShaderTypes headers not found at $CSHADER_SRC"
-fi
+# The same goes for C modules: CShaderTypes, and any other C target the engine or a package it
+# depends on was built with. Each is shipped as its headers with a relocatable module map.
+C_MODULES_LIST="$(python3 "$SCRIPT_DIR/scripts/copy-component-sdk-c-modules.py" "$BUILD_DIR" "$SDK_DIR")"
+C_MODULES=()
+while IFS= read -r module; do
+    if [ -n "$module" ]; then
+        C_MODULES+=("$module")
+    fi
+done <<< "$C_MODULES_LIST"
 
 SWIFT_COMPILER_VERSION="$(swift --version 2>&1 | head -1)"
-python3 - "$SDK_DIR/sdk.json" "$SWIFT_COMPILER_VERSION" "${PROVIDED_MODULES[@]}" << 'SDKJSON'
+python3 - "$SDK_DIR/sdk.json" "$SWIFT_COMPILER_VERSION" "${PROVIDED_MODULES[*]}" "${C_MODULES[*]}" << 'SDKJSON'
 import json, sys
-path, compiler, *modules = sys.argv[1:]
+path, compiler, modules, c_modules = sys.argv[1:]
 engine_url = revision = None
 try:
     pins = json.load(open("Package.resolved"))["pins"]
@@ -156,7 +163,8 @@ with open(path, "w") as handle:
         "engineRevision": revision,
         "target": "arm64-apple-macosx14.0",
         "languageMode": "5",
-        "providedModules": sorted(modules),
+        "providedModules": sorted(modules.split()),
+        "cModules": c_modules.split(),
     }, handle, indent=2)
     handle.write("\n")
 SDKJSON
@@ -170,7 +178,6 @@ fi
 # Copy exporter scripts. SPM only checks the dependency out under .build/checkouts/ for a
 # git-URL dependency; while Package.swift points at a local path (e.g. during engine+editor
 # co-development), fall back to that sibling checkout directly.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPTS_SRC=".build/checkouts/UntoldEngine/scripts"
 if [ ! -d "$SCRIPTS_SRC" ]; then
     SCRIPTS_SRC="$SCRIPT_DIR/../UntoldEngine/scripts"
