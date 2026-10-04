@@ -11,7 +11,7 @@
 
 import Foundation
 
-/// The Swift modules a component library compiles against.
+/// The modules a component library compiles against.
 ///
 /// Compiling against the editor's own modules, and linking nothing, is what makes loaded code
 /// share the editor's engine: one `scene`, one registry. A packaged editor ships them in
@@ -27,13 +27,24 @@ struct ComponentSDK: Equatable {
         var target: String
         var languageMode: String
         var providedModules: [String]
+        /// The C modules shipped beside `Modules`, each a folder of headers with a
+        /// `module.modulemap`. An SDK packaged before the list existed has CShaderTypes alone.
+        var cModules: [String]?
     }
 
     static let bundleDirectoryName = "ComponentSDK"
     static let manifestFileName = "sdk.json"
+    /// The engine's own C module: every SDK has it.
+    static let cShaderTypesModule = "CShaderTypes"
 
     let modulesDirectory: URL
-    let cShaderTypesModuleMap: URL
+    /// The module map of every C module the modules in `modulesDirectory` import: CShaderTypes
+    /// first, then any other the engine was built with. The compiler does not find these by
+    /// itself, and cannot import `UntoldEngine` without them.
+    let cModuleMaps: [URL]
+    /// C targets the editor was built with whose module map was not found. Always empty for a
+    /// packaged editor, where the packaging check has compiled against the SDK.
+    let cModulesWithoutModuleMap: [String]
     /// Modules the editor itself links, which a plugin must therefore never bring a second copy of.
     let providedModules: [String]
     let targetTriple: String
@@ -70,17 +81,19 @@ struct ComponentSDK: Equatable {
 
     static func resolveBundled(at sdkRoot: URL, fileManager: FileManager = .default) -> ComponentSDK? {
         let modules = sdkRoot.appendingPathComponent("Modules", isDirectory: true)
-        let moduleMap = sdkRoot.appendingPathComponent("CShaderTypes/module.modulemap")
         let manifestURL = sdkRoot.appendingPathComponent(manifestFileName)
         guard hasRequiredModules(in: modules, fileManager: fileManager),
-              fileManager.fileExists(atPath: moduleMap.path),
               let data = try? Data(contentsOf: manifestURL),
               let manifest = try? JSONDecoder().decode(Manifest.self, from: data)
         else { return nil }
+        let moduleMaps = (manifest.cModules ?? [cShaderTypesModule])
+            .map { sdkRoot.appendingPathComponent("\($0)/module.modulemap") }
+        guard moduleMaps.allSatisfy({ fileManager.fileExists(atPath: $0.path) }) else { return nil }
 
         return ComponentSDK(
             modulesDirectory: modules,
-            cShaderTypesModuleMap: moduleMap,
+            cModuleMaps: moduleMaps,
+            cModulesWithoutModuleMap: [],
             providedModules: manifest.providedModules,
             targetTriple: manifest.target,
             recordedCompilerVersion: manifest.swiftCompilerVersion,
@@ -95,18 +108,20 @@ struct ComponentSDK: Equatable {
     /// the module map in `CShaderTypes.build/`.
     static func resolveFromBuildProducts(productsDirectory: URL, fileManager: FileManager = .default) -> ComponentSDK? {
         let moduleCandidates = [productsDirectory, productsDirectory.appendingPathComponent("Modules", isDirectory: true)]
-        let moduleMapCandidates = [
-            productsDirectory.appendingPathComponent("../../Intermediates.noindex/GeneratedModuleMaps/CShaderTypes.modulemap").standardizedFileURL,
-            productsDirectory.appendingPathComponent("CShaderTypes.build/module.modulemap"),
-        ]
         guard let modules = moduleCandidates.first(where: { hasRequiredModules(in: $0, fileManager: fileManager) }),
-              let moduleMap = moduleMapCandidates.first(where: { fileManager.fileExists(atPath: $0.path) })
+              let layout = ComponentSDKBuildLayout.allCases.first(where: {
+                  let moduleMap = $0.generatedModuleMap(of: cShaderTypesModule, productsDirectory: productsDirectory)
+                  return fileManager.fileExists(atPath: moduleMap.path)
+              })
         else { return nil }
+        let swiftModules = moduleNames(in: modules, fileManager: fileManager)
+        let cModules = layout.cModules(productsDirectory: productsDirectory, swiftModules: swiftModules, fileManager: fileManager)
 
         return ComponentSDK(
             modulesDirectory: modules,
-            cShaderTypesModuleMap: moduleMap,
-            providedModules: moduleNames(in: modules, fileManager: fileManager),
+            cModuleMaps: cModules.moduleMaps,
+            cModulesWithoutModuleMap: cModules.withoutModuleMap,
+            providedModules: swiftModules,
             targetTriple: defaultTargetTriple,
             recordedCompilerVersion: nil,
             engineURL: nil,

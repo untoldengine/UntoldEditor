@@ -45,10 +45,15 @@ final class ScratchDirectory {
     }
 }
 
-func makeTestSDK(providedModules: [String] = ["UntoldComponentKit", "UntoldEngine"]) -> ComponentSDK {
+func makeTestSDK(
+    providedModules: [String] = ["UntoldComponentKit", "UntoldEngine"],
+    cModuleMaps: [String] = ["/sdk/CShaderTypes/module.modulemap"],
+    cModulesWithoutModuleMap: [String] = []
+) -> ComponentSDK {
     ComponentSDK(
         modulesDirectory: URL(fileURLWithPath: "/sdk/Modules"),
-        cShaderTypesModuleMap: URL(fileURLWithPath: "/sdk/CShaderTypes/module.modulemap"),
+        cModuleMaps: cModuleMaps.map { URL(fileURLWithPath: $0) },
+        cModulesWithoutModuleMap: cModulesWithoutModuleMap,
         providedModules: providedModules,
         targetTriple: "arm64-apple-macosx14.0",
         recordedCompilerVersion: nil,

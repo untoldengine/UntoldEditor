@@ -25,7 +25,8 @@ final class EditorEnginePackageTests: XCTestCase {
     func test_packagedEditor_readsItsEngineFromTheSDK() {
         let sdk = ComponentSDK(
             modulesDirectory: URL(fileURLWithPath: "/sdk/Modules"),
-            cShaderTypesModuleMap: URL(fileURLWithPath: "/sdk/CShaderTypes/module.modulemap"),
+            cModuleMaps: [URL(fileURLWithPath: "/sdk/CShaderTypes/module.modulemap")],
+            cModulesWithoutModuleMap: [],
             providedModules: [],
             targetTriple: "arm64-apple-macosx14.0",
             recordedCompilerVersion: "Apple Swift version 6.4",
