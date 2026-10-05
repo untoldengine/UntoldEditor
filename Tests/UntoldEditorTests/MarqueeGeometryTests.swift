@@ -188,6 +188,151 @@ final class MarqueeGeometryTests: XCTestCase {
         XCTAssertFalse(contains(CGRect(x: 0, y: 0, width: 400, height: 400), box: room))
     }
 
+    // MARK: - Where a box stands to the rectangle
+
+    private func place(
+        _ rect: CGRect,
+        box: (min: simd_float3, max: simd_float3)? = nil,
+        at position: simd_float3 = .zero,
+        view: MarqueeGeometry.View? = nil
+    ) -> MarqueeGeometry.Place {
+        let box = box ?? unitBox
+        return MarqueeGeometry.place(
+            ofBoxMinimum: box.min,
+            boxMaximum: box.max,
+            modelSpace: matrix4x4Translation(position.x, position.y, position.z),
+            in: rect,
+            view: view ?? self.view()
+        )
+    }
+
+    func test_aBoxAllInTheRectangle_isInside_andOneTheRectangleCuts_isAcross() {
+        XCTAssertEqual(place(CGRect(x: 150, y: 150, width: 100, height: 100)), .inside)
+        XCTAssertEqual(place(CGRect(x: 190, y: 150, width: 100, height: 100)), .across, "the left of the box is out")
+        XCTAssertEqual(place(CGRect(x: 195, y: 195, width: 10, height: 10)), .across, "a rectangle on its face")
+        XCTAssertEqual(place(CGRect(x: 180, y: 180, width: 40, height: 40)), .across, "around its far face, short of its near one")
+    }
+
+    func test_aBoxBeyondOneSideOfTheRectangle_isOutside() {
+        // The box shows from 178 to 222 points each way.
+        XCTAssertEqual(place(CGRect(x: 230, y: 150, width: 100, height: 100)), .outside, "the rectangle is right of it")
+        XCTAssertEqual(place(CGRect(x: 70, y: 150, width: 100, height: 100)), .outside, "left of it")
+        XCTAssertEqual(place(CGRect(x: 150, y: 230, width: 100, height: 100)), .outside, "above it")
+        XCTAssertEqual(place(CGRect(x: 150, y: 70, width: 100, height: 100)), .outside, "below it")
+        XCTAssertEqual(place(CGRect(x: 10, y: 10, width: 50, height: 50)), .outside)
+    }
+
+    func test_aBoxThatTouchesTheBorder_isNotOutside() {
+        // The near face ends 22.2 points right of the middle.
+        XCTAssertEqual(place(CGRect(x: 222, y: 150, width: 100, height: 100)), .across)
+        XCTAssertEqual(place(CGRect(x: 223, y: 150, width: 100, height: 100)), .outside)
+    }
+
+    func test_aBoxBehindTheCamera_isOutside_andOneThatReachesBehindIt_isNot() {
+        let everything = CGRect(x: 0, y: 0, width: 400, height: 400)
+        let beam = (min: simd_float3(-0.5, -0.5, -20), max: simd_float3(0.5, 0.5, 20))
+        // A wall five units behind the camera, far wider than the view: it is
+        // beyond no side of the rectangle with all of it.
+        let wallBehind = (min: simd_float3(-10, -10, 9.9), max: simd_float3(10, 10, 10.1))
+
+        XCTAssertEqual(place(everything, at: simd_float3(0, 0, 10)), .outside)
+        XCTAssertEqual(place(everything, box: wallBehind), .outside)
+        XCTAssertEqual(place(CGRect(x: 190, y: 190, width: 20, height: 20), box: wallBehind), .outside)
+        XCTAssertEqual(place(everything, box: beam), .across, "the camera is in the beam")
+        XCTAssertEqual(place(CGRect(x: 10, y: 10, width: 50, height: 50), box: beam), .across, "and its walls are all around the view")
+    }
+
+    func test_theRoomTheCameraIsIn_isAcrossEveryRectangle() {
+        let room = (min: simd_float3(repeating: -10), max: simd_float3(repeating: 10))
+
+        XCTAssertEqual(place(CGRect(x: 190, y: 190, width: 20, height: 20), box: room), .across)
+        XCTAssertEqual(place(CGRect(x: 0, y: 0, width: 10, height: 10), box: room), .across)
+        XCTAssertEqual(place(CGRect(x: 0, y: 0, width: 400, height: 400), box: room), .across)
+    }
+
+    func test_aFloor_isAcrossARectangleOverIt_andOutsideOneAboveTheHorizon() {
+        // A floor a unit under the camera's height, that reaches behind the
+        // camera: all that shows of it is below the middle of the view.
+        let floor = (min: simd_float3(-10, -1.1, -10), max: simd_float3(10, -1, 10))
+
+        XCTAssertEqual(place(CGRect(x: 150, y: 100, width: 100, height: 100), box: floor), .across)
+        XCTAssertEqual(place(CGRect(x: 150, y: 220, width: 100, height: 100), box: floor), .outside)
+    }
+
+    func test_aViewportWithNoSize_hasEveryBoxOutside() {
+        XCTAssertEqual(place(CGRect(x: 0, y: 0, width: 10, height: 10), view: view(size: CGSize(width: 0, height: 400))), .outside)
+    }
+
+    func test_aBoxThatIsNowhere_isAcross_asThereIsNoTelling() {
+        let nowhere = MarqueeGeometry.place(
+            ofBoxMinimum: unitBox.min,
+            boxMaximum: unitBox.max,
+            modelSpace: matrix4x4Translation(.nan, 0, 0),
+            in: CGRect(x: 150, y: 150, width: 100, height: 100),
+            view: view()
+        )
+
+        XCTAssertEqual(nowhere, .across)
+    }
+
+    /// The answer `outside` leaves an entity out of what is drawn to tell
+    /// what is seen, so it must never be given for a box that shows in the
+    /// rectangle: turned boxes of every size, around the camera and behind it.
+    func test_noBoxToldOutside_hasAPointThatShowsInTheRectangle() {
+        var generator = SeededGenerator(state: 7)
+        let view = view()
+        var outside = 0
+        var across = 0
+        var inside = 0
+
+        for _ in 0 ..< 3000 {
+            let half = simd_float3(generator.next(in: 0.05 ... 3), generator.next(in: 0.05 ... 3), generator.next(in: 0.05 ... 3))
+            let turn = simd_quatf(
+                angle: generator.next(in: 0 ... 2 * .pi),
+                axis: simd_normalize(simd_float3(generator.next(in: -1 ... 1), generator.next(in: -1 ... 1), generator.next(in: 0.1 ... 1)))
+            )
+            let position = simd_float3(generator.next(in: -8 ... 8), generator.next(in: -8 ... 8), generator.next(in: -12 ... 9))
+            let modelSpace = simd_mul(matrix4x4Translation(position.x, position.y, position.z), simd_float4x4(turn))
+            let origin = CGPoint(x: CGFloat(generator.next(in: 0 ... 360)), y: CGFloat(generator.next(in: 0 ... 360)))
+            let rect = CGRect(
+                origin: origin,
+                size: CGSize(width: CGFloat(generator.next(in: 1 ... 200)), height: CGFloat(generator.next(in: 1 ... 200)))
+            )
+
+            let place = MarqueeGeometry.place(ofBoxMinimum: -half, boxMaximum: half, modelSpace: modelSpace, in: rect, view: view)
+
+            // Points all through the box, its corners among them.
+            var shows = 0
+            var points = 0
+            let steps: [Float] = [-1, -0.5, 0, 0.5, 1]
+            for x in steps {
+                for y in steps {
+                    for z in steps {
+                        let world = simd_mul(modelSpace, simd_float4(half * simd_float3(x, y, z), 1))
+                        points += 1
+                        shows += MarqueeGeometry.contains(rect, point: simd_float3(world.x, world.y, world.z), view: view) ? 1 : 0
+                    }
+                }
+            }
+
+            switch place {
+            case .outside:
+                outside += 1
+                XCTAssertEqual(shows, 0, "a box told outside shows in \(rect)")
+            case .inside:
+                inside += 1
+                XCTAssertEqual(shows, points, "a box told inside reaches out of \(rect)")
+            case .across:
+                across += 1
+            }
+        }
+
+        // The three answers all came up, so each of them was put to the test.
+        XCTAssertGreaterThan(outside, 300)
+        XCTAssertGreaterThan(across, 300)
+        XCTAssertGreaterThan(inside, 3)
+    }
+
     // MARK: - A point
 
     func test_aPoint_isInsideTheRectangleItIsIn() {

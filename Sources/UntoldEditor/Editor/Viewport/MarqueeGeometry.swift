@@ -19,7 +19,8 @@ import simd
 /// box is, the one drawn around it when it is selected: every corner of the
 /// box in front of the camera and within the rectangle. A floor or a wall
 /// that reaches out of the rectangle is therefore left out, however much of
-/// it shows in it.
+/// it shows in it. Such a box is across the rectangle, and one that cannot
+/// show in it at all is outside.
 enum MarqueeGeometry {
     /// The nearest a point may be to the camera's plane and still be projected.
     static let nearestDepth: Float = 0.01
@@ -49,6 +50,16 @@ enum MarqueeGeometry {
         CGRect(x: rect.minX, y: height - rect.maxY, width: rect.width, height: rect.height)
     }
 
+    /// How a box stands to the rectangle.
+    enum Place: Equatable {
+        /// All of it is in the rectangle.
+        case inside
+        /// It reaches out of the rectangle, and part of it may show in it.
+        case across
+        /// None of it can show in the rectangle.
+        case outside
+    }
+
     /// Whether a box given in an entity's own space, which `modelSpace`
     /// carries into the world, stands inside the rectangle: all eight of its
     /// corners in front of the camera and within the rectangle, its border
@@ -61,32 +72,26 @@ enum MarqueeGeometry {
         modelSpace: simd_float4x4,
         view: View
     ) -> Bool {
-        guard let area = deviceRect(rect, in: view.size) else {
-            return false
-        }
+        place(ofBoxMinimum: minimum, boxMaximum: maximum, modelSpace: modelSpace, in: rect, view: view) == .inside
+    }
 
-        let toClip = simd_mul(simd_mul(view.perspectiveSpace, view.viewSpace), modelSpace)
-        for corner in 0 ..< 8 {
-            let clip = simd_mul(toClip, simd_float4(
-                corner & 1 == 0 ? minimum.x : maximum.x,
-                corner & 2 == 0 ? minimum.y : maximum.y,
-                corner & 4 == 0 ? minimum.z : maximum.z,
-                1
-            ))
-            guard area.contains(clip) else {
-                return false
-            }
-        }
-        return true
+    /// How a box given in an entity's own space, which `modelSpace` carries
+    /// into the world, stands to the rectangle. For many boxes and one
+    /// rectangle, make the `Frustum` once and ask it.
+    static func place(
+        ofBoxMinimum minimum: simd_float3,
+        boxMaximum maximum: simd_float3,
+        modelSpace: simd_float4x4,
+        in rect: CGRect,
+        view: View
+    ) -> Place {
+        Frustum(rect, view: view)?.place(ofBoxMinimum: minimum, boxMaximum: maximum, modelSpace: modelSpace) ?? .outside
     }
 
     /// Whether a point of the world is inside the rectangle: for what has a
     /// place and no box, such as a light.
     static func contains(_ rect: CGRect, point: simd_float3, view: View) -> Bool {
-        guard let area = deviceRect(rect, in: view.size) else {
-            return false
-        }
-        return area.contains(simd_mul(simd_mul(view.perspectiveSpace, view.viewSpace), simd_float4(point, 1)))
+        Frustum(rect, view: view)?.contains(point) ?? false
     }
 
     // MARK: - The parts

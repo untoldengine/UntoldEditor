@@ -15,12 +15,12 @@ import UntoldEngine
 
 /// Tells which entities show in a rectangle of the viewport.
 ///
-/// Every mesh the scene draws is drawn once more, into a texture the size of
-/// the rectangle: each with the number of its entity, the nearer over the
-/// farther. The numbers left in the texture are then gathered, on the GPU
-/// too, so an entity behind a wall or under a floor is not among them. It
-/// runs once, when the rectangle is released, on the editor's own pipelines:
-/// the engine's passes are not touched.
+/// Every mesh the scene draws that may show in the rectangle is drawn once
+/// more, into a texture the size of the rectangle: each with the number of
+/// its entity, the nearer over the farther. The numbers left in the texture
+/// are then gathered, on the GPU too, so an entity behind a wall or under a
+/// floor is not among them. It runs once, when the rectangle is released, on
+/// the editor's own pipelines: the engine's passes are not touched.
 enum SelectionVisibilityPass {
     /// What the shader takes for each mesh: where to draw it and the number
     /// to draw it with.
@@ -113,7 +113,7 @@ enum SelectionVisibilityPass {
     ///   - rect: the rectangle in points from the bottom left of the viewport.
     ///   - view: how the camera sees the world, and the viewport's size in points.
     ///   - scale: pixels per point of the viewport.
-    ///   - drawn: the entities whose meshes the scene draws; those not selectable hide what is behind them all the same.
+    ///   - drawn: the entities whose meshes may show in the rectangle; those not selectable hide what is behind them all the same.
     static func entitiesSeen(
         in rect: CGRect,
         view: MarqueeGeometry.View,
@@ -233,6 +233,9 @@ enum SelectionVisibilityPass {
             threadsPerThreadgroup: MTLSize(width: across, height: down, depth: 1)
         )
         gather.endEncoding()
+        // The answer is waited for, on the mouse-up that asks for it. The
+        // wait stays short because only what may show in the rectangle was
+        // drawn, into no more than `maximumPixels`.
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         guard commandBuffer.error == nil else {

@@ -341,6 +341,104 @@ final class SelectionVisibilityPassTests: XCTestCase {
         XCTAssertEqual(asked, 0, "a rectangle over nothing costs no pass")
     }
 
+    func test_thePassIsHanded_onlyWhatMayShowInTheRectangle() {
+        let (wall, behind) = makeWallAndWhatIsBehind()
+        // A floor that shows in the rectangle and reaches far out of it.
+        let floor = makeCube("Floor", at: simd_float3(0, -3.5, 0), side: 6)
+        _ = makeCube("Beside", at: simd_float3(6, 0, -3))
+        _ = makeCube("Behind the camera", at: simd_float3(0, 0, 9))
+        var handed: [EntityID] = []
+
+        _ = MarqueeSelection.entities(
+            inside: aroundTheWall,
+            view: view(),
+            selectionManager: selectionManager,
+            seen: { _, _, drawn in
+                handed = drawn
+                return Set(drawn)
+            }
+        )
+
+        XCTAssertEqual(Set(handed), [wall, behind, floor], "what stands beside the rectangle or behind the camera is not drawn for it")
+    }
+
+    func test_whatCannotBeSelected_isHandedToThePassAllTheSame() {
+        let (wall, behind) = makeWallAndWhatIsBehind()
+        selectionManager.setLocked(wall, true)
+        var handed: [EntityID] = []
+
+        _ = MarqueeSelection.entities(
+            inside: aroundTheWall,
+            view: view(),
+            selectionManager: selectionManager,
+            seen: { _, _, drawn in
+                handed = drawn
+                return Set(drawn)
+            }
+        )
+
+        XCTAssertEqual(Set(handed), [wall, behind], "a locked wall still hides what is behind it")
+    }
+
+    /// Leaving out of the pass what stands outside the rectangle changes
+    /// nothing of what it tells: many cubes, some hiding others, and
+    /// rectangles of several sizes.
+    func test_drawingOnlyWhatMayShow_selectsTheSameAsDrawingEverything() {
+        var generator = SeededGenerator(state: 11)
+        // One cube of a unit, drawn by every entity at its own size: small
+        // ones for the rectangles to hold, and a large one now and then that
+        // reaches out of them and hides what is behind it.
+        let unitCube = BasicPrimitives.createCube(extent: 1)
+        var cubes: [EntityID] = []
+        for index in 0 ..< 120 {
+            let cube = createEntity()
+            setEntityMeshDirect(entityId: cube, meshes: unitCube, assetName: "Cube \(index)")
+            let side = index % 8 == 0 ? generator.next(in: 2.5 ... 5) : generator.next(in: 0.2 ... 1.2)
+            scaleTo(entityId: cube, scale: simd_float3(repeating: side))
+            translateTo(
+                entityId: cube,
+                position: simd_float3(generator.next(in: -7 ... 7), generator.next(in: -5 ... 5), generator.next(in: -12 ... 3))
+            )
+            cubes.append(cube)
+        }
+        let view = view()
+        let rects = [
+            CGRect(x: 0, y: 0, width: 400, height: 300),
+            CGRect(x: 100, y: 60, width: 200, height: 180),
+            CGRect(x: 20, y: 150, width: 160, height: 120),
+            CGRect(x: 230, y: 20, width: 150, height: 130),
+            CGRect(x: 180, y: 130, width: 40, height: 40),
+        ]
+
+        var chosen = 0
+        var hidden = 0
+        var leftOut = 0
+        for rect in rects {
+            let byBoxes = MarqueeSelection.entities(inside: rect, view: view, selectionManager: selectionManager)
+            let shown = SelectionVisibilityPass.entitiesSeen(in: rect, view: view, scale: 2, drawn: cubes) ?? []
+            let withEverythingDrawn = byBoxes.filter(shown.contains)
+
+            let withWhatMayShowDrawn = MarqueeSelection.entities(
+                inside: rect,
+                view: view,
+                selectionManager: selectionManager,
+                seen: { rect, view, drawn in
+                    leftOut += cubes.count - drawn.count
+                    return SelectionVisibilityPass.entitiesSeen(in: rect, view: view, scale: 2, drawn: drawn)
+                }
+            )
+
+            XCTAssertEqual(withWhatMayShowDrawn, withEverythingDrawn, "in \(rect)")
+            chosen += withEverythingDrawn.count
+            hidden += byBoxes.count - withEverythingDrawn.count
+        }
+
+        // Enough is selected, hidden and left out for the comparison to mean something.
+        XCTAssertGreaterThan(chosen, 20)
+        XCTAssertGreaterThan(hidden, 5)
+        XCTAssertGreaterThan(leftOut, 100)
+    }
+
     func test_theNearestOfThoseSeen_comesLast() {
         let far = makeCube("Far", at: simd_float3(-3, 0, -4))
         let near = makeCube("Near", at: simd_float3(2, 0, 2))

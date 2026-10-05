@@ -21,10 +21,13 @@ import UntoldEngine
 /// inside where it stands. Of what draws meshes, only what is seen counts:
 /// what stands behind a wall or under a floor is left out though it is
 /// inside. Telling what is seen takes a pass of the renderer, handed in as
-/// `seen`; without one, being inside is enough.
+/// `seen`; without one, being inside is enough. The pass is handed only what
+/// reaches into the rectangle: what is outside it neither shows in it nor
+/// hides anything in it, so the cost follows what the rectangle covers and
+/// not the size of the scene.
 enum MarqueeSelection {
-    /// Tells which of the entities that draw meshes show in a rectangle of
-    /// the viewport, or nil when it cannot tell.
+    /// Tells which of `drawn`, the entities whose meshes may show in a
+    /// rectangle of the viewport, do show in it, or nil when it cannot tell.
     typealias Seen = (_ rect: CGRect, _ view: MarqueeGeometry.View, _ drawn: [EntityID]) -> Set<EntityID>?
 
     /// The entities inside the rectangle, the farthest from the camera first
@@ -36,43 +39,59 @@ enum MarqueeSelection {
         selectionManager: SelectionManager?,
         seen: Seen? = nil
     ) -> [EntityID] {
+        guard let frustum = MarqueeGeometry.Frustum(rect, view: view) else {
+            return []
+        }
         let eye = simd_mul(simd_inverse(view.viewSpace), simd_float4(0, 0, 0, 1))
         let camera = simd_float3(eye.x, eye.y, eye.z)
         var inside: [(entityId: EntityID, distance: Float, drawsMeshes: Bool)] = []
+        // What draws meshes that may show in the rectangle, selectable or
+        // not: all the pass has to draw.
+        var mayShow: [EntityID] = []
 
-        let everyEntity = getAllGameEntities()
-        for entityId in everyEntity {
-            guard canBeSelected(entityId, selectionManager: selectionManager),
-                  let world = scene.get(component: WorldTransformComponent.self, for: entityId)?.space
-            else {
+        // Where an entity stands is asked first, and the rest only of what
+        // the rectangle reaches: in a scene of many thousands of entities
+        // that leaves nearly all of them out at once.
+        for entityId in getAllGameEntities() {
+            guard let world = scene.get(component: WorldTransformComponent.self, for: entityId)?.space else {
                 continue
             }
             let position = simd_float3(world.columns.3.x, world.columns.3.y, world.columns.3.z)
 
-            let isInside: Bool
+            var drawsItsMeshes = false
             if draws(entityId), let local = scene.get(component: LocalTransformComponent.self, for: entityId) {
-                isInside = MarqueeGeometry.contains(
-                    rect,
-                    boxMinimum: local.boundingBox.min,
+                // The box the engine culls by, so what is outside by it is
+                // not drawn for the rectangle either.
+                let place = frustum.place(
+                    ofBoxMinimum: local.boundingBox.min,
                     boxMaximum: local.boundingBox.max,
-                    modelSpace: world,
-                    view: view
+                    modelSpace: world
                 )
-            } else if showsWhereItStands(entityId) {
-                isInside = MarqueeGeometry.contains(rect, point: position, view: view)
+                guard place != .outside else {
+                    continue
+                }
+                drawsItsMeshes = drawsMeshes(entityId)
+                if drawsItsMeshes {
+                    mayShow.append(entityId)
+                }
+                guard place == .inside else {
+                    continue
+                }
             } else {
-                isInside = false
+                guard showsWhereItStands(entityId), frustum.contains(position) else {
+                    continue
+                }
             }
 
-            if isInside {
-                inside.append((entityId, simd_distance(position, camera), drawsMeshes(entityId)))
+            if canBeSelected(entityId, selectionManager: selectionManager) {
+                inside.append((entityId, simd_distance(position, camera), drawsItsMeshes))
             }
         }
 
         // Whatever draws a mesh hides what is behind it, selectable or not: a
         // locked wall is not selected, and neither is what it covers. The pass
         // is only asked when something it can tell about is inside.
-        if inside.contains(where: \.drawsMeshes), let shown = seen?(rect, view, everyEntity.filter(drawsMeshes)) {
+        if inside.contains(where: \.drawsMeshes), let shown = seen?(rect, view, mayShow) {
             inside.removeAll { $0.drawsMeshes && shown.contains($0.entityId) == false }
         }
         return inside.sorted { $0.distance > $1.distance }.map(\.entityId)
