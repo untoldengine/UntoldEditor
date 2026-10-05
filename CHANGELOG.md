@@ -1,4 +1,13 @@
 # Changelog
+## v0.22.0 - 2026-10-05
+### 🐞 Fixes
+- [Patch] Show every line of an export's output in the Console (#143) (a204708…)
+### 🚀 Features
+- [Feature] Editor UI redesign, part 2: hierarchy with eye and lock, scene tabs and Inspector sections (#142) (046df92…)
+- [Feature] Cook imported sources into the folder they were imported into (#144) (5cfecd6…)
+- [Feature] Editor UI redesign, part 3: viewport header, input, overlays and play mode (#146) (3d87595…)
+- [Feature] Editor UI redesign, part 4: selecting several entities (#147) (19a88ff…)
+- [Feature] Component SDK: every C module the engine was built with, not only CShaderTypes (#148) (9ede444…)
 ## v0.21.0 - 2026-09-27
 ### 🐞 Fixes
 - [Patch] Dividers: system resize cursor and a preview line instead of live resizing (e27b770…)
