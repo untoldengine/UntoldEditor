@@ -14,7 +14,8 @@ import UniformTypeIdentifiers
 import UntoldEngine
 
 /// The Inspector: the entity's header, then one section per component with
-/// its editor, then Add Component. With nothing to show, the empty state.
+/// its editor, then Add Component. With nothing to show, the empty state, and
+/// with several entities selected how many they are.
 struct InspectorView: View {
     @ObservedObject var selectionManager: SelectionManager
     @ObservedObject var sceneGraphModel: SceneGraphModel
@@ -24,12 +25,14 @@ struct InspectorView: View {
     @Binding var selectedAsset: Asset?
 
     /// The entity the Inspector shows: the pinned one while it is in the scene,
-    /// otherwise the selection.
+    /// otherwise the selection when it is one entity.
     var inspectedEntity: EntityID? {
         if let pinned = selectionManager.pinnedInspection, sceneGraphModel.contains(pinned) {
             return pinned
         }
-        guard let selected = selectionManager.selectedEntity, selected != .invalid else {
+        guard selectionManager.hasSeveralSelected == false,
+              let selected = selectionManager.selectedEntity, selected != .invalid
+        else {
             return nil
         }
         return selected
@@ -114,6 +117,8 @@ struct InspectorView: View {
                         .padding(10)
                     }
                 }
+            } else if selectionManager.hasSeveralSelected {
+                InspectorSeveralSelectedView(count: selectionManager.selectedEntities.count)
             } else {
                 InspectorEmptyStateView()
             }

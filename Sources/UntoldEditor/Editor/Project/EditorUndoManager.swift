@@ -296,6 +296,34 @@ final class EditorUndoManager: ObservableObject {
         )
     }
 
+    /// A drag of the gizmo began on these entities: where each stands is kept,
+    /// so that the drag is undone in one step.
+    func beginTransformEdit(entityIds: [EntityID]) {
+        for entityId in entityIds {
+            beginTransformEdit(entityId: entityId)
+        }
+    }
+
+    /// The drag ended: what it changed is one step to undo, whether it moved
+    /// one entity or several.
+    func commitTransformEdit(entityIds: [EntityID]) {
+        let changes = entityIds.compactMap { entityId -> EditorGroupTransformChangeCommand.Change? in
+            guard let before = transformEditStart.removeValue(forKey: entityId),
+                  hasComponent(entityId: entityId, componentType: LocalTransformComponent.self)
+            else {
+                return nil
+            }
+            let after = EditorTransformSnapshot(entityId: entityId)
+            return before == after ? nil : .init(entityId: entityId, before: before, after: after)
+        }
+
+        if changes.count == 1, let change = changes.first {
+            registerTransformChange(entityId: change.entityId, before: change.before, after: change.after)
+        } else if changes.isEmpty == false {
+            register(EditorGroupTransformChangeCommand(changes: changes))
+        }
+    }
+
     func registerValueChange<Value: Equatable>(
         name: String,
         oldValue: Value,

@@ -25,6 +25,8 @@ struct HierarchyNode: View {
     var onDeleteEntity: (EntityID) -> Void = { _ in }
     var onDropRow: (DroppedRowPayload, EntityID?) -> Void = { _, _ in }
     var addActions: AddEntityActions = .init()
+    /// True from Play to Stop, when a click on a row selects nothing.
+    var isPlaying = false
     @State private var isDragOver = false
 
     var body: some View {
@@ -51,7 +53,14 @@ struct HierarchyNode: View {
             // One group indent per level, so a child's caret sits under its parent's icon.
             .padding(.leading, CGFloat(depth) * 16)
             .onTapGesture {
-                selectionManager.inspectEntity(entityId: entityId)
+                switch HierarchyRowClick.click(isPlaying: isPlaying, modifiers: NSEvent.modifierFlags) {
+                case .none:
+                    break
+                case .select:
+                    selectionManager.inspectEntity(entityId: entityId)
+                case .toggle:
+                    selectionManager.toggleSelection(of: entityId)
+                }
             }
             .contextMenu {
                 contextMenuContent
@@ -79,7 +88,8 @@ struct HierarchyNode: View {
                         onUnparentEntity: onUnparentEntity,
                         onDeleteEntity: onDeleteEntity,
                         onDropRow: onDropRow,
-                        addActions: addActions
+                        addActions: addActions,
+                        isPlaying: isPlaying
                     )
                 }
             }

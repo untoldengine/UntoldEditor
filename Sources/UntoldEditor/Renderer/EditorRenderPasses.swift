@@ -538,7 +538,10 @@ extension RenderPasses {
     }
 
     static let highlightExecution: (MTLCommandBuffer) -> Void = { commandBuffer in
-        if activeEntity == .invalid {
+        // With several entities selected each one has its box here.
+        let selectionBoxes = SelectionHighlights.shared.boxes
+
+        if activeEntity == .invalid, selectionBoxes.isEmpty {
             clearGizmoLayerExecution(commandBuffer)
             return
         }
@@ -590,6 +593,18 @@ extension RenderPasses {
         renderEncoder.setCullMode(.back)
 
         renderEncoder.setFrontFacing(.counterClockwise)
+
+        if selectionBoxes.isEmpty == false {
+            renderEncoder.setVertexBytes(
+                &cameraComponent.viewSpace, length: MemoryLayout<matrix_float4x4>.stride, index: 1
+            )
+            renderEncoder.setVertexBytes(
+                &renderInfo.perspectiveSpace, length: MemoryLayout<matrix_float4x4>.stride, index: 2
+            )
+            drawSelectionBoxes(selectionBoxes, with: renderEncoder)
+            renderEncoder.updateFence(renderInfo.fence, after: .fragment)
+            return
+        }
 
         guard let worldTransform = scene.get(component: WorldTransformComponent.self, for: activeEntity) else {
             handleError(.noWorldTransformComponent)

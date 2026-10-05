@@ -71,7 +71,7 @@ final class ViewportOverlayHitTestTests: XCTestCase {
     }
 
     /// Puts the canvas with the overlays over it in a window, laid out.
-    private func show(showsEditorOverlays: Bool = true) {
+    private func show(showsEditorOverlays: Bool = true, marquee: ViewportMarqueeStore = ViewportMarqueeStore()) {
         let content = CanvasProbe(canvas: canvas)
             .overlay {
                 ViewportOverlaysView(
@@ -82,7 +82,8 @@ final class ViewportOverlayHitTestTests: XCTestCase {
                     hasSelection: true,
                     onSelectView: { _ in },
                     overlays: overlays,
-                    store: store
+                    store: store,
+                    marquee: marquee
                 )
             }
             .frame(width: size.width, height: size.height)
@@ -126,6 +127,17 @@ final class ViewportOverlayHitTestTests: XCTestCase {
         show()
 
         XCTAssertTrue(reachesTheCanvas(x: size.width / 2, y: size.height / 2))
+    }
+
+    func test_theRectangleBeingDragged_takesNoClickFromTheCanvas() {
+        let marquee = ViewportMarqueeStore()
+        marquee.show(CGRect(x: 200, y: 100, width: 300, height: 200))
+
+        show(marquee: marquee)
+
+        XCTAssertEqual(marquee.rect, CGRect(x: 200, y: 100, width: 300, height: 200))
+        XCTAssertTrue(reachesTheCanvas(x: 350, y: 200), "inside the rectangle")
+        XCTAssertTrue(reachesTheCanvas(x: 200, y: 200), "on its border")
     }
 
     func test_aClickOnTheBadgeOrTheStatistics_reachesTheCanvas() {

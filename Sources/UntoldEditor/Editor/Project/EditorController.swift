@@ -122,6 +122,20 @@ class EditorController: SelectionDelegate, ObservableObject {
         }
     }
 
+    func didSelectEntities(_ entityIds: [EntityID]) {
+        DispatchQueue.main.async {
+            // A locked entity keeps the viewport from selecting it, among several too.
+            self.selectionManager.selectEntities(entityIds.filter { self.selectionManager.isEffectivelyLocked($0) == false })
+        }
+    }
+
+    func didToggleEntity(_ entityId: EntityID) {
+        DispatchQueue.main.async {
+            guard self.selectionManager.isEffectivelyLocked(entityId) == false else { return }
+            self.selectionManager.toggleSelection(of: entityId)
+        }
+    }
+
     func resetActiveAxis() {
         activeAxis = .none
     }

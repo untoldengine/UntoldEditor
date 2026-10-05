@@ -23,6 +23,8 @@ struct ViewportHint: Equatable, Identifiable {
 /// The hints of the viewport, from how the camera is steered now.
 enum ViewportHints {
     static let frameSelection = ViewportHint(action: "Frame selected", keys: "F")
+    static let select = ViewportHint(action: "Select", keys: "Click or drag")
+    static let addToSelection = ViewportHint(action: "Add or remove", keys: "⇧ Click")
     static let look = ViewportHint(action: "Look", keys: "Right drag")
     static let fly = ViewportHint(action: "Fly", keys: "W A S D Q E")
     static let pan = ViewportHint(action: "Pan", keys: "⇧ Right drag")
@@ -39,9 +41,14 @@ enum ViewportHints {
     }
 
     /// The hints by what helps first, so a narrow viewport drops from the
-    /// end. Framing is only hinted with something selected to frame.
-    static func hints(style: CameraNavigationStyle, hasSelection: Bool) -> [ViewportHint] {
+    /// end. Selecting is hinted where the viewport selects, which explore mode
+    /// does not, and framing and adding to the selection only with something
+    /// selected.
+    static func hints(style: CameraNavigationStyle, hasSelection: Bool, canSelect: Bool = false) -> [ViewportHint] {
         var hints = hasSelection ? [frameSelection] : []
+        if canSelect {
+            hints += hasSelection ? [select, addToSelection] : [select]
+        }
         hints += [look, fly, scroll(style: style), pan, move]
         // In the Blender style scrolling orbits already.
         if scroll(style: style).action != orbit.action {
