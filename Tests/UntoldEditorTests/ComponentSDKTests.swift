@@ -30,7 +30,7 @@ final class ComponentSDKTests: XCTestCase {
         let sdk = try XCTUnwrap(ComponentSDK.resolveFromBuildProducts(productsDirectory: products))
 
         XCTAssertEqual(sdk.modulesDirectory.path, products.path)
-        XCTAssertEqual(sdk.cShaderTypesModuleMap.path, moduleMap.path)
+        XCTAssertEqual(sdk.cModuleMaps.map(\.path), [moduleMap.path])
         XCTAssertEqual(sdk.providedModules, ["UntoldComponentKit", "UntoldEngine", "UntoldGaussianTwins"])
         XCTAssertNil(sdk.recordedCompilerVersion, "a source build never needs the compiler check")
         XCTAssertFalse(sdk.isBundled)
@@ -45,7 +45,7 @@ final class ComponentSDKTests: XCTestCase {
         let sdk = try XCTUnwrap(ComponentSDK.resolveFromBuildProducts(productsDirectory: products))
 
         XCTAssertEqual(sdk.modulesDirectory.path, products.appendingPathComponent("Modules").path)
-        XCTAssertEqual(sdk.cShaderTypesModuleMap.path, moduleMap.path)
+        XCTAssertEqual(sdk.cModuleMaps.map(\.path), [moduleMap.path])
     }
 
     func test_executableReachedThroughTheDebugSymlink_stillFindsTheModuleMap() throws {
@@ -66,7 +66,7 @@ final class ComponentSDKTests: XCTestCase {
         let scratch = try ScratchDirectory()
         let resources = try scratch.directory("App.app/Contents/Resources")
         try addModules(["UntoldEngine", "UntoldComponentKit"], to: resources.appendingPathComponent("ComponentSDK/Modules"))
-        try scratch.write("module CShaderTypes {}", to: "App.app/Contents/Resources/ComponentSDK/CShaderTypes/module.modulemap")
+        let moduleMap = try scratch.write("module CShaderTypes {}", to: "App.app/Contents/Resources/ComponentSDK/CShaderTypes/module.modulemap")
         let manifest = ComponentSDK.Manifest(
             swiftCompilerVersion: "Apple Swift version 6.4",
             engineURL: "https://github.com/miolabs/UntoldEngine.git",
@@ -84,6 +84,35 @@ final class ComponentSDKTests: XCTestCase {
         XCTAssertEqual(sdk.engineRevision, "abc123")
         XCTAssertEqual(sdk.engineURL, "https://github.com/miolabs/UntoldEngine.git")
         XCTAssertEqual(sdk.providedModules, ["UntoldComponentKit", "UntoldEngine"])
+        XCTAssertEqual(sdk.cModuleMaps.map(\.path), [moduleMap.path], "an sdk.json without a list of C modules has CShaderTypes alone")
+    }
+
+    func test_bundledSDK_passesTheModuleMapOfEveryCModuleItsManifestLists() throws {
+        let scratch = try ScratchDirectory()
+        let sdkRoot = try scratch.directory("App.app/Contents/Resources/ComponentSDK")
+        try addModules(["UntoldEngine", "UntoldComponentKit", "Atomics"], to: sdkRoot.appendingPathComponent("Modules"))
+        let moduleMaps = try ["CShaderTypes", "CEngineAtomics", "_AtomicsShims"].map {
+            try scratch.write("module \($0) {}", to: "App.app/Contents/Resources/ComponentSDK/\($0)/module.modulemap")
+        }
+        // Shipped, and not listed: not passed.
+        try scratch.write("module Stray {}", to: "App.app/Contents/Resources/ComponentSDK/Stray/module.modulemap")
+        var manifest = ComponentSDK.Manifest(
+            swiftCompilerVersion: "Apple Swift version 6.4",
+            target: "arm64-apple-macosx14.0",
+            languageMode: "5",
+            providedModules: ["Atomics", "UntoldComponentKit", "UntoldEngine"],
+            cModules: ["CShaderTypes", "CEngineAtomics", "_AtomicsShims"]
+        )
+        try JSONEncoder().encode(manifest).write(to: sdkRoot.appendingPathComponent("sdk.json"))
+
+        let sdk = try XCTUnwrap(ComponentSDK.resolveBundled(at: sdkRoot))
+
+        XCTAssertEqual(sdk.cModuleMaps.map(\.path), moduleMaps.map(\.path))
+
+        // A listed module that was not shipped would only fail later, in every compile.
+        manifest.cModules?.append("CMissing")
+        try JSONEncoder().encode(manifest).write(to: sdkRoot.appendingPathComponent("sdk.json"))
+        XCTAssertNil(ComponentSDK.resolveBundled(at: sdkRoot))
     }
 
     func test_missingKitModule_isNotAnSDK() throws {

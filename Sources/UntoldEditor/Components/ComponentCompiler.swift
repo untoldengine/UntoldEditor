@@ -140,11 +140,11 @@ enum ComponentCompiler {
         if request.unit.reloadableImports.isEmpty == false {
             arguments += ["-I", request.outputDirectory.path]
         }
-        arguments += [
-            "-Xcc", "-fmodule-map-file=\(request.sdk.cShaderTypesModuleMap.path)",
-            // Link nothing of the engine: its symbols are found in the running editor at load.
-            "-Xlinker", "-undefined", "-Xlinker", "dynamic_lookup",
-        ]
+        for moduleMap in request.sdk.cModuleMaps {
+            arguments += ["-Xcc", "-fmodule-map-file=\(moduleMap.path)"]
+        }
+        // Link nothing of the engine: its symbols are found in the running editor at load.
+        arguments += ["-Xlinker", "-undefined", "-Xlinker", "dynamic_lookup"]
         arguments += request.unit.sources.map(\.path)
         return arguments
     }

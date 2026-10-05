@@ -16,7 +16,13 @@ import XCTest
 final class ComponentCompilerTests: XCTestCase {
     private let toolchain = ComponentToolchain(swiftcPath: "/toolchain/swiftc", macOSSDKPath: "/sdks/MacOSX.sdk", compilerVersion: "Apple Swift version 6.4")
 
-    private func request(role: ComponentSourceUnit.Role, module: String, imports: [String] = [], revision: Int = 7) -> ComponentCompileRequest {
+    private func request(
+        role: ComponentSourceUnit.Role,
+        module: String,
+        imports: [String] = [],
+        revision: Int = 7,
+        sdk: ComponentSDK = makeTestSDK()
+    ) -> ComponentCompileRequest {
         let unit = ComponentSourceUnit(
             role: role,
             moduleBaseName: module,
@@ -24,7 +30,7 @@ final class ComponentCompilerTests: XCTestCase {
             sources: [URL(fileURLWithPath: "/project/Sources/\(module)/A.swift"), URL(fileURLWithPath: "/project/Sources/\(module)/B.swift")],
             reloadableImports: imports
         )
-        return ComponentCompileRequest(unit: unit, revision: revision, outputDirectory: URL(fileURLWithPath: "/cache"), sdk: makeTestSDK(), toolchain: toolchain)
+        return ComponentCompileRequest(unit: unit, revision: revision, outputDirectory: URL(fileURLWithPath: "/cache"), sdk: sdk, toolchain: toolchain)
     }
 
     func test_projectUnit_exactArguments() {
@@ -44,6 +50,24 @@ final class ComponentCompilerTests: XCTestCase {
             "/project/Sources/SplatTwinPlugins/A.swift",
             "/project/Sources/SplatTwinPlugins/B.swift",
         ])
+    }
+
+    func test_everyCModuleOfTheSDK_getsItsModuleMapInOrder() {
+        let sdk = makeTestSDK(cModuleMaps: [
+            "/sdk/CShaderTypes/module.modulemap",
+            "/sdk/CEngineAtomics/module.modulemap",
+            "/sdk/_AtomicsShims/module.modulemap",
+        ])
+
+        let arguments = ComponentCompiler.arguments(for: request(role: .project, module: "Game", sdk: sdk))
+
+        let clangOptions = zip(arguments, arguments.dropFirst()).filter { $0.0 == "-Xcc" }.map(\.1)
+        XCTAssertEqual(clangOptions, [
+            "-fmodule-map-file=/sdk/CShaderTypes/module.modulemap",
+            "-fmodule-map-file=/sdk/CEngineAtomics/module.modulemap",
+            "-fmodule-map-file=/sdk/_AtomicsShims/module.modulemap",
+        ])
+        XCTAssertEqual(arguments.firstIndex(of: "-Xlinker"), arguments.lastIndex(of: "-Xcc").map { $0 + 2 }, "the link options follow as before")
     }
 
     func test_moduleNameIsUniquePerRevision() {

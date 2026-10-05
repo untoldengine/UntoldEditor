@@ -4,7 +4,8 @@
 #
 # Checks that a packaged editor can load code components: it compiles a fixture against the
 # bundle's Component SDK exactly as the editor does (nothing of the engine linked), then makes
-# sure every engine and kit symbol the fixture needs is exported by the editor executable.
+# sure every symbol the fixture needs from a module of the SDK (the engine, the kit, and any
+# module they import) is exported by the editor executable.
 #
 # Why this exists: a subclass compiled into another image copies its base class's dispatch
 # table, entries for internal members included. Debug builds export internal symbols, release
@@ -18,12 +19,30 @@ APP="${1:?usage: verify-component-sdk.sh <path to the .app>}"
 SDK="$APP/Contents/Resources/ComponentSDK"
 EXECUTABLE="$APP/Contents/MacOS/UntoldEditor"
 
-for required in "$SDK/sdk.json" "$SDK/Modules" "$SDK/CShaderTypes/module.modulemap" "$EXECUTABLE"; do
+for required in "$SDK/sdk.json" "$SDK/Modules" "$EXECUTABLE"; do
     if [ ! -e "$required" ]; then
         echo "❌ Component SDK check: missing $required"
         exit 1
     fi
 done
+
+# The C modules sdk.json lists are the ones the editor passes a module map for: CShaderTypes,
+# and any other the engine was built with. An sdk.json from before the list has CShaderTypes.
+MODULE_MAP_ARGUMENTS=()
+while IFS= read -r module; do
+    MODULE_MAP="$SDK/$module/module.modulemap"
+    if [ ! -e "$MODULE_MAP" ]; then
+        echo "❌ Component SDK check: missing $MODULE_MAP"
+        exit 1
+    fi
+    # The app runs on another machine: a module map must name its headers inside the SDK.
+    if grep -q '"/' "$MODULE_MAP"; then
+        echo "❌ Component SDK check: $MODULE_MAP names a path outside the SDK"
+        grep '"/' "$MODULE_MAP" | sed 's/^/     /'
+        exit 1
+    fi
+    MODULE_MAP_ARGUMENTS+=(-Xcc "-fmodule-map-file=$MODULE_MAP")
+done < <(python3 -c 'import json, sys; print("\n".join(json.load(open(sys.argv[1])).get("cModules") or ["CShaderTypes"]))' "$SDK/sdk.json")
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -147,7 +166,7 @@ if ! xcrun swiftc -emit-library -parse-as-library \
     -o "$WORK/Fixture.dylib" -module-name ComponentSDKFixture \
     -swift-version 5 -Onone -D UNTOLD_EDITOR \
     -target "$TARGET" -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
-    -I "$SDK/Modules" -Xcc "-fmodule-map-file=$SDK/CShaderTypes/module.modulemap" \
+    -I "$SDK/Modules" "${MODULE_MAP_ARGUMENTS[@]}" \
     -Xlinker -undefined -Xlinker dynamic_lookup \
     "$WORK/Fixture.swift" > "$WORK/compile.log" 2>&1
 then
@@ -156,7 +175,10 @@ then
     exit 1
 fi
 
-nm -u "$WORK/Fixture.dylib" | awk '{print $NF}' | grep -E '18UntoldComponentKit|12UntoldEngine' | sort -u > "$WORK/needed.txt"
+# A symbol's mangled name carries its module, as the length of the name and the name:
+# 12UntoldEngine. Every Swift module of the SDK is linked into the editor.
+MODULE_PATTERN="$(python3 -c 'import json, sys; print("|".join(f"{len(m)}{m}" for m in json.load(open(sys.argv[1]))["providedModules"]))' "$SDK/sdk.json")"
+nm -u "$WORK/Fixture.dylib" | awk '{print $NF}' | grep -E "$MODULE_PATTERN" | sort -u > "$WORK/needed.txt"
 nm -gU "$EXECUTABLE" | awk '{print $NF}' | sort -u > "$WORK/exported.txt"
 MISSING="$(comm -23 "$WORK/needed.txt" "$WORK/exported.txt")"
 
@@ -167,4 +189,4 @@ if [ -n "$MISSING" ]; then
     exit 1
 fi
 
-echo "✅ Component SDK verified: the editor exports all $(wc -l < "$WORK/needed.txt" | tr -d ' ') engine and kit symbols a loaded library needs"
+echo "✅ Component SDK verified: the editor exports all $(wc -l < "$WORK/needed.txt" | tr -d ' ') symbols of its modules that a loaded library needs"

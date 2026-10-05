@@ -114,7 +114,7 @@ struct ComponentProjectLayout: Equatable {
     let pluginsDirectory: URL
     /// In build order: package runtimes, package editor sources, then the project's folder.
     let units: [ComponentSourceUnit]
-    /// Manifest and plugin package problems, shown in the Plugins panel.
+    /// Manifest, plugin package and SDK problems, shown in the Plugins panel.
     let problems: [String]
 
     var pluginsDirectoryExists: Bool {
@@ -157,6 +157,11 @@ enum ComponentSourceLocator {
 
         for legacyKey in manifest?.legacyKeys ?? [] {
             problems.append("\(EditorProjectManifest.fileName) uses an old key: \(legacyKey).")
+        }
+
+        // The compiler would only say that a required module is missing.
+        for module in sdk?.cModulesWithoutModuleMap ?? [] {
+            problems.append("No module map was found for the C module \(module), which this editor was built with. Plugins do not compile if the engine imports it.")
         }
 
         let pluginsDirectory: URL
