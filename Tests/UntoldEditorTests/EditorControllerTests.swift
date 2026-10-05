@@ -125,7 +125,8 @@ final class EditorControllerTests: XCTestCase {
 
     func test_editorController_implementsSelectionDelegate() {
         // Assert
-        XCTAssertNotNil(controller as? SelectionDelegate, "Should implement SelectionDelegate protocol")
+        let delegate: SelectionDelegate? = controller
+        XCTAssertNotNil(delegate, "Should implement SelectionDelegate protocol")
     }
 
     func test_editorController_didSelectEntity_updatesSelectionManager() {

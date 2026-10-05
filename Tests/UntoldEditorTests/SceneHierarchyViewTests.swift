@@ -205,8 +205,8 @@ final class SceneHierarchyViewTests: XCTestCase {
 
     func test_sceneGraphModel_returnsRootEntitiesForNilParent() {
         // Arrange
-        createEntity()
-        createEntity()
+        _ = createEntity()
+        _ = createEntity()
 
         // Refresh to cache the hierarchy
         sceneGraphModel.refreshHierarchy()
@@ -360,15 +360,15 @@ final class SceneHierarchyViewTests: XCTestCase {
 
     func test_sceneGraphModel_refreshHierarchy() {
         // Arrange: Create some entities
-        createEntity()
-        createEntity()
-        createEntity()
+        _ = createEntity()
+        _ = createEntity()
+        _ = createEntity()
 
         // Act: Refresh hierarchy
         sceneGraphModel.refreshHierarchy()
 
         // Assert: The childrenMap should be populated
-        let mirror = Mirror(reflecting: sceneGraphModel)
+        let mirror = Mirror(reflecting: sceneGraphModel!)
         if let childrenMap = mirror.descendant("childrenMap") as? [EntityID: [EntityID]] {
             // The map should exist (though it might be empty or contain root entities)
             XCTAssertNotNil(childrenMap, "Children map should be populated after refresh")
@@ -393,7 +393,7 @@ final class SceneHierarchyViewTests: XCTestCase {
         // Arrange
         let entity = createEntity()
 
-        let row = EntityRow(
+        _ = EntityRow(
             entityid: entity,
             entityName: "TestEntity",
             selectionManager: selectionManager

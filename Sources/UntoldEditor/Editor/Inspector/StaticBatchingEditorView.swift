@@ -104,9 +104,9 @@ struct StaticBatchingEditorView: View {
                     // Update checkbox state when view appears
                     staticBatchCheckboxState = isMarkedAsStatic(entityId: entityId)
                 }
-                .onChange(of: entityId) { newEntityId in
+                .onChange(of: entityId) {
                     // Update checkbox state when entity selection changes
-                    staticBatchCheckboxState = isMarkedAsStatic(entityId: newEntityId)
+                    staticBatchCheckboxState = isMarkedAsStatic(entityId: entityId)
                 }
             }
 

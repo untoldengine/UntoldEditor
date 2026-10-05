@@ -13,6 +13,7 @@
 //  spinner plus elapsed time, and a cancel button for jobs that support it.
 //
 
+import Combine
 import SwiftUI
 
 struct TasksPanelView: View {
