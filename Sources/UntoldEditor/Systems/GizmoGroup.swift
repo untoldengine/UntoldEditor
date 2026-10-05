@@ -25,26 +25,37 @@ var gizmoTargets: [EntityID] = []
 struct GizmoTargetStart {
     let entityId: EntityID
     let localPosition: simd_float3
+    /// Where it stood in the world. A scale of several entities reads it,
+    /// and those all keep a world transform: see `hasBothTransforms`.
     let worldPosition: simd_float3
     let scale: simd_float3
 
     init(entityId: EntityID) {
         self.entityId = entityId
         localPosition = getLocalPosition(entityId: entityId)
-        worldPosition = hasComponent(entityId: entityId, componentType: WorldTransformComponent.self)
-            ? getPosition(entityId: entityId)
-            : getLocalPosition(entityId: entityId)
+        worldPosition = getPosition(entityId: entityId)
         scale = getScale(entityId: entityId)
     }
 }
 
+/// Whether an entity keeps both of its transforms: its place under its
+/// parent, which the gizmo writes, and its place in the world, which a turn
+/// and a scale of several entities start from. The engine gives an entity the
+/// two together and takes them away together, so one without the other is
+/// not an entity the gizmo can work on.
+func hasBothTransforms(_ entityId: EntityID) -> Bool {
+    canEditSceneTransform(entityId: entityId)
+        && hasComponent(entityId: entityId, componentType: WorldTransformComponent.self)
+}
+
 /// The entities a drag of the gizmo works on: the active one, or with several
-/// selected every one of them that is still in the scene.
+/// selected every one of them that is still in the scene with both of its
+/// transforms.
 func gizmoTransformTargets() -> [EntityID] {
     guard activeEntity != .invalid else {
         return []
     }
-    let several = gizmoTargets.filter { canEditSceneTransform(entityId: $0) }
+    let several = gizmoTargets.filter(hasBothTransforms)
     guard several.count > 1, several.contains(activeEntity) else {
         return [activeEntity]
     }
@@ -133,12 +144,7 @@ func rotateGizmoTargets(_ targets: [EntityID], around pivot: simd_float3, axis: 
     let turn = simd_quatf(angle: degreesToRadians(degrees: degrees), axis: simd_normalize(axis))
 
     // Where each one goes is taken before any of them moves.
-    let destinations = targets.map { target -> simd_float3 in
-        let position = hasComponent(entityId: target, componentType: WorldTransformComponent.self)
-            ? getPosition(entityId: target)
-            : pivot
-        return pivot + simd_act(turn, position - pivot)
-    }
+    let destinations = targets.map { pivot + simd_act(turn, getPosition(entityId: $0) - pivot) }
     for (target, destination) in zip(targets, destinations) {
         applyGizmoRotationDelta(entityId: target, axis: axis, degrees: degrees)
         translateTo(entityId: target, position: localPosition(ofWorld: destination, for: target))

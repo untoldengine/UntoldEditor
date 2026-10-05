@@ -289,10 +289,11 @@ class SelectionManager: ObservableObject {
         activateSeveral()
     }
 
-    /// Whether the gizmo may go on an entity: it has a place in the scene, it
-    /// is neither hidden nor locked, and it shows in the viewport.
+    /// Whether the gizmo may go on an entity: it has a place in the scene and
+    /// in the world, it is neither hidden nor locked, and it shows in the
+    /// viewport.
     func takesGizmo(_ entityId: EntityID) -> Bool {
-        guard canEditSceneTransform(entityId: entityId), canMove(entityId) else { return false }
+        guard hasBothTransforms(entityId), canMove(entityId) else { return false }
         return entityOrChildrenHaveRenderableRepresentation(entityId: entityId)
             || EditorRepresentationRenderer.drawing(for: entityId) != nil
     }

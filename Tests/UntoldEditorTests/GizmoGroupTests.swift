@@ -173,6 +173,28 @@ final class GizmoGroupTests: XCTestCase {
         XCTAssertEqual(gizmoTransformTargets(), [second, third])
     }
 
+    func test_anEntityWithoutItsPlaceInTheWorld_isNoTargetAmongSeveral() {
+        let first = makeBox("First"), second = makeBox("Second"), third = makeBox("Third")
+        selectionManager.selectEntities([first, second, third])
+
+        // The engine takes an entity's two transforms away together; a turn
+        // and a scale of several start from the one taken here.
+        scene.remove(component: WorldTransformComponent.self, from: first)
+
+        XCTAssertFalse(hasBothTransforms(first))
+        XCTAssertEqual(gizmoTransformTargets(), [second, third])
+    }
+
+    func test_anEntityTheEngineMade_hasBothTransforms_untilItLeavesTheScene() {
+        let entity = createEntity()
+        XCTAssertTrue(hasBothTransforms(entity), "the engine gives an entity the two together")
+
+        destroyEntity(entityId: entity)
+        finalizePendingDestroys()
+
+        XCTAssertFalse(hasBothTransforms(entity))
+    }
+
     // MARK: - Moving
 
     func test_aDragOfTheMoveGizmo_carriesEveryEntityTheSameWay() {

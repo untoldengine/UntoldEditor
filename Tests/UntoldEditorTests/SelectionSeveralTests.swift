@@ -273,6 +273,17 @@ final class SelectionSeveralTests: XCTestCase {
         XCTAssertEqual(activeEntity, second)
     }
 
+    func test_anEntityWithoutItsPlaceInTheWorld_takesNoGizmo() {
+        let first = makeBox("First"), second = makeBox("Second"), third = makeBox("Third")
+        scene.remove(component: WorldTransformComponent.self, from: second)
+
+        selectionManager.selectEntities([first, second, third])
+
+        XCTAssertFalse(selectionManager.takesGizmo(second))
+        XCTAssertEqual(selectionManager.transformTargets, [first, third])
+        XCTAssertEqual(gizmoTargets, [first, third])
+    }
+
     func test_anEntityUnderASelectedOne_movesWithItsParent() {
         let parent = makeBox("Parent"), child = makeBox("Child"), other = makeBox("Other")
         setParent(childId: child, parentId: parent)
