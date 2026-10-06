@@ -23,6 +23,9 @@ let package = Package(
                 .product(name: "UntoldComponentKit", package: "UntoldEngine"),
             ],
             path: "Sources/UntoldEditor",
+            exclude: [
+                "Info.plist",
+            ],
             resources: [
                 .process("Resources/Thumbnails"),
             ],
@@ -34,6 +37,18 @@ let package = Package(
                 .linkedFramework("Metal"),
                 .linkedFramework("MetalKit"),
                 .linkedFramework("QuartzCore"),
+                // The identity of the executable run from the build folder (`swift run`, Xcode),
+                // which has no app bundle around it: its bundle identifier and name, read from
+                // the Info.plist embedded in the binary. The system's device picker of the Apple
+                // Vision Pro preview traps without one, and the settings live under it, shared
+                // with the packaged app (create_app_bundle.sh writes the bundle's own Info.plist).
+                // An incremental build does not notice a change to the file: clean, or touch a source.
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", Context.packageDirectory + "/Sources/UntoldEditor/Info.plist",
+                ]),
             ]
         ),
 

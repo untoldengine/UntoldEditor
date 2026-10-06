@@ -19,16 +19,20 @@ import UntoldEngine
 /// engine is what makes "it compiles in Xcode" and "it compiles in the editor" mean the same.
 enum EditorEnginePackage {
     /// A packaged editor reads it from its Component SDK; an editor run from source finds the
-    /// `Package.resolved` of its own checkout above the executable. `nil` when neither exists,
-    /// in which case new projects keep the engine's default reference and get no plugins folder.
+    /// `Package.resolved` of its own checkout above the executable, or above the build products
+    /// a development app bundle links. `nil` when none exists, in which case new projects keep
+    /// the engine's default reference and get no plugins folder.
     static func resolve(
         sdk: ComponentSDK? = ComponentSDK.resolve(),
+        resourceURL: URL? = Bundle.main.resourceURL,
         executableURL: URL? = Bundle.main.executableURL
     ) -> EnginePackageReference? {
         if let sdk, let url = sdk.engineURL, let revision = sdk.engineRevision {
             return EnginePackageReference(url: url, requirement: .revision(revision))
         }
-        guard var directory = executableURL?.resolvingSymlinksInPath().deletingLastPathComponent() else { return nil }
+        guard var directory = ComponentSDK.developmentBuildProducts(resourceURL: resourceURL)
+            ?? executableURL?.resolvingSymlinksInPath().deletingLastPathComponent()
+        else { return nil }
         for _ in 0 ..< 8 {
             let candidate = directory.appendingPathComponent("Package.resolved")
             if let reference = reference(fromResolvedFile: candidate) {

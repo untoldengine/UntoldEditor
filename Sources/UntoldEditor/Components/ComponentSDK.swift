@@ -34,6 +34,9 @@ struct ComponentSDK: Equatable {
 
     static let bundleDirectoryName = "ComponentSDK"
     static let manifestFileName = "sdk.json"
+    /// A development app bundle (`scripts/dev-app.sh`) links the build products it wraps here,
+    /// beside its resources: its executable is a copy that sits apart from them.
+    static let buildProductsLinkName = "BuildProducts"
     /// The engine's own C module: every SDK has it.
     static let cShaderTypesModule = "CShaderTypes"
 
@@ -73,10 +76,22 @@ struct ComponentSDK: Equatable {
         {
             return bundled
         }
+        if let products = developmentBuildProducts(resourceURL: resourceURL, fileManager: fileManager) {
+            return resolveFromBuildProducts(productsDirectory: products, fileManager: fileManager)
+        }
         guard let executableURL else { return nil }
         // `.build/debug` is a symlink; the module maps are found relative to the real directory.
         let products = executableURL.resolvingSymlinksInPath().deletingLastPathComponent()
         return resolveFromBuildProducts(productsDirectory: products, fileManager: fileManager)
+    }
+
+    /// The build products a development app bundle wraps, from the link beside its resources;
+    /// nil for a packaged app and for an executable run from the build folder.
+    static func developmentBuildProducts(resourceURL: URL?, fileManager: FileManager = .default) -> URL? {
+        guard let link = resourceURL?.appendingPathComponent(buildProductsLinkName, isDirectory: true) else { return nil }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: link.path, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
+        return link.resolvingSymlinksInPath()
     }
 
     static func resolveBundled(at sdkRoot: URL, fileManager: FileManager = .default) -> ComponentSDK? {

@@ -55,7 +55,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var splatLevelModeItems: [SplatLevelModeOption: NSMenuItem] = [:]
 
     func applicationDidFinishLaunching(_: Notification) {
-        Logger.log(message: "Launching \(appName) v\(Self.editorVersion)")
+        Logger.log(message: "Launching \(appName) v\(Self.editorVersion) as \(Bundle.main.bundleIdentifier ?? "an executable without an identity")")
+        EditorSettingsDomain.adoptLegacySettings()
 
         setupMainMenu()
 

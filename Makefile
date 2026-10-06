@@ -5,6 +5,12 @@
 build:
 	swift build
 
+# Build, wrap the result in a development app bundle and start it: what the Apple Vision Pro
+# preview needs (see scripts/dev-app.sh). CONFIG=release for the release build.
+CONFIG ?= debug
+run-app:
+	scripts/dev-app.sh --run $(CONFIG)
+
 # Clean build artifact
 
 clean:

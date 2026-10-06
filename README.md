@@ -120,6 +120,16 @@ swift build
 swift run UntoldEditor
 ```
 
+### Run as an app, for the Apple Vision Pro preview
+
+`swift run` and Xcode start the editor as a bare executable. View ▸ Preview on Apple Vision Pro (macOS 26, a Vision Pro on visionOS 26 nearby, both on the same Apple Account) needs the editor to run as an app that LaunchServices knows, because the system's device picker asks LaunchServices for the app behind the request. This makes a development app bundle around the build in seconds and starts it:
+
+```bash
+scripts/dev-app.sh --run          # the debug build; add `release` for the release build
+```
+
+It builds, wraps the result in `Untold Engine Studio.app` inside the build folder (the executable copied, the resources and the build products linked), registers the bundle, and starts it with its output in the terminal; `make run-app` does the same. Run it again after a build. The packaged app from `create_app_bundle.sh` works as well.
+
 ### Open in Xcode (recommended)
 
 1. Open Xcode → File ▸ Open → select the Package.swift in this repo

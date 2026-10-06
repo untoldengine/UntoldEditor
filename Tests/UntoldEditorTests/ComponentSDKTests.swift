@@ -62,6 +62,22 @@ final class ComponentSDKTests: XCTestCase {
         XCTAssertNotNil(sdk, "../.. must be taken from the real products directory, not from the symlink")
     }
 
+    func test_developmentAppBundle_findsTheBuildProductsItLinks() throws {
+        let scratch = try ScratchDirectory()
+        let products = try scratch.directory("build/out/Products/Debug")
+        try addModules(["UntoldEngine", "UntoldComponentKit"], to: products)
+        try scratch.write("module CShaderTypes {}", to: "build/out/Intermediates.noindex/GeneratedModuleMaps/CShaderTypes.modulemap")
+        let executable = try scratch.write("", to: "build/out/Products/Debug/Untold Engine Studio.app/Contents/MacOS/UntoldEditor")
+        let resources = try scratch.directory("build/out/Products/Debug/Untold Engine Studio.app/Contents/Resources")
+        try FileManager.default.createSymbolicLink(at: resources.appendingPathComponent(ComponentSDK.buildProductsLinkName), withDestinationURL: products)
+
+        let sdk = try XCTUnwrap(ComponentSDK.resolve(resourceURL: resources, executableURL: executable))
+
+        XCTAssertEqual(sdk.modulesDirectory.resolvingSymlinksInPath().path, products.resolvingSymlinksInPath().path)
+        XCTAssertFalse(sdk.isBundled)
+        XCTAssertNil(ComponentSDK.resolve(resourceURL: resources.appendingPathComponent("elsewhere"), executableURL: executable), "a copied executable with no link beside the resources finds nothing")
+    }
+
     func test_bundledSDK_winsAndCarriesTheRecordedCompiler() throws {
         let scratch = try ScratchDirectory()
         let resources = try scratch.directory("App.app/Contents/Resources")
