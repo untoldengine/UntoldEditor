@@ -18,6 +18,22 @@ import SwiftUI
 import XCTest
 
 final class CreateProjectViewTests: XCTestCase {
+    // MARK: - Helper mirroring CreateProjectView's target-index mapping
+
+    /// Mirrors the `selectedTarget` → `BuildTarget` switch in `CreateProjectView.createBuildSettings()`.
+    /// Takes the index as a parameter (rather than inlining the switch on a literal in each test)
+    /// so the compiler can't prove branches unreachable and warn about dead code.
+    private func buildTarget(forSelectedTarget selectedTarget: Int) -> BuildTarget {
+        switch selectedTarget {
+        case 0: return .macOS(deployment: .v15)
+        case 1: return .iOS(deployment: .v17)
+        case 2: return .iOS(deployment: .v17)
+        case 3: return .visionOS(deployment: .v26)
+        case 4: return .multi(macOS: .v15, iOS: .v17, visionOS: .v26)
+        default: return .macOS(deployment: .v15)
+        }
+    }
+
     // MARK: - Helper for reading @State defaults
 
     /// Reads the initial value of one of the view's `@State` properties using reflection.
@@ -512,11 +528,7 @@ final class CreateProjectViewTests: XCTestCase {
         let selectedTarget = 0
 
         // Act
-        let target: BuildTarget
-        switch selectedTarget {
-        case 0: target = .macOS(deployment: .v15)
-        default: target = .macOS(deployment: .v15)
-        }
+        let target = buildTarget(forSelectedTarget: selectedTarget)
 
         // Assert
         if case .macOS = target {
@@ -531,11 +543,7 @@ final class CreateProjectViewTests: XCTestCase {
         let selectedTarget = 1
 
         // Act
-        let target: BuildTarget
-        switch selectedTarget {
-        case 1: target = .iOS(deployment: .v17)
-        default: target = .macOS(deployment: .v15)
-        }
+        let target = buildTarget(forSelectedTarget: selectedTarget)
 
         // Assert
         if case .iOS = target {
@@ -551,11 +559,7 @@ final class CreateProjectViewTests: XCTestCase {
         let isIOSAR = (selectedTarget == 2)
 
         // Act
-        let target: BuildTarget
-        switch selectedTarget {
-        case 2: target = .iOS(deployment: .v17)
-        default: target = .macOS(deployment: .v15)
-        }
+        let target = buildTarget(forSelectedTarget: selectedTarget)
 
         // Assert
         if case .iOS = target {
@@ -570,11 +574,7 @@ final class CreateProjectViewTests: XCTestCase {
         let selectedTarget = 3
 
         // Act
-        let target: BuildTarget
-        switch selectedTarget {
-        case 3: target = .visionOS(deployment: .v26)
-        default: target = .macOS(deployment: .v15)
-        }
+        let target = buildTarget(forSelectedTarget: selectedTarget)
 
         // Assert
         if case .visionOS = target {
@@ -589,11 +589,7 @@ final class CreateProjectViewTests: XCTestCase {
         let selectedTarget = 4
 
         // Act
-        let target: BuildTarget
-        switch selectedTarget {
-        case 4: target = .multi(macOS: .v15, iOS: .v17, visionOS: .v26)
-        default: target = .macOS(deployment: .v15)
-        }
+        let target = buildTarget(forSelectedTarget: selectedTarget)
 
         // Assert
         if case .multi = target {
@@ -608,15 +604,7 @@ final class CreateProjectViewTests: XCTestCase {
         let selectedTarget = 999 // Invalid index
 
         // Act
-        let target: BuildTarget
-        switch selectedTarget {
-        case 0: target = .macOS(deployment: .v15)
-        case 1: target = .iOS(deployment: .v17)
-        case 2: target = .iOS(deployment: .v17)
-        case 3: target = .visionOS(deployment: .v26)
-        case 4: target = .multi(macOS: .v15, iOS: .v17, visionOS: .v26)
-        default: target = .macOS(deployment: .v15)
-        }
+        let target = buildTarget(forSelectedTarget: selectedTarget)
 
         // Assert
         if case .macOS = target {

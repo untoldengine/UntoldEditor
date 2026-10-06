@@ -188,7 +188,7 @@ final class AssetImportCopyTests: XCTestCase {
         let destination = base.appendingPathComponent("copy.ply")
 
         var reports: [AssetCopyProgress] = []
-        try copyAssetItem(from: source, to: destination, allowClone: false) { reports.append($0) }
+        try copyAssetItem(from: source, to: destination, allowClone: false, progress: { reports.append($0) })
 
         XCTAssertEqual(try Data(contentsOf: destination), payload)
         XCTAssertEqual(reports.last, AssetCopyProgress(copied: Int64(payload.count), total: Int64(payload.count)))
@@ -212,7 +212,7 @@ final class AssetImportCopyTests: XCTestCase {
         let destination = base.appendingPathComponent("copy", isDirectory: true)
 
         var last: AssetCopyProgress?
-        try copyAssetItem(from: source, to: destination, allowClone: false) { last = $0 }
+        try copyAssetItem(from: source, to: destination, allowClone: false, progress: { last = $0 })
 
         XCTAssertEqual(try Data(contentsOf: destination.appendingPathComponent("Textures/albedo.png")), Data("bb".utf8))
         XCTAssertEqual(try Data(contentsOf: destination.appendingPathComponent("material.json")), Data("a".utf8))

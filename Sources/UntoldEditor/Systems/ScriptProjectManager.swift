@@ -57,7 +57,7 @@ class ScriptProjectManager {
     // MARK: - Initialize Project
 
     func initializeProject() throws {
-        guard let basePath = EditorAssetBasePath.shared.basePath else {
+        guard EditorAssetBasePath.shared.basePath != nil else {
             throw ScriptProjectError.noAssetBasePath
         }
 

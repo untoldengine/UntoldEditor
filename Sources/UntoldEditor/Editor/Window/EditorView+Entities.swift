@@ -142,8 +142,6 @@ extension EditorView {
 
         var forward = forwardDirectionVector(from: cameraComponent.rotation)
         forward *= -1.0
-        let camPosition = cameraComponent.localPosition
-        let spawnPosition = camPosition + forward * spawnDistance
         translateTo(entityId: entityId, position: simd_float3(0.0, 0.0, 0.0))
 
         selectionManager.selectedEntity = entityId

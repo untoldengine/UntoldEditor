@@ -97,8 +97,6 @@ final class EnvironmentViewTests: XCTestCase {
             let hdrFilePath = hdr.appendingPathComponent("test_environment.hdr")
             FileManager.default.createFile(atPath: hdrFilePath.path, contents: Data())
 
-            let hdrAsset = Asset(name: "test_environment.hdr", category: "HDR", path: hdrFilePath, isFolder: false)
-
             // Verify the HDR file exists
             XCTAssertTrue(FileManager.default.fileExists(atPath: hdrFilePath.path), "HDR file should exist")
 
