@@ -247,29 +247,42 @@
             }
         }
 
+        // While a headset previews the scene, a move of the camera waits for
+        // the eyes being drawn: `VisionProPreviewState.steerCamera`.
+
         func canvasRightMouseDown(_ event: NSEvent) {
             syncModifiers(from: event)
             keyState.rightMousePressed = true
-            beginCameraDrag()
+            VisionProPreviewState.shared.steerCamera {
+                beginCameraDrag()
+            }
         }
 
         func canvasRightMouseDragged(_ event: NSEvent) {
             // The event's Y grows down the screen; the view's Y points up.
-            moveCameraDrag(by: simd_float2(Float(event.deltaX), Float(-event.deltaY)))
+            VisionProPreviewState.shared.steerCamera {
+                moveCameraDrag(by: simd_float2(Float(event.deltaX), Float(-event.deltaY)))
+            }
         }
 
         func canvasRightMouseUp(_: NSEvent) {
             keyState.rightMousePressed = false
-            endCameraDrag()
+            VisionProPreviewState.shared.steerCamera {
+                endCameraDrag()
+            }
         }
 
         func canvasScrolled(_ event: NSEvent) {
             syncModifiers(from: event)
-            handleMouseScroll(event)
+            VisionProPreviewState.shared.steerCamera {
+                handleMouseScroll(event)
+            }
         }
 
         func canvasMagnified(_ event: NSEvent) {
-            handleMagnify(by: event.magnification, phase: event.phase)
+            VisionProPreviewState.shared.steerCamera {
+                handleMagnify(by: event.magnification, phase: event.phase)
+            }
         }
 
         /// A key pressed while the canvas has the keyboard. False when the key is
@@ -348,6 +361,13 @@
                 return
             }
             let precise = event.hasPreciseScrollingDeltas
+
+            // With a headset on, the scroll does nothing: the orbit would swing
+            // the wearer round a point ahead, the pointer's own movement turns
+            // the view, and the keys move.
+            if VisionProPreviewState.shared.isPreviewing {
+                return
+            }
 
             let now = ProcessInfo.processInfo.systemUptime
             if now - editorInputTargetViewRef.lastScrollNavigationTime > InputSystem.scrollSessionGap {
@@ -705,7 +725,10 @@
 
             if magnification != 0 {
                 pinchDelta = 3.0 * simd_float3(0.0, 0.0, Float(magnification))
-                zoomSceneCamera(by: Float(magnification) * 8.0)
+                // With a headset on, the pinch does nothing: the keys move.
+                if VisionProPreviewState.shared.isPreviewing == false {
+                    zoomSceneCamera(by: Float(magnification) * 8.0)
+                }
                 previousScale += magnification
                 currentPinchGestureState = .changed
             }
@@ -1268,6 +1291,11 @@
         /// The pointer moved by `delta` points, Y up, with the right button held.
         func moveCameraDrag(by delta: simd_float2) {
             guard editorInputTargetViewRef.isCameraDragActive else {
+                return
+            }
+            // With a headset on, the pointer's movement turns the view, button
+            // or not: `VisionProPointerCapture` has it.
+            if VisionProPreviewState.shared.isPreviewing {
                 return
             }
             switch editorInputTargetViewRef.activeDragAction {

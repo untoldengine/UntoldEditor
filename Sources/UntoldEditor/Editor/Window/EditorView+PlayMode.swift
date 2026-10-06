@@ -44,6 +44,8 @@ extension EditorView {
         }
 
         if shouldPlay {
+            // A preview on a headset ends before the game takes the camera.
+            VisionProPreviewSession.shared.end()
             if capturesSnapshot {
                 let snapshot = serializeScene()
                 playModeSnapshot = snapshot

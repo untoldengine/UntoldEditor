@@ -90,6 +90,17 @@ final class ViewportCameraTests: XCTestCase {
         XCTAssertFalse(ViewportCameras.isLockedPreview)
     }
 
+    func test_whileAHeadsetPreviews_theViewportIsLocked_andTheKeysSteerTheEditorsCamera() {
+        let original = ViewportCameras.isPreviewingOnHeadset
+        ViewportCameras.isPreviewingOnHeadset = { true }
+        defer { ViewportCameras.isPreviewingOnHeadset = original }
+        let camera = findSceneCamera()
+
+        XCTAssertEqual(ViewportCameras.current, .editor, "the editor's camera carries the headset")
+        XCTAssertTrue(ViewportCameras.isLockedPreview, "clicks select nothing and no overlay is drawn")
+        XCTAssertEqual(ViewportCameras.steered, camera, "the keys and the mouse fly the camera the headset rides")
+    }
+
     func test_show_refusesAnEntityThatIsNotAGameCamera() {
         let sceneCamera = findSceneCamera()
         let prop = createEntity()

@@ -14,6 +14,14 @@ import UntoldEngine
 
 extension UntoldRenderer {
     func handleSceneInput() {
+        // While a headset previews the scene the engine's XR update runs this
+        // from the headset's loop too. The keys fly the camera level from that
+        // loop then (`VisionProFlight`), the pointer turns it, and the gizmo
+        // takes no input: the editor's own flying, along the camera's tilted
+        // forward, would climb and dive on top.
+        guard VisionProPreviewState.shared.isPreviewing == false else {
+            return
+        }
         // A key whose release was never reported must not fly the camera forever.
         #if os(macOS)
             InputSystem.shared.releaseFlyKeysTheKeyboardLetGo()

@@ -71,6 +71,19 @@ extension EditorView {
                     .padding(.top, 10)
                 }
             }
+            .overlay(alignment: .top) {
+                if experienceMode == .edit, editor_showsHeadsetPreviewLabel {
+                    VStack(spacing: 8) {
+                        VisionProPreviewLabel(state: visionProPreview.state) {
+                            visionProPreview.end()
+                        }
+                        if visionProPreview.isPreviewing {
+                            VisionProPreviewHints()
+                        }
+                    }
+                    .padding(.top, 10)
+                }
+            }
             .overlay {
                 if shouldShowDemoGallery {
                     DemoGalleryView(

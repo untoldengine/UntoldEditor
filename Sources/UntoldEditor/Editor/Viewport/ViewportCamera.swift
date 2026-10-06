@@ -84,10 +84,12 @@ enum ViewportCameras {
 
     /// The camera the keys and the mouse steer now, or nil when they steer
     /// none. While editing it is the editor's, and a game camera shown as a
-    /// locked preview stays where it is. While playing it is the camera the
-    /// viewport shows: the game's, unless View > Steer the Camera While
-    /// Playing is off and the game steers it alone, or the editor's when the
-    /// View menu keeps the viewport on it.
+    /// locked preview stays where it is. While a headset previews the scene it
+    /// is the editor's too, which carries the headset: the keys and the mouse
+    /// fly it, and the headset sees the scene from there. While playing it is
+    /// the camera the viewport shows: the game's, unless View > Steer the
+    /// Camera While Playing is off and the game steers it alone, or the
+    /// editor's when the View menu keeps the viewport on it.
     static var steered: EntityID? {
         if let active = CameraSystem.shared.activeCamera, isGameCamera(active) {
             return isPlaying && playback.steersCameraWhilePlaying ? active : nil
@@ -95,12 +97,18 @@ enum ViewportCameras {
         return findSceneCamera()
     }
 
-    /// True while the viewport is a locked preview of a game camera: the mouse
-    /// and the keys move nothing, clicks select nothing and the editor draws
-    /// none of its overlays, until the editor's camera is chosen again.
+    /// True while the viewport is a locked preview of a game camera, or while
+    /// a headset previews the scene: clicks select nothing and the editor
+    /// draws none of its overlays, until the editor's camera is chosen again
+    /// or the preview ends. The keys and the mouse move nothing in a game
+    /// camera's preview; with a headset they fly the editor's camera.
     static var isLockedPreview: Bool {
-        current != .editor
+        current != .editor || isPreviewingOnHeadset()
     }
+
+    /// Whether the scene is previewed on a headset, which the editor's camera
+    /// carries then. Tests put their own answer here.
+    static var isPreviewingOnHeadset: () -> Bool = { VisionProPreviewState.shared.isPreviewing }
 
     /// An entity is about to leave the scene. A game camera the viewport is
     /// locked on, or an ancestor of it, which goes with it, gives the viewport
