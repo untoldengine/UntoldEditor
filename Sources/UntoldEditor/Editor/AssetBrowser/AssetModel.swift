@@ -20,7 +20,7 @@ public struct Asset: Identifiable {
     /// The source/working folder this runtime asset was cooked from (same stem,
     /// e.g. `bl.untoldpack` <- `bl/`), if one exists. Hidden from the listing in
     /// its own right; reachable via the asset's "Reveal Source Folder" context menu.
-    var sourceFolder: URL? = nil
+    var sourceFolder: URL?
 }
 
 enum AssetCategory: String, CaseIterable {
