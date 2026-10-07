@@ -54,7 +54,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var splatBlendCapItems: [SplatBlendCapOption: NSMenuItem] = [:]
     private var splatWorkingSetItems: [EditorSplatWorkingSet: NSMenuItem] = [:]
     private var splatLevelModeItems: [SplatLevelModeOption: NSMenuItem] = [:]
-    /// Installs the menu bar and keeps it in place (SwiftUI installs its own).
+    /// Puts the editor's menus in the menu bar and keeps them there (SwiftUI installs its own bar).
     private var mainMenuKeeper: EditorMainMenuKeeper?
 
     func applicationDidFinishLaunching(_: Notification) {
@@ -346,7 +346,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.zoom(_:)), keyEquivalent: "")
         NSApp.windowsMenu = windowMenu
 
-        mainMenuKeeper = EditorMainMenuKeeper(menu: mainMenu)
+        mainMenuKeeper = EditorMainMenuKeeper(menu: mainMenu, windowsMenu: windowMenu)
     }
 
     /// A menu item that shows or hides a panel of the docking layout; its
