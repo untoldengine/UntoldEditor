@@ -967,12 +967,9 @@ final class AssetBrowserViewTests: XCTestCase {
         XCTAssertTrue(item.replacePaths.isEmpty)
     }
 
-    func test_defaultAssetPackCatalog_onlyShowsStarterPackWithThumbnail() {
+    func test_defaultAssetPackCatalog_isEmpty() {
         let catalog = defaultAssetPackCatalog()
-        XCTAssertEqual(catalog.assets.map(\.id), ["starter"])
-        XCTAssertEqual(catalog.assets.first?.name, "StarterPack")
-        XCTAssertEqual(catalog.assets.first?.thumbnailName, "starterpack")
-        XCTAssertEqual(catalog.assets.first?.replacePaths, ["Models/starterpack"])
+        XCTAssertTrue(catalog.assets.isEmpty)
     }
 
     func test_assetPackCategoryNames_sortsUniqueCategories() {

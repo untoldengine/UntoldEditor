@@ -88,5 +88,6 @@ enum PanelID: String, Codable, CaseIterable, Identifiable {
     /// The panels this build of the editor offers.
     static var available: [PanelID] {
         allCases.filter { $0 != .plugins || EditorFeatureFlags.enableCodeComponents }
+            .filter { $0 != .explore }
     }
 }

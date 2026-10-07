@@ -36,8 +36,18 @@ import XCTest
             }
         }
 
-        func test_demoGalleryView_wiresCallbacks() {
-            let firstDemo = demoSceneCatalog[0]
+        func test_demoGalleryView_wiresCallbacks() throws {
+            let firstDemo = try DemoSceneCatalogItem(
+                id: "sample",
+                title: "Sample",
+                subtitle: "A sample demo scene.",
+                thumbnailName: "sample",
+                systemImageName: "cube",
+                tags: ["Demo"],
+                source: .remoteManifest(XCTUnwrap(URL(string: "https://example.com/sample.json"))),
+                cameraFrame: nil,
+                loadsSceneAuthoredPayload: false
+            )
             var selectedDemoId: String?
             var didTryOwnScene = false
             var didCreateProject = false
@@ -45,7 +55,7 @@ import XCTest
             var didOpenFullEditor = false
 
             let sut = DemoGalleryView(
-                demos: demoSceneCatalog,
+                demos: [firstDemo],
                 onDemoSelected: { selectedDemoId = $0.id },
                 onTryOwnScene: { didTryOwnScene = true },
                 onCreateProject: { didCreateProject = true },
