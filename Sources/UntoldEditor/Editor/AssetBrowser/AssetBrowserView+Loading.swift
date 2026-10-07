@@ -50,10 +50,24 @@ extension AssetBrowserView {
                 includingPropertiesForKeys: nil,
                 options: [.skipsHiddenFiles]
             ) {
+                // A folder that shares its stem with a sibling runtime asset is that
+                // asset's cook source (see `runtimeExportLocation`): it's not listed on
+                // its own, only reachable via that asset's "Reveal Source Folder" menu.
+                let sourceFolderByStem: [String: URL] = contents.reduce(into: [:]) { result, item in
+                    guard allRuntimeAssetExtensions.contains(item.pathExtension.lowercased()) else { return }
+                    let stem = item.deletingPathExtension().lastPathComponent
+                    let candidateFolder = categoryPath.appendingPathComponent(stem, isDirectory: true)
+                    var isDir: ObjCBool = false
+                    if FileManager.default.fileExists(atPath: candidateFolder.path, isDirectory: &isDir), isDir.boolValue {
+                        result[stem] = candidateFolder
+                    }
+                }
+
                 for item in contents {
                     var isDir: ObjCBool = false
                     if FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir) {
                         if isDir.boolValue {
+                            guard sourceFolderByStem[item.lastPathComponent] == nil else { continue }
                             // It’s a folder — valid for all categories
                             categoryAssets.append(Asset(name: item.lastPathComponent,
                                                         category: category.rawValue,
@@ -81,11 +95,16 @@ extension AssetBrowserView {
                                                         path: item,
                                                         isFolder: false))
                         } else if category == .models || category == .animations {
-                            if runtimeAssetExtensions(for: category).contains(item.pathExtension.lowercased()) || sourceAssetExtensions.contains(item.pathExtension.lowercased()) {
+                            let itemExtension = item.pathExtension.lowercased()
+                            if runtimeAssetExtensions(for: category).contains(itemExtension) || sourceAssetExtensions.contains(itemExtension) {
+                                let sourceFolder = allRuntimeAssetExtensions.contains(itemExtension)
+                                    ? sourceFolderByStem[item.deletingPathExtension().lastPathComponent]
+                                    : nil
                                 categoryAssets.append(Asset(name: item.lastPathComponent,
                                                             category: category.rawValue,
                                                             path: item,
-                                                            isFolder: false))
+                                                            isFolder: false,
+                                                            sourceFolder: sourceFolder))
                             }
                         } else if category == .scripts {
                             // Not used anymore due to flat listing, but keep for safety (won’t execute due to continue above)

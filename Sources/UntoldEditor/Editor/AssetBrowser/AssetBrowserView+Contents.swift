@@ -156,6 +156,17 @@ extension AssetBrowserView {
                                 }
                             }
                         }
+                        if let sourceFolder = asset.sourceFolder {
+                            Button {
+                                if selectedDirURL != nil {
+                                    selectedDirURL = sourceFolder
+                                } else if selectedCategory != AssetCategory.scripts.rawValue {
+                                    folderPathStack.append(sourceFolder)
+                                }
+                            } label: {
+                                Label("Reveal Source Folder", systemImage: "folder")
+                            }
+                        }
                         Button(role: .destructive) {
                             pendingDeleteAsset = asset
                             showDeleteConfirmation = true
@@ -183,11 +194,25 @@ extension AssetBrowserView {
     @ViewBuilder
     func folderContentsView(for folder: URL, selectionManager _: SelectionManager) -> some View {
         if let contents = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil, options: .skipsHiddenFiles) {
+            // A folder that shares its stem with a sibling runtime asset is that
+            // asset's cook source (see `runtimeExportLocation`): it's not listed on
+            // its own, only reachable via that asset's "Reveal Source Folder" menu.
+            let sourceFolderByStem: [String: URL] = contents.reduce(into: [:]) { result, item in
+                guard allRuntimeAssetExtensions.contains(item.pathExtension.lowercased()) else { return }
+                let stem = item.deletingPathExtension().lastPathComponent
+                let candidateFolder = folder.appendingPathComponent(stem, isDirectory: true)
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: candidateFolder.path, isDirectory: &isDir), isDir.boolValue {
+                    result[stem] = candidateFolder
+                }
+            }
+
             let items = contents.compactMap { item -> Asset? in
                 var isDir: ObjCBool = false
                 if FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir) {
                     let itemCategory = selectedCategory ?? inferCategory(for: item)?.rawValue ?? ""
                     if isDir.boolValue {
+                        guard sourceFolderByStem[item.lastPathComponent] == nil else { return nil }
                         return Asset(name: item.lastPathComponent, category: itemCategory, path: item, isFolder: true)
                     } else {
                         // Imported sources (USD, .blend) are listed too: they stay in the
@@ -200,9 +225,14 @@ extension AssetBrowserView {
                             .union(sourceAssetExtensions)
                         guard allowedExtensions.contains(itemExtension) else { return nil }
 
+                        let sourceFolder = allRuntimeAssetExtensions.contains(itemExtension)
+                            ? sourceFolderByStem[item.deletingPathExtension().lastPathComponent]
+                            : nil
+
                         return Asset(name: item.lastPathComponent,
                                      category: itemCategory,
-                                     path: item)
+                                     path: item,
+                                     sourceFolder: sourceFolder)
                     }
                 }
                 return nil
