@@ -306,6 +306,26 @@ final class VisionProPreviewLoopTests: XCTestCase {
         XCTAssertGreaterThan(flown.eye.y, 1, "without a headset the editor's own W climbs where the camera looks")
     }
 
+    func test_aFrameWithMoreEyesThanTheEngineDraws_getsTwo_andClobbersNone() throws {
+        _ = makeCubeInFrontOfTheCamera()
+        let frames = VisionProFakeFrames(device: renderInfo.device, eyeSize: (128, 96), count: 6, eyes: 3)
+        renderer.enterStereo()
+        let loop = VisionProPreviewLoop(renderer: renderer, frames: frames, start: start(), mirror: nil)
+
+        loop.run()
+        try XCTUnwrap(frames.frames.last?.presentedIn).waitUntilCompleted()
+
+        XCTAssertEqual(loop.framesDrawn, 6)
+        for index in 0 ..< 2 {
+            let eye = frames.colorTextures[index]
+            let middle = VisionProFakeFrames.pixel(of: eye, x: 64, y: 48)
+            let corner = VisionProFakeFrames.pixel(of: eye, x: 4, y: 4)
+            XCTAssertGreaterThan(abs(brightness(middle) - brightness(corner)), 40, "eye \(index) shows the cube")
+        }
+        let third = VisionProFakeFrames.pixel(of: frames.colorTextures[2], x: 64, y: 48)
+        XCTAssertEqual(brightness(third), 0, "the third eye is left as it was: nothing drawn, nothing clobbered")
+    }
+
     func test_aFrameWithoutEyes_isPresentedWithNothingDrawn() {
         _ = makeCubeInFrontOfTheCamera()
         let frames = VisionProFakeFrames(device: renderInfo.device, eyeSize: (64, 48), count: 1)

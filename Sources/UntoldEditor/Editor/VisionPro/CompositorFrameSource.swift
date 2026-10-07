@@ -128,7 +128,7 @@
 
         func acquireEyes() -> VisionProFrameEyes? {
             // The headset is the first drawable; another target the compositor
-            // hands over is presented and left blank.
+            // hands over is cleared and presented, see `present`.
             drawables = frame.queryDrawables()
             guard let drawable = drawables.first else {
                 return nil
@@ -137,7 +137,9 @@
             guard let anchor = source.deviceAnchor(for: presentationTime) else {
                 return VisionProFrameEyes(originFromDevice: nil, eyes: [])
             }
-            drawable.deviceAnchor = anchor
+            for drawable in drawables {
+                drawable.deviceAnchor = anchor
+            }
             let originFromDevice = anchor.originFromAnchorTransform
             let eyes = drawable.views.indices.map { index in
                 VisionProEye(
@@ -151,6 +153,18 @@
         }
 
         func present(commandBuffer: MTLCommandBuffer) {
+            // A drawable beyond the first was not drawn: it is cleared, so
+            // that it shows nothing rather than what its textures held.
+            for drawable in drawables.dropFirst() {
+                for texture in drawable.colorTextures {
+                    let pass = MTLRenderPassDescriptor()
+                    pass.colorAttachments[0].texture = texture
+                    pass.colorAttachments[0].loadAction = .clear
+                    pass.colorAttachments[0].storeAction = .store
+                    pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
+                    commandBuffer.makeRenderCommandEncoder(descriptor: pass)?.endEncoding()
+                }
+            }
             for drawable in drawables {
                 drawable.encodePresent(commandBuffer: commandBuffer)
             }

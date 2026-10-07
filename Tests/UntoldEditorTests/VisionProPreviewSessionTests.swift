@@ -145,6 +145,44 @@ final class VisionProPreviewSessionTests: XCTestCase {
         XCTAssertTrue(turns.isEmpty)
     }
 
+    func test_aLoopThatOutlivesTheStop_putsTheEditorBack_whenItEnds() {
+        session.loopStopTimeout = 0.05
+        var dismissed = 0
+        session.openSpace = { true }
+        session.dismissSpace = { dismissed += 1 }
+        let frames = VisionProFakeFrames(device: renderInfo.device, eyeSize: (64, 48), count: nil)
+        // The loop is held in the middle of a frame, as a command buffer that
+        // never completes would hold it.
+        let gate = DispatchSemaphore(value: 0)
+        let arrived = DispatchSemaphore(value: 0)
+        frames.beforeEachFrame = {
+            arrived.signal()
+            gate.wait()
+        }
+        session.begin()
+        session.spaceDidOpen(frames: frames)
+        XCTAssertEqual(arrived.wait(timeout: .now() + .seconds(5)), .success, "the loop reached the frame it is held in")
+
+        session.end()
+
+        XCTAssertEqual(session.state, .ending, "the ending waits for the loop")
+        XCTAssertTrue(session.restoreWaitsForTheLoop)
+        XCTAssertTrue(VisionProPreviewState.shared.isPreviewing, "the loop still draws: nothing is taken from under it")
+        XCTAssertTrue(renderInfo.isXRStereoMode)
+        XCTAssertFalse(renderer.metalView.delegate === renderer)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(session.state, .ending, "the dismiss alone does not end the ending")
+
+        gate.signal()
+        waitForState(.idle)
+
+        XCTAssertFalse(session.restoreWaitsForTheLoop)
+        XCTAssertFalse(VisionProPreviewState.shared.isPreviewing)
+        XCTAssertFalse(renderInfo.isXRStereoMode)
+        XCTAssertTrue(renderer.metalView.delegate === renderer)
+        XCTAssertEqual(dismissed, 1)
+    }
+
     func test_endingThePreview_putsTheEditorBack() {
         let camera = findSceneCamera()
         cameraLookAt(entityId: camera, eye: simd_float3(1, 2, 3), target: .zero, up: simd_float3(0, 1, 0))

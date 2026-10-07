@@ -58,6 +58,11 @@ final class VisionProPreviewSession: ObservableObject {
     private var loopDone: DispatchSemaphore?
     private var mirror: VisionProMirror?
     private var pointer: VisionProPointerCapture?
+    /// How long `end()` waits for the loop to finish the frame it is on
+    /// before leaving the rest to the loop's own end; tests shorten it.
+    var loopStopTimeout: TimeInterval = 2
+    /// The loop outlived the wait: the editor is put back when it ends.
+    private(set) var restoreWaitsForTheLoop = false
 
     var isPreviewing: Bool {
         state == .previewing
@@ -121,14 +126,23 @@ final class VisionProPreviewSession: ObservableObject {
         }
         Task { @MainActor [weak self] in
             await self?.dismissSpace?()
-            guard let self, state == .ending else { return }
+            // A loop that outlived the wait puts the editor back, and ends
+            // the ending, when it ends.
+            guard let self, state == .ending, restoreWaitsForTheLoop == false else { return }
             state = .idle
         }
     }
 
-    /// The loop ended on its own: the headset closed the space, or the
-    /// stream broke.
+    /// The loop's thread ended: the headset closed the space, the stream
+    /// broke, or a loop that outlived `end()`'s wait is done at last.
     private func loopDidEnd() {
+        if restoreWaitsForTheLoop {
+            restoreEditor()
+            if state == .ending {
+                state = .idle
+            }
+            return
+        }
         guard state == .previewing else {
             return
         }
@@ -186,12 +200,26 @@ final class VisionProPreviewSession: ObservableObject {
         thread.start()
     }
 
+    /// Stops the loop and puts the editor back once the loop has ended: the
+    /// loop finishes the frame it is on, through the renderer's stereo targets
+    /// and the mirror, so neither is taken from under it. Should the frame
+    /// take longer than the wait, as a command buffer that never completes
+    /// would, the editor is put back when the loop's thread ends; the session
+    /// stays in `ending` meanwhile.
     private func stopLoopAndRestore() {
         loop?.stop()
-        // The loop finishes the frame it is on.
-        _ = loopDone?.wait(timeout: .now() + .seconds(2))
+        guard loopDone?.wait(timeout: .now() + loopStopTimeout) == .success else {
+            Logger.log(message: "Vision Pro preview: the headset's loop did not end within \(loopStopTimeout) s; the editor is put back when it does.")
+            restoreWaitsForTheLoop = true
+            return
+        }
+        restoreEditor()
+    }
+
+    private func restoreEditor() {
         loop = nil
         loopDone = nil
+        restoreWaitsForTheLoop = false
 
         if let renderer {
             renderer.metalView.delegate = renderer

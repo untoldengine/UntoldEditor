@@ -84,10 +84,14 @@ final class VisionProFakeFrames: VisionProFrameSource {
     /// Open-ended frames carry eyes, as a headset that shows the scene; off,
     /// they carry none, as one that shows nothing yet.
     var showsEyesWhileOpen = false
+    /// Run on the loop's thread before each open-ended frame is handed over:
+    /// a test holds the loop there.
+    var beforeEachFrame: (() -> Void)?
 
     /// Textures of `eyeSize` for `count` frames; `count` nil keeps the source
     /// open with empty frames until it is stopped.
-    init(device: MTLDevice, eyeSize: (width: Int, height: Int), count: Int?) {
+    /// `eyes` beyond two stand for a headset with more views than the engine draws.
+    init(device: MTLDevice, eyeSize: (width: Int, height: Int), count: Int?, eyes: Int = 2) {
         let color = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm_srgb, width: eyeSize.width, height: eyeSize.height, mipmapped: false
         )
@@ -98,8 +102,8 @@ final class VisionProFakeFrames: VisionProFrameSource {
         )
         depth.usage = [.renderTarget, .shaderRead]
         depth.storageMode = .private
-        colorTextures = (0 ..< 2).compactMap { _ in device.makeTexture(descriptor: color) }
-        depthTextures = (0 ..< 2).compactMap { _ in device.makeTexture(descriptor: depth) }
+        colorTextures = (0 ..< eyes).compactMap { _ in device.makeTexture(descriptor: color) }
+        depthTextures = (0 ..< eyes).compactMap { _ in device.makeTexture(descriptor: depth) }
         left = count ?? 0
         keepsOpen = count == nil
     }
@@ -114,6 +118,7 @@ final class VisionProFakeFrames: VisionProFrameSource {
         if keepsOpen {
             // A headset that is on but shows nothing yet: a frame now and then.
             _ = opened.wait(timeout: .now() + .milliseconds(20))
+            beforeEachFrame?()
             guard isStopped == false else { return nil }
             let frame = Frame(eyes: showsEyesWhileOpen ? eyes() : nil)
             frames.append(frame)
@@ -136,7 +141,7 @@ final class VisionProFakeFrames: VisionProFrameSource {
     private func eyes() -> VisionProFrameEyes {
         let aspect = Float(colorTextures[0].width) / Float(colorTextures[0].height)
         let projection = matrixPerspectiveRightHandReverseZ(fovyRadians: .pi / 2, aspectRatio: aspect, nearZ: 0.1, farZ: 100)
-        let eyes = (0 ..< 2).map { index -> VisionProEye in
+        let eyes = colorTextures.indices.map { index -> VisionProEye in
             let side = index == 0 ? -Self.halfEyeDistance : Self.halfEyeDistance
             let deviceFromView = matrix4x4Translation(side, 0, 0)
             return VisionProEye(

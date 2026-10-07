@@ -44,7 +44,11 @@ final class VisionProPreviewLoop {
     private var originFromScene = matrix_identity_float4x4
     /// The headset's first tracked pose: what stands on the camera.
     private var deviceStart: simd_float4x4?
+    /// One per eye the engine draws: its stereo path has two, left and right
+    /// (`renderInfo.currentEye`). A frame with more eyes gets these two drawn
+    /// and the rest left, said once.
     private let passDescriptors = [MTLRenderPassDescriptor(), MTLRenderPassDescriptor()]
+    private var saidTooManyEyes = false
 
     /// Frames in which the eyes were drawn, for the tests.
     private(set) var framesDrawn = 0
@@ -179,8 +183,12 @@ final class VisionProPreviewLoop {
                 executeRadixSort(commandBuffer)
             }
 
-            for (index, eye) in acquired.eyes.enumerated() {
-                let descriptor = passDescriptors[min(index, passDescriptors.count - 1)]
+            if acquired.eyes.count > passDescriptors.count, saidTooManyEyes == false {
+                saidTooManyEyes = true
+                Logger.log(message: "Vision Pro preview: the headset's frame has \(acquired.eyes.count) eyes; the engine draws two, the rest are left blank.")
+            }
+            for (index, eye) in acquired.eyes.prefix(passDescriptors.count).enumerated() {
+                let descriptor = passDescriptors[index]
                 descriptor.colorAttachments[0].texture = eye.colorTexture
                 descriptor.colorAttachments[0].loadAction = .clear
                 descriptor.colorAttachments[0].storeAction = .store
