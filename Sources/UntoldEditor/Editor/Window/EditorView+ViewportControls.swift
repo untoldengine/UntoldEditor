@@ -60,7 +60,7 @@ extension EditorView {
     /// as a locked preview. Not during a play session, when the play flow owns
     /// the camera.
     func editor_showViewportCamera(_ camera: ViewportCamera) {
-        guard experienceMode == .edit, isPlaying == false, ViewportCameras.show(camera) else { return }
+        guard experienceMode == .edit, isPlaying == false, visionProPreview.isPreviewing == false, ViewportCameras.show(camera) else { return }
         viewportSettings.camera = camera
     }
 
@@ -76,6 +76,12 @@ extension EditorView {
     var editor_previewedCamera: GameCameraChoice? {
         guard isPlaying == false, isRestoringPlayMode == false, case let .game(entityId) = ViewportCameras.current else { return nil }
         return ViewportCameras.gameCameras().first { $0.entityId == entityId }
+    }
+
+    /// True while a preview on a headset is asked for or shown, when the
+    /// viewport says so.
+    var editor_showsHeadsetPreviewLabel: Bool {
+        visionProPreview.state == .connecting || visionProPreview.state == .previewing
     }
 
     /// F: frames the selection, keeping the camera's direction.

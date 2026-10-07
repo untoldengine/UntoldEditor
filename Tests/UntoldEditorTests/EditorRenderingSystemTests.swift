@@ -118,6 +118,20 @@ final class EditorRenderingSystemTests: XCTestCase {
         XCTAssertNotNil(graph["untold.editor.clearGizmoLayer"])
     }
 
+    func testHeadsetPreviewUsesRuntimeGraphWithOnlyTheClearingPass() throws {
+        gameMode = false
+        let original = ViewportCameras.isPreviewingOnHeadset
+        ViewportCameras.isPreviewingOnHeadset = { true }
+        defer { ViewportCameras.isPreviewingOnHeadset = original }
+
+        let (graph, _) = try buildGameModeGraph()
+
+        XCTAssertNil(graph["untold.editor.highlight"])
+        XCTAssertNil(graph["untold.editor.lightVisuals"])
+        XCTAssertNil(graph["untold.editor.gizmo"])
+        XCTAssertNotNil(graph["untold.editor.clearGizmoLayer"], "nothing of the editor's shows in the headset")
+    }
+
     func testEditingAddsNoClearingPassOfItsOwn() throws {
         gameMode = false
 

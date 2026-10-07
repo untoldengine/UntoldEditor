@@ -85,6 +85,7 @@ public struct EditorView: View {
     @State var dropStatusIsError = false
     @ObservedObject var buildTargetSettings = EditorBuildTargetSettings.shared
     @ObservedObject var viewportSettings = EditorViewportSettings.shared
+    @ObservedObject var visionProPreview = VisionProPreviewSession.shared
 
     var renderer: UntoldRenderer?
 
@@ -93,6 +94,7 @@ public struct EditorView: View {
         _selectionManager = StateObject(wrappedValue: sharedSelectionManager)
         editorController = EditorController(selectionManager: sharedSelectionManager)
         renderer = UntoldRenderer.create(configuration: .editor)
+        VisionProPreviewSession.shared.renderer = renderer
         // Extensions that create pipelines must be registered after the renderer
         // has initialized Metal and loaded the engine shader library.
         registerEditorRenderExtension()

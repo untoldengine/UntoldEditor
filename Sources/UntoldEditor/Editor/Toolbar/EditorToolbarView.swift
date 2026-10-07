@@ -12,7 +12,7 @@ import SwiftUI
 
 /// The toolbar row that shares the window's title bar: the traffic lights on
 /// the left (drawn by macOS), the project chip, Undo / Redo / History, the play
-/// controls in the middle, and the build target on the right. The search field
+/// controls in the middle, and the preview and the build target on the right. The search field
 /// of the mockup joins it with the command palette (stage 1.9). Global chrome:
 /// it shows in every experience mode. Dragging its empty space moves the
 /// window, as the title bar it replaces did.
@@ -44,8 +44,11 @@ struct EditorToolbarView: View {
             )
             UndoRedoControls()
             Spacer(minLength: 0)
+            PreviewControl()
             BuildTargetMenu(target: $buildTarget)
+                .padding(.leading, 12)
         }
+        .background(VisionProPreviewBridge())
         .padding(.trailing, 12)
         .frame(maxWidth: .infinity)
         .frame(height: Self.height)

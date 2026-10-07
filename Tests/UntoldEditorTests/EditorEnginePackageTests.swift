@@ -50,6 +50,19 @@ final class EditorEnginePackageTests: XCTestCase {
         XCTAssertEqual(reference, EnginePackageReference(url: "https://github.com/miolabs/UntoldEngine.git", requirement: .revision("engine123")))
     }
 
+    func test_developmentAppBundle_findsThePackageResolvedAboveTheBuildProductsItLinks() throws {
+        let scratch = try ScratchDirectory("EditorEnginePackage")
+        try scratch.write(resolvedFile, to: "UntoldEditor/Package.resolved")
+        let products = try scratch.directory("UntoldEditor/.build/out/Products/Debug")
+        let executable = try scratch.write("", to: "Elsewhere/Untold Engine Studio.app/Contents/MacOS/UntoldEditor")
+        let resources = try scratch.directory("Elsewhere/Untold Engine Studio.app/Contents/Resources")
+        try FileManager.default.createSymbolicLink(at: resources.appendingPathComponent(ComponentSDK.buildProductsLinkName), withDestinationURL: products)
+
+        let reference = EditorEnginePackage.resolve(sdk: makeTestSDK(), resourceURL: resources, executableURL: executable)
+
+        XCTAssertEqual(reference, EnginePackageReference(url: "https://github.com/miolabs/UntoldEngine.git", requirement: .revision("engine123")))
+    }
+
     func test_withoutAnyRecord_thereIsNoReference() throws {
         let scratch = try ScratchDirectory("EditorEnginePackage")
         let executable = try scratch.write("", to: "Somewhere/UntoldEditor")

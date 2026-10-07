@@ -41,6 +41,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var overlayItems: [ViewportOverlay: NSMenuItem] = [:]
     private var sceneCamItem: NSMenuItem?
     private var steerWhilePlayingItem: NSMenuItem?
+    private var visionProItem: NSMenuItem?
     private var cameraMenu: NSMenu?
     private var panelMenuItems: [PanelID: [NSMenuItem]] = [:]
     private var dockMenuItem: NSMenuItem?
@@ -55,7 +56,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var splatLevelModeItems: [SplatLevelModeOption: NSMenuItem] = [:]
 
     func applicationDidFinishLaunching(_: Notification) {
-        Logger.log(message: "Launching \(appName) v\(Self.editorVersion)")
+        Logger.log(message: "Launching \(appName) v\(Self.editorVersion) as \(Bundle.main.bundleIdentifier ?? "an executable without an identity")")
+        EditorSettingsDomain.adoptLegacySettings()
 
         setupMainMenu()
 
@@ -184,6 +186,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sceneCamItem?.toolTip = "While playing, keep the viewport on the editor's camera"
         steerWhilePlayingItem = addItem(to: viewMenu, title: "Steer the Camera While Playing", action: #selector(menuToggleSteerWhilePlaying), key: "")
         steerWhilePlayingItem?.toolTip = "While playing, the keys and the mouse steer the game's camera as they steer the editor's. Switch it off for a game that steers its camera itself."
+        // Shown only where the Mac can draw for a headset (macOS 26 and later).
+        visionProItem = addItem(to: viewMenu, title: "Preview on Apple Vision Pro", action: #selector(menuToggleVisionProPreview), key: "")
+        visionProItem?.toolTip = "Shows the scene in an Apple Vision Pro nearby, drawn by this Mac; the headset asks to accept. The headset moves the camera, and the viewport shows its left eye."
         viewMenu.addItem(.separator())
 
         // Camera navigation style (radio-style checkmarks, synced in menuNeedsUpdate).
@@ -407,6 +412,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         sceneCamItem?.state = EditorPlaybackSettings.shared.useSceneCameraDuringPlay ? .on : .off
         steerWhilePlayingItem?.state = EditorPlaybackSettings.shared.steersCameraWhilePlaying ? .on : .off
+        let preview = VisionProPreviewSession.menuItem(for: VisionProPreviewSession.shared.state, isPlaying: ViewportCameras.isPlaying)
+        visionProItem?.title = preview.title
+        visionProItem?.isEnabled = preview.isEnabled
+        visionProItem?.isHidden = preview.isHidden
 
         let layout = EditorDockLayout.shared
         for (panel, items) in panelMenuItems {
@@ -484,6 +493,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         EditorPlaybackSettings.shared.useSceneCameraDuringPlay.toggle()
     }
 
+    @objc private func menuToggleVisionProPreview() {
+        VisionProPreviewSession.shared.toggle()
+    }
+
     @objc private func menuToggleSteerWhilePlaying() {
         EditorPlaybackSettings.shared.steersCameraWhilePlaying.toggle()
     }
@@ -494,7 +507,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func fillCameraMenu(_ menu: NSMenu) {
         menu.removeAllItems()
         let shown = CameraSystem.shared.activeCamera
-        let canChoose = EditorPlaybackSettings.shared.isSessionActive == false
+        // Not while the game plays, nor while a headset moves the camera.
+        let canChoose = EditorPlaybackSettings.shared.isSessionActive == false && VisionProPreviewSession.shared.isPreviewing == false
         let cameras = ViewportCameras.gameCameras()
 
         let editorItem = addItem(to: menu, title: "Editor Camera", action: #selector(menuShowViewportCamera(_:)), key: "")
@@ -616,17 +630,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 }
 
-/// Entry point. An `@main` type rather than top-level code in a `main.swift`: Xcode 26
-/// compiles a package executable that test targets import with `-parse-as-library`
-/// (so `@testable import UntoldEditor` works), which forbids top-level statements.
-/// `swift build` / `swift test` handle `@main` executables the same way.
+/// Entry point: a SwiftUI app, so that it can declare the space the Apple Vision Pro
+/// preview shows (`RemoteImmersiveSpace` is a SwiftUI scene), with the editor's own
+/// AppKit delegate, window and menus as before; the app opens no window of its own.
+/// An `@main` type rather than top-level code in a `main.swift`: Xcode 26 compiles a
+/// package executable that test targets import with `-parse-as-library` (so
+/// `@testable import UntoldEditor` works), which forbids top-level statements.
 @main
-enum UntoldEditorApp {
-    static func main() {
-        let app = NSApplication.shared
-        let delegate = AppDelegate()
-        app.delegate = delegate
-        app.run()
+struct UntoldEditorApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+
+    var body: some SwiftUI.Scene {
+        #if canImport(CompositorServices)
+            if #available(macOS 26.0, *) {
+                VisionProPreviewScene()
+            }
+        #endif
+        // A scene nothing opens: the editor's window is the delegate's.
+        Settings {
+            EmptyView()
+        }
     }
 }
 
