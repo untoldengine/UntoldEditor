@@ -54,6 +54,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var splatBlendCapItems: [SplatBlendCapOption: NSMenuItem] = [:]
     private var splatWorkingSetItems: [EditorSplatWorkingSet: NSMenuItem] = [:]
     private var splatLevelModeItems: [SplatLevelModeOption: NSMenuItem] = [:]
+    /// Installs the menu bar and keeps it in place (SwiftUI installs its own).
+    private var mainMenuKeeper: EditorMainMenuKeeper?
 
     func applicationDidFinishLaunching(_: Notification) {
         Logger.log(message: "Launching \(appName) v\(Self.editorVersion) as \(Bundle.main.bundleIdentifier ?? "an executable without an identity")")
@@ -344,7 +346,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.zoom(_:)), keyEquivalent: "")
         NSApp.windowsMenu = windowMenu
 
-        NSApp.mainMenu = mainMenu
+        mainMenuKeeper = EditorMainMenuKeeper(menu: mainMenu)
     }
 
     /// A menu item that shows or hides a panel of the docking layout; its
