@@ -60,7 +60,7 @@ public struct EditorView: View {
     @State var panelSearchText: [PanelID: String] = [:]
     @State var renderPauseGeneration = 0
     let panelAnimationDuration = 0.28
-    @State var showWelcomeStart = true
+    @State var showWelcomeStart = false
     @State var showCameraControlHints = false
     @State var showQuickPreviewWarning = false
     @State var quickPreviewEntities: [(EntityID, String)] = []
@@ -72,8 +72,8 @@ public struct EditorView: View {
     @State var quickPreviewCompressGeometry = false
     @State var quickPreviewCompressTextures = false
     @State var quickPreviewAstcencBinPath = ""
-    @State var experienceMode: EditorExperienceMode = .explore
-    @State var showDemoGallery = true
+    @State var experienceMode: EditorExperienceMode = .edit
+    @State var showDemoGallery = false
     @State var showPreviewImportGallery = false
     @State var activeDemoScene: DemoSceneCatalogItem?
     @State var activeDemoCameraFrame: StreamModelCameraFrame?

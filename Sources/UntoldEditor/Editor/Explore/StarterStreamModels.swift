@@ -23,33 +23,9 @@ struct StreamModelCameraFrame {
     let usesOriginOrbit: Bool
 }
 
-let starterStreamModels: [StreamModelCatalogItem] = [
-    .init(
-        id: "dungeon",
-        title: "Game Dungeon",
-        manifestURL: URL(string: "https://d8pyi1c08k1w.cloudfront.net/Dungeon/dungeon.json")!
-    ),
-    .init(
-        id: "city",
-        title: "Cartoon City",
-        manifestURL: URL(string: "https://d8pyi1c08k1w.cloudfront.net/city/city.json")!
-    ),
-    .init(
-        id: "f1car",
-        title: "Formula 1",
-        manifestURL: URL(string: "https://d8pyi1c08k1w.cloudfront.net/F1Car/F1Car.json")!
-    ),
-    .init(
-        id: "airplane",
-        title: "Skyhawk",
-        manifestURL: URL(string: "https://d8pyi1c08k1w.cloudfront.net/Shyhawk_stream/Skyhawks.json")!
-    ),
-    .init(
-        id: "porsche964",
-        title: "Porsche 964",
-        manifestURL: URL(string: "https://d8pyi1c08k1w.cloudfront.net/Porsche964-stream/Porsche964-stream.json")!
-    ),
-]
+/// No streamed demo scenes are hosted; the Explore gallery (unreachable since
+/// the editor now launches straight into the full editor) has nothing to list.
+let starterStreamModels: [StreamModelCatalogItem] = []
 
 extension StreamModelCatalogItem {
     var cameraFrame: StreamModelCameraFrame {

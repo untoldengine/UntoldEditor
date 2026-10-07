@@ -110,21 +110,9 @@ struct AssetPackInstallResult: Equatable {
 }
 
 func defaultAssetPackCatalog() -> AssetPackCatalog {
-    AssetPackCatalog(
-        version: "1.0.0",
-        assets: [
-            AssetPackCatalogItem(
-                id: "starter",
-                name: "StarterPack",
-                description: "Soccer field, goals, ball, and a sample scene.",
-                version: "1.0.0",
-                downloadURL: "https://d8pyi1c08k1w.cloudfront.net/StarterPack.zip",
-                size: "5.3 MB",
-                thumbnailName: "starterpack",
-                replacePaths: ["Models/starterpack"]
-            ),
-        ]
-    )
+    // No asset packs are hosted; the Explore panel (hidden via PanelID.available)
+    // has nothing to list.
+    AssetPackCatalog(version: "1.0.0", assets: [])
 }
 
 func configuredAssetPackCatalogURL(
