@@ -553,8 +553,13 @@ class SelectionManager: ObservableObject {
             foundBounds = true
         }
 
-        let childLocalToRoot = simd_mul(localToRoot, localMatrix(for: localTransform))
         for childId in getEntityChildren(parentId: entityId) {
+            let childLocalToRoot: simd_float4x4
+            if let childLocalTransform = scene.get(component: LocalTransformComponent.self, for: childId) {
+                childLocalToRoot = simd_mul(localToRoot, localMatrix(for: childLocalTransform))
+            } else {
+                childLocalToRoot = localToRoot
+            }
             accumulateBoundsInRootSpace(
                 entityId: childId,
                 localToRoot: childLocalToRoot,
@@ -597,8 +602,13 @@ class SelectionManager: ObservableObject {
             }
         }
 
-        let childLocalToRoot = simd_mul(localToRoot, localMatrix(for: localTransform))
         for childId in getEntityChildren(parentId: entityId) {
+            let childLocalToRoot: simd_float4x4
+            if let childLocalTransform = scene.get(component: LocalTransformComponent.self, for: childId) {
+                childLocalToRoot = simd_mul(localToRoot, localMatrix(for: childLocalTransform))
+            } else {
+                childLocalToRoot = localToRoot
+            }
             accumulateRenderableBoundsInRootSpace(
                 entityId: childId,
                 localToRoot: childLocalToRoot,

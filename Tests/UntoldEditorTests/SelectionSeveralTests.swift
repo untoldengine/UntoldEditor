@@ -477,4 +477,48 @@ final class SelectionSeveralTests: XCTestCase {
         assertNearlyEqual(framing.min, simd_float3(-0.5, -0.5, -0.5))
         assertNearlyEqual(framing.max, simd_float3(0.5, 10.5, 0.5))
     }
+
+    // MARK: - Single selection's live highlight box, with a mesh on a child
+
+    /// A container entity, as the asset root a drag from the Asset Browser
+    /// creates: it has a place in the scene but draws nothing itself.
+    private func makeContainer(_ name: String, at position: simd_float3) -> EntityID {
+        let entity = createEntity()
+        setEntityName(entityId: entity, name: name)
+        registerTransformComponent(entityId: entity)
+        registerSceneGraphComponent(entityId: entity)
+        translateTo(entityId: entity, position: position)
+        return entity
+    }
+
+    /// What `updateBoundingBoxBuffer` last wrote: the min/max of the eight
+    /// distinct corners among its 24 line-endpoint vertices.
+    private func writtenBoxBounds() throws -> (min: simd_float3, max: simd_float3) {
+        let buffer = try XCTUnwrap(bufferResources.boundingBoxBuffer)
+        let vertices = buffer.contents().bindMemory(to: simd_float4.self, capacity: boundingBoxVertexCount)
+        var minBounds = simd_float3(repeating: .greatestFiniteMagnitude)
+        var maxBounds = simd_float3(repeating: -.greatestFiniteMagnitude)
+        for index in 0 ..< boundingBoxVertexCount {
+            let v = vertices[index]
+            let point = simd_float3(v.x, v.y, v.z)
+            minBounds = simd_min(minBounds, point)
+            maxBounds = simd_max(maxBounds, point)
+        }
+        return (minBounds, maxBounds)
+    }
+
+    /// Selecting a dragged-in asset's root through the scenegraph highlights
+    /// the box around its mesh, which lives on a child with its own offset
+    /// from the root — not the box the root would have at its own origin.
+    func test_selectingAContainer_highlightsItsOffsetChildsMesh() throws {
+        let root = makeContainer("GoalpostRoot", at: simd_float3(10, 0, 0))
+        let mesh = makeBox("Crossbar", at: simd_float3(0, 3, 0))
+        setParent(childId: mesh, parentId: root)
+
+        selectionManager.selectEntity(entityId: root)
+
+        let written = try writtenBoxBounds()
+        assertNearlyEqual(written.min, simd_float3(-0.5, 2.5, -0.5))
+        assertNearlyEqual(written.max, simd_float3(0.5, 3.5, 0.5))
+    }
 }
