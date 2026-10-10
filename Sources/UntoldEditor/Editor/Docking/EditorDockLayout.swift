@@ -14,7 +14,8 @@ import Foundation
 
 /// The docking layout of the editor window: three areas around the viewport,
 /// left, right and bottom, each showing its panels as tabs. A panel dropped on
-/// an area joins it; the viewport stays in the centre. The mockup's arrangement
+/// an area joins it; the viewport stays in the centre. A panel can also float
+/// in a window of its own and dock back where it was. The mockup's arrangement
 /// is the default: hierarchy left at 250, the dock panels below at 250, the
 /// inspector right at 320.
 ///
@@ -36,8 +37,11 @@ final class EditorDockLayout: ObservableObject {
     /// Where the dragged tab would dock if the pointer went up now.
     @Published private(set) var tabDragTarget: DockDragTarget?
 
-    /// Where each closed panel was, so reopening it puts it back.
+    /// Where each closed or floating panel was, so reopening or docking it puts it back.
     private var lastAreas: [PanelID: DockArea] = [:]
+    /// Where each panel's window was when it last floated, in screen points,
+    /// so it floats there again.
+    private(set) var floatingFrames: [PanelID: CGRect] = [:]
     /// The tabs hidden together by an area toggle (⌘2), reopened together, and
     /// the one that was in front.
     private var collapsedAreas: [DockArea: [PanelID]] = [:]
@@ -53,6 +57,7 @@ final class EditorDockLayout: ObservableObject {
         if let defaults, let stored = Self.load(from: defaults) {
             state = stored.state
             lastAreas = stored.lastAreas
+            floatingFrames = stored.floatingFrames
         } else {
             state = Self.defaultState()
         }
@@ -68,12 +73,25 @@ final class EditorDockLayout: ObservableObject {
         state.panels
     }
 
+    /// Whether a panel shows at all: docked in an area or floating in its own window.
     func isOpen(_ panel: PanelID) -> Bool {
-        panel == .viewport || state.panels.contains(panel)
+        panel == .viewport || state.panels.contains(panel) || state.isFloating(panel)
     }
 
     func area(of panel: PanelID) -> DockArea? {
         state.area(of: panel)
+    }
+
+    var floatingPanels: [PanelID] {
+        state.floating
+    }
+
+    func isFloating(_ panel: PanelID) -> Bool {
+        state.isFloating(panel)
+    }
+
+    func floatingFrame(of panel: PanelID) -> CGRect? {
+        floatingFrames[panel]
     }
 
     func tabs(in area: DockArea) -> [PanelID] {
@@ -96,8 +114,16 @@ final class EditorDockLayout: ObservableObject {
         persist()
     }
 
+    /// Hides a panel: a docked one leaves its area, a floating one loses its
+    /// window. Either comes back docked where it was.
     func close(_ panel: PanelID) {
-        guard panel.canClose, let area = area(of: panel) else { return }
+        guard panel.canClose else { return }
+        if isFloating(panel) {
+            state.floating.removeAll { $0 == panel }
+            persist()
+            return
+        }
+        guard let area = area(of: panel) else { return }
         lastAreas[panel] = area
         remove(panel, from: area)
         persist()
@@ -146,13 +172,47 @@ final class EditorDockLayout: ObservableObject {
         persist()
     }
 
+    // MARK: - Floating
+
+    /// Takes a panel out of its area into a window of its own. The area it
+    /// leaves is where `dock` puts it back; a closed panel floats too, and
+    /// docks back where it was closed from.
+    func float(_ panel: PanelID) {
+        guard panel.isDockable, isFloating(panel) == false else { return }
+        if let area = area(of: panel) {
+            lastAreas[panel] = area
+            remove(panel, from: area)
+        }
+        state.floating.append(panel)
+        persist()
+    }
+
+    /// Puts a floating panel back in the area it came from, in front.
+    func dock(_ panel: PanelID) {
+        guard isFloating(panel), let destination = lastAreas[panel] ?? panel.defaultArea else { return }
+        state.floating.removeAll { $0 == panel }
+        append(panel, to: destination)
+        persist()
+    }
+
+    /// Where a floating panel's window is now, kept for the next time it
+    /// floats. The window reports every step of a move or a resize; the frame
+    /// is small, so each step is written through.
+    func setFloatingFrame(_ frame: CGRect, of panel: PanelID) {
+        guard isFloating(panel), floatingFrames[panel] != frame else { return }
+        floatingFrames[panel] = frame
+        persist()
+    }
+
     // MARK: - Moving
 
     /// Moves a panel into an area, as the last tab and in front; a panel already
-    /// there just comes to front.
+    /// there just comes to front, a floating one leaves its window.
     func move(_ panel: PanelID, to destination: DockArea) {
         guard panel.isDockable else { return }
-        if let current = area(of: panel) {
+        if isFloating(panel) {
+            state.floating.removeAll { $0 == panel }
+        } else if let current = area(of: panel) {
             if current == destination {
                 select(panel)
                 return
@@ -216,7 +276,8 @@ final class EditorDockLayout: ObservableObject {
 
     // MARK: - Whole-layout
 
-    /// Collapses the layout to the viewport, or restores what was there.
+    /// Collapses the layout to the viewport, floating windows included, or
+    /// restores what was there.
     func toggleFocusViewport() {
         if let saved = focusSaved {
             focusSaved = nil
@@ -227,12 +288,14 @@ final class EditorDockLayout: ObservableObject {
                 state[area].tabs = []
                 state[area].selected = nil
             }
+            state.floating = []
         }
     }
 
     func reset() {
         focusSaved = nil
         lastAreas = [:]
+        floatingFrames = [:]
         collapsedAreas = [:]
         collapsedFronts = [:]
         state = Self.defaultState()
@@ -276,6 +339,27 @@ final class EditorDockLayout: ObservableObject {
         var version: Int
         var state: DockLayoutState
         var lastAreas: [String: DockArea]
+        var floatingFrames: [String: CGRect]
+
+        init(version: Int, state: DockLayoutState, lastAreas: [String: DockArea], floatingFrames: [String: CGRect]) {
+            self.version = version
+            self.state = state
+            self.lastAreas = lastAreas
+            self.floatingFrames = floatingFrames
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case version, state, lastAreas, floatingFrames
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            version = try container.decode(Int.self, forKey: .version)
+            state = try container.decode(DockLayoutState.self, forKey: .state)
+            lastAreas = try container.decode([String: DockArea].self, forKey: .lastAreas)
+            // Saved before panels could float: no window frames.
+            floatingFrames = try container.decodeIfPresent([String: CGRect].self, forKey: .floatingFrames) ?? [:]
+        }
     }
 
     private func persist() {
@@ -283,14 +367,15 @@ final class EditorDockLayout: ObservableObject {
         let snapshot = Snapshot(
             version: Self.formatVersion,
             state: focusSaved ?? state,
-            lastAreas: Dictionary(uniqueKeysWithValues: lastAreas.map { ($0.key.rawValue, $0.value) })
+            lastAreas: Dictionary(uniqueKeysWithValues: lastAreas.map { ($0.key.rawValue, $0.value) }),
+            floatingFrames: Dictionary(uniqueKeysWithValues: floatingFrames.map { ($0.key.rawValue, $0.value) })
         )
         if let data = try? JSONEncoder().encode(snapshot) {
             defaults.set(data, forKey: Self.defaultsKey)
         }
     }
 
-    private static func load(from defaults: UserDefaults) -> (state: DockLayoutState, lastAreas: [PanelID: DockArea])? {
+    private static func load(from defaults: UserDefaults) -> (state: DockLayoutState, lastAreas: [PanelID: DockArea], floatingFrames: [PanelID: CGRect])? {
         guard let data = defaults.data(forKey: defaultsKey),
               let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data),
               snapshot.version == formatVersion,
@@ -308,17 +393,26 @@ final class EditorDockLayout: ObservableObject {
                 lastAreas[panel] = area
             }
         }
-        return (state, lastAreas)
+        var floatingFrames: [PanelID: CGRect] = [:]
+        for (raw, frame) in snapshot.floatingFrames {
+            if let panel = PanelID(rawValue: raw), frame.width > 0, frame.height > 0 {
+                floatingFrames[panel] = frame
+            }
+        }
+        return (state, lastAreas, floatingFrames)
     }
 
-    /// A layout the window can render: every docked panel once, all of them
-    /// dockable and available in this build, a front tab that exists, and
-    /// positive lengths.
+    /// A layout the window can render: every docked or floating panel once and
+    /// in one place, all of them dockable and available in this build, a front
+    /// tab that exists, and positive lengths.
     static func isValid(_ state: DockLayoutState) -> Bool {
         let panels = state.panels
+        let floating = state.floating
         guard Set(panels).count == panels.count,
-              panels.allSatisfy(\.isDockable),
-              Set(panels).isSubset(of: PanelID.available)
+              Set(floating).count == floating.count,
+              Set(panels).isDisjoint(with: floating),
+              (panels + floating).allSatisfy(\.isDockable),
+              Set(panels + floating).isSubset(of: PanelID.available)
         else {
             return false
         }

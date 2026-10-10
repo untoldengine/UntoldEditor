@@ -12,8 +12,8 @@ import SwiftUI
 
 /// One tab of an area's strip. A click brings the panel to front, a drag by the
 /// pointer carries it to another area (no system drag, so the pointer keeps
-/// its shape), the context menu moves it to an area or closes it, and a close
-/// button appears on hover.
+/// its shape), the context menu floats it in a window of its own, moves it to
+/// an area or closes it, and a close button appears on hover.
 struct DockTab: View {
     let panel: PanelID
     let isSelected: Bool
@@ -67,6 +67,10 @@ struct DockTab: View {
                 }
         )
         .contextMenu {
+            Button("Float in Its Own Window") {
+                layout.float(panel)
+            }
+            Divider()
             ForEach(DockArea.allCases.filter { $0 != layout.area(of: panel) }) { area in
                 Button("Move to \(area.title)") {
                     layout.move(panel, to: area)
