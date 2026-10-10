@@ -108,6 +108,15 @@ extension AssetBrowserView {
         folderPathStack = stack
     }
 
+    /// Brings `folder` into view and highlights `assetName` within it, so a freshly
+    /// cooked asset (which can land in a different folder than the source being cooked,
+    /// e.g. a model's cook-source folder vs. its category root) is visible right away.
+    func navigateToCookedAsset(folder: URL, assetName: String?, category: AssetCategory) {
+        selectDirectory(url: folder, category: category.rawValue)
+        guard let assetName else { return }
+        selectAsset(Asset(name: assetName, category: category.rawValue, path: folder.appendingPathComponent(assetName)))
+    }
+
     /// Entry point for the "New Directory" menu items. If there's no project
     /// asset folder yet, tell the user instead of silently doing nothing.
     func requestNewDirectory(in parent: URL?) {

@@ -46,6 +46,25 @@ extension AssetBrowserView {
                 switch result {
                 case let .success(bake):
                     loadAssets()
+                    // The tiers land beside the source, so cooking from inside the source's own
+                    // package folder (the common case for an imported .ply/.spz) leaves the
+                    // browser sitting right where it was. Pop back out to that folder's parent
+                    // so the user lands where the package folder itself is visible, same as a
+                    // runtime export surfaces its result in the model's parent folder.
+                    let sourceFolder = plyURL.deletingLastPathComponent()
+                    if let gaussianRoot, sourceFolder.standardizedFileURL != gaussianRoot.standardizedFileURL {
+                        navigateToCookedAsset(
+                            folder: sourceFolder.deletingLastPathComponent(),
+                            assetName: sourceFolder.lastPathComponent,
+                            category: .gaussians
+                        )
+                    } else if let outputDirectory {
+                        navigateToCookedAsset(
+                            folder: outputDirectory.deletingLastPathComponent(),
+                            assetName: outputDirectory.lastPathComponent,
+                            category: .gaussians
+                        )
+                    }
                     let report = bake.cookReport
                     let names = bake.tiers.map(\.url.lastPathComponent).joined(separator: ", ")
                     showStatus("Cooked \(report.keptSplatCount) of \(report.inputSplatCount) splats → \(names)")

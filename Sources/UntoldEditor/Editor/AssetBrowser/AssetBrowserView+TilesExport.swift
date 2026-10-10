@@ -299,6 +299,19 @@ extension AssetBrowserView {
                         showStatus("Tiles export cancelled")
                     } else if exportSucceeded {
                         loadAssets()
+                        // Tiles land inside a "tile_exports" subfolder of the source's own
+                        // package folder, so the browser would otherwise stay right where it
+                        // was. Pop back out to that folder's parent, same as the Gaussian cook.
+                        let streamModelsRoot = categoryRootURL(.streamModels)
+                        if let streamModelsRoot,
+                           request.destinationFolder.standardizedFileURL != streamModelsRoot.standardizedFileURL
+                        {
+                            navigateToCookedAsset(
+                                folder: request.destinationFolder.deletingLastPathComponent(),
+                                assetName: request.destinationFolder.lastPathComponent,
+                                category: .streamModels
+                            )
+                        }
                         showStatus("Exported tiles for \(request.sourceURL.deletingPathExtension().lastPathComponent)")
                     } else {
                         showStatus("Tiles export failed for \(request.sourceURL.lastPathComponent)", isError: true)
