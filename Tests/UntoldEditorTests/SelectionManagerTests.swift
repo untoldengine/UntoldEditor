@@ -381,7 +381,6 @@ final class SelectionManagerTests: XCTestCase {
         let manager = SelectionManager()
         let entity = createEntity()
         manager.selectedEntity = entity
-        manager.projectSelected = true
         manager.sceneSelected = true
         activeEntity = entity
 
@@ -389,7 +388,6 @@ final class SelectionManagerTests: XCTestCase {
 
         XCTAssertNil(manager.selectedEntity)
         XCTAssertNil(manager.inspectedMesh)
-        XCTAssertFalse(manager.projectSelected)
         XCTAssertFalse(manager.sceneSelected)
         XCTAssertEqual(activeEntity, .invalid)
         XCTAssertFalse(gizmoActive)

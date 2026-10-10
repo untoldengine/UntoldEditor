@@ -24,8 +24,8 @@ import Foundation
 final class EditorDockLayout: ObservableObject {
     static let shared = EditorDockLayout(defaults: .standard)
 
-    static let defaultsKey = "editor.layout.v2"
-    static let formatVersion = 2
+    static let defaultsKey = "editor.layout.v3"
+    static let formatVersion = 3
 
     /// The areas the window renders.
     @Published private(set) var state: DockLayoutState
@@ -306,7 +306,7 @@ final class EditorDockLayout: ObservableObject {
     static func defaultState() -> DockLayoutState {
         DockLayoutState(
             left: DockAreaState(tabs: [.hierarchy], length: DockArea.left.defaultLength),
-            right: DockAreaState(tabs: [.inspector], length: DockArea.right.defaultLength),
+            right: DockAreaState(tabs: [.inspector, .environment, .effects], length: DockArea.right.defaultLength),
             bottom: DockAreaState(
                 tabs: PanelID.available.filter { $0.defaultArea == .bottom },
                 selected: .assets,

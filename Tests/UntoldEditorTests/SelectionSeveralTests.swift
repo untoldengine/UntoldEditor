@@ -159,16 +159,11 @@ final class SelectionSeveralTests: XCTestCase {
         XCTAssertTrue(SelectionHighlights.shared.boxes.isEmpty)
     }
 
-    func test_selectingTheScene_orTheProject_leavesNoEntitySelected() {
+    func test_selectingTheScene_leavesNoEntitySelected() {
         selectionManager.selectEntities([makeBox("First"), makeBox("Second")])
         selectionManager.selectScene()
         XCTAssertEqual(selectionManager.selectedEntities, [])
         XCTAssertTrue(SelectionHighlights.shared.boxes.isEmpty)
-
-        selectionManager.selectEntities([makeBox("Third"), makeBox("Fourth")])
-        XCTAssertFalse(selectionManager.sceneSelected)
-        selectionManager.selectProject()
-        XCTAssertEqual(selectionManager.selectedEntities, [])
     }
 
     // MARK: - Adding and taking out

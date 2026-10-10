@@ -144,9 +144,6 @@ class SelectionManager: ObservableObject {
     /// True while `selectedEntity` is set as one of several.
     private var isSelectingSeveral = false
     @Published var inspectedMesh: MeshInspectionSelection?
-    /// True when the project itself is selected in the Scene Graph panel. Drives
-    /// the right panel to show Environment/Effects instead of the Inspector.
-    @Published var projectSelected: Bool = false
     /// True when the active scene node is selected. Drives the right panel to
     /// show the scene inspector.
     @Published var sceneSelected: Bool = false
@@ -162,28 +159,17 @@ class SelectionManager: ObservableObject {
 
     init() {}
 
-    /// Select the project (deselects any entity/scene). The right panel switches
-    /// to the Environment/Effects editors.
-    func selectProject() {
-        projectSelected = true
-        sceneSelected = false
-        inspectedMesh = nil
-        selectedEntity = nil
-    }
-
-    /// Select the active scene (deselects project/entity). The right panel shows
+    /// Select the active scene (deselects entity). The right panel shows
     /// the scene inspector.
     func selectScene() {
         sceneSelected = true
-        projectSelected = false
         inspectedMesh = nil
         selectedEntity = nil
     }
 
-    /// Nothing selected: no entity, mesh, scene or project, and no gizmo in the
+    /// Nothing selected: no entity, mesh or scene, and no gizmo in the
     /// viewport. What a click on empty viewport space leaves behind.
     func clearSelection() {
-        projectSelected = false
         sceneSelected = false
         inspectedMesh = nil
         selectedEntity = nil
@@ -193,7 +179,6 @@ class SelectionManager: ObservableObject {
     }
 
     func selectEntity(entityId: EntityID) {
-        projectSelected = false
         sceneSelected = false
         inspectedMesh = nil
         let selectedEntityId = editableAssetRootEntity(for: entityId)
@@ -201,14 +186,12 @@ class SelectionManager: ObservableObject {
     }
 
     func inspectEntity(entityId: EntityID) {
-        projectSelected = false
         sceneSelected = false
         inspectedMesh = nil
         selectEntity(entityId: sceneTransformEntity(for: entityId), inspectEntityId: entityId)
     }
 
     func inspectMesh(entityId: EntityID, meshIndex: Int) {
-        projectSelected = false
         sceneSelected = false
         let transformEntityId = sceneTransformEntity(for: entityId)
         selectedEntity = entityId
@@ -279,7 +262,6 @@ class SelectionManager: ObservableObject {
     /// Makes `entities`, two or more of them, the selection. The last one is
     /// `selectedEntity`. The gizmo goes to the middle of those it can move.
     func setSelection(toSeveral entities: [EntityID]) {
-        projectSelected = false
         sceneSelected = false
         inspectedMesh = nil
         isSelectingSeveral = true

@@ -20,7 +20,7 @@ extension EditorView {
             isPlayBusy: isRestoringPlayMode,
             playIsAvailable: experienceMode == .edit,
             buildTarget: $buildTargetSettings.target,
-            onSelectProject: { selectionManager.selectProject() },
+            onSelectProject: { dockLayout.open(.environment) },
             onPlayStop: { editor_handlePlayToggle(!isPlaying) },
             onPauseResume: editor_togglePauseInPlayMode,
             onStep: {}

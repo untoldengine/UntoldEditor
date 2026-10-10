@@ -38,7 +38,6 @@ public struct EditorView: View {
     @State var showBlockedDuringPlayAlert = false
     @State var showCreateProject = false
     @ObservedObject var taskCenter = TaskCenter.shared
-    @State var rightPanelEnvTab: EnvEffectsTab = .environment
     @State var consoleAutoScroll: Bool = true
     @State var showInvalidProjectAlert = false
     @State var invalidProjectMessage = ""
