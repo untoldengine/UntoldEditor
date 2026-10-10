@@ -316,6 +316,11 @@ extension AssetBrowserView {
                         Logger.log(message: "Export cancelled for \(request.sourceURL.lastPathComponent)")
                         showStatus("Export cancelled")
                     } else if exportSucceeded {
+                        navigateToCookedAsset(
+                            folder: outputURL.deletingLastPathComponent(),
+                            assetName: outputURL.lastPathComponent,
+                            category: request.category
+                        )
                         loadAssets()
                         showStatus("Exported \(outputURL.lastPathComponent)")
                     } else {
