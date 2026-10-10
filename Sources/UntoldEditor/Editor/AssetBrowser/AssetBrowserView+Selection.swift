@@ -82,6 +82,18 @@ extension AssetBrowserView {
         do {
             try FileManager.default.removeItem(at: asset.path)
             print("✅ Deleted asset: \(asset.name)")
+
+            // Cooked runtime assets (e.g. `Tower.untoldpack`) can have a sibling
+            // source/working folder with the same stem (`Tower/`) that was cooked
+            // from. Remove it too so the folder doesn't linger on disk, requiring
+            // a second manual delete.
+            if let sourceFolder = asset.sourceFolder,
+               sourceFolder.resolvingSymlinksInPath().path.hasPrefix(basePath.resolvingSymlinksInPath().path)
+            {
+                try? FileManager.default.removeItem(at: sourceFolder)
+                print("✅ Deleted source folder: \(sourceFolder.lastPathComponent)")
+            }
+
             if selectedAsset?.id == asset.id {
                 selectedAsset = nil
                 selectedAssetName = nil
