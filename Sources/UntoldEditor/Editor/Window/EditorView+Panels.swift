@@ -48,6 +48,21 @@ extension EditorView {
             return AnyView(editorSceneViewport)
         case .inspector:
             return AnyView(editorRightPanel)
+        case .environment:
+            return AnyView(
+                EnvironmentView(
+                    selectedAsset: $selectedAsset,
+                    onLoadSceneAuthored: editor_loadSceneAuthoredFromAsset
+                )
+                .editorPanel()
+                .padding(5)
+            )
+        case .effects:
+            return AnyView(
+                PostProcessingEditorView(selectedAsset: $selectedAsset)
+                    .editorPanel()
+                    .padding(5)
+            )
         case .assets:
             return AnyView(AssetBrowserView(
                 assets: $assets,
@@ -106,7 +121,7 @@ extension EditorView {
                     taskCenter.clearFinished()
                 }
             })
-        case .viewport, .inspector:
+        case .viewport, .inspector, .environment, .effects:
             return nil
         }
     }

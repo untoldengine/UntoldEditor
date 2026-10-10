@@ -151,6 +151,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         dockMenuItem = addItem(to: viewMenu, title: "Show Bottom Area", action: #selector(menuToggleDock), key: "2")
         dockMenuItem?.toolTip = "Hide or show the panels docked below the viewport"
         addPanelItem(.inspector, to: viewMenu, title: "Show Inspector", key: "3")
+        addPanelItem(.environment, to: viewMenu, title: "Show Environment", key: "")
+        addPanelItem(.effects, to: viewMenu, title: "Show Effects", key: "")
         addItem(to: viewMenu, title: "Focus Viewport", action: #selector(menuToggleFocusViewport), key: "f")
         viewMenu.addItem(.separator())
         // The dock panels one by one, so a panel closed from its tab comes back from here.

@@ -11,8 +11,8 @@
 import SwiftUI
 
 /// The project chip at the left of the toolbar: the orange project mark, the
-/// project's name and the editor version. Clicking it selects the project, which
-/// shows the Environment and Effects editors in the right panel.
+/// project's name and the editor version. Clicking it brings the Environment
+/// panel forward (opening it if it isn't docked).
 struct ProjectChipView: View {
     let projectName: String?
     let version: String
@@ -38,6 +38,6 @@ struct ProjectChipView: View {
         .buttonStyle(.plain)
         .focusable(false)
         .disabled(projectName == nil)
-        .help(projectName == nil ? "Create or open a project from the File menu" : "Select the project to edit its environment and effects")
+        .help(projectName == nil ? "Create or open a project from the File menu" : "Show the Environment panel")
     }
 }
