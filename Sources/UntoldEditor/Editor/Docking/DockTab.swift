@@ -20,6 +20,7 @@ struct DockTab: View {
     /// The only tab of its area: drawn as a plain title rather than a pill.
     let isAlone: Bool
     @ObservedObject var layout: EditorDockLayout
+    @ObservedObject private var taskCenter = TaskCenter.shared
 
     @State private var isHovering = false
 
@@ -29,6 +30,13 @@ struct DockTab: View {
                 .font(isSelected ? EditorType.title : EditorType.body)
                 .foregroundColor(isSelected ? Color.editorTextPrimary : Color.editorTextSecondary)
                 .lineLimit(1)
+            if panel == .tasks, taskCenter.activeCount > 0 {
+                Text("\(taskCenter.activeCount)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(minWidth: 16, minHeight: 16)
+                    .background(Circle().fill(Color.red))
+            }
             if panel.canClose, isHovering {
                 Button {
                     layout.close(panel)
