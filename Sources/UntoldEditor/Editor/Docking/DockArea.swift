@@ -77,11 +77,34 @@ struct DockAreaState: Codable, Equatable {
     }
 }
 
-/// The whole docking layout: the three areas around the viewport.
+/// The whole docking layout: the three areas around the viewport, and the
+/// panels that float in windows of their own.
 struct DockLayoutState: Codable, Equatable {
     var left: DockAreaState
     var right: DockAreaState
     var bottom: DockAreaState
+    /// The panels in windows of their own, in the order they floated.
+    var floating: [PanelID]
+
+    init(left: DockAreaState, right: DockAreaState, bottom: DockAreaState, floating: [PanelID] = []) {
+        self.left = left
+        self.right = right
+        self.bottom = bottom
+        self.floating = floating
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case left, right, bottom, floating
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        left = try container.decode(DockAreaState.self, forKey: .left)
+        right = try container.decode(DockAreaState.self, forKey: .right)
+        bottom = try container.decode(DockAreaState.self, forKey: .bottom)
+        // A layout saved before panels could float has no list of them.
+        floating = try container.decodeIfPresent([PanelID].self, forKey: .floating) ?? []
+    }
 
     subscript(area: DockArea) -> DockAreaState {
         get {
@@ -100,12 +123,16 @@ struct DockLayoutState: Codable, Equatable {
         }
     }
 
-    /// Every docked panel, left to right then bottom.
+    /// Every docked panel, left to right then bottom; the floating ones are not among them.
     var panels: [PanelID] {
         left.tabs + right.tabs + bottom.tabs
     }
 
     func area(of panel: PanelID) -> DockArea? {
         DockArea.allCases.first { self[$0].tabs.contains(panel) }
+    }
+
+    func isFloating(_ panel: PanelID) -> Bool {
+        floating.contains(panel)
     }
 }

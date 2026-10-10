@@ -315,8 +315,194 @@ final class EditorDockLayoutTests: XCTestCase {
     }
 
     func test_stateRoundTripsThroughJSON() throws {
+        layout.float(.console)
         let data = try JSONEncoder().encode(layout.state)
         let decoded = try JSONDecoder().decode(DockLayoutState.self, from: data)
         XCTAssertEqual(decoded, layout.state)
+        XCTAssertEqual(decoded.floating, [.console])
+    }
+
+    // MARK: - Floating
+
+    func test_float_takesTheTabOutOfItsArea_andDockPutsItBackInFront() {
+        layout.float(.console)
+
+        XCTAssertTrue(layout.isFloating(.console))
+        XCTAssertTrue(layout.isOpen(.console), "A floating panel shows, so the View menu keeps its checkmark")
+        XCTAssertNil(layout.area(of: .console))
+        XCTAssertFalse(layout.tabs(in: .bottom).contains(.console))
+        XCTAssertEqual(layout.floatingPanels, [.console])
+        XCTAssertTrue(EditorDockLayout.isValid(layout.state))
+
+        layout.dock(.console)
+
+        XCTAssertFalse(layout.isFloating(.console))
+        XCTAssertEqual(layout.area(of: .console), .bottom)
+        XCTAssertEqual(layout.state.bottom.selected, .console)
+    }
+
+    func test_floatTheOnlyTab_hidesItsArea_andDockBringsTheAreaBack() {
+        layout.float(.hierarchy)
+        XCTAssertFalse(layout.isVisible(.left))
+
+        layout.dock(.hierarchy)
+        XCTAssertEqual(layout.tabs(in: .left), [.hierarchy])
+        XCTAssertTrue(layout.isVisible(.left))
+    }
+
+    func test_floatAClosedPanel_docksBackWhereItWasClosedFrom() {
+        layout.move(.console, to: .right)
+        layout.close(.console)
+
+        layout.float(.console)
+        XCTAssertTrue(layout.isFloating(.console))
+
+        layout.dock(.console)
+        XCTAssertEqual(layout.area(of: .console), .right)
+    }
+
+    func test_floatingTwice_orTheViewport_changesNothing() {
+        layout.float(.console)
+        layout.float(.console)
+        layout.float(.viewport)
+
+        XCTAssertEqual(layout.floatingPanels, [.console])
+        XCTAssertTrue(layout.isOpen(.viewport))
+        XCTAssertNil(layout.area(of: .viewport))
+    }
+
+    func test_closingAFloatingPanel_hidesIt_andOpenDocksItBack() {
+        layout.float(.tasks)
+        layout.close(.tasks)
+
+        XCTAssertFalse(layout.isOpen(.tasks))
+        XCTAssertFalse(layout.isFloating(.tasks))
+
+        layout.open(.tasks)
+        XCTAssertEqual(layout.area(of: .tasks), .bottom)
+        XCTAssertFalse(layout.isFloating(.tasks))
+    }
+
+    func test_toggle_onAFloatingPanel_closesIt() {
+        layout.float(.tasks)
+        layout.toggle(.tasks)
+        XCTAssertFalse(layout.isOpen(.tasks))
+    }
+
+    func test_movingAFloatingPanel_toAnArea_docksItThere() {
+        layout.float(.console)
+        layout.move(.console, to: .left)
+
+        XCTAssertFalse(layout.isFloating(.console))
+        XCTAssertEqual(layout.tabs(in: .left), [.hierarchy, .console])
+
+        layout.close(.console)
+        layout.open(.console)
+        XCTAssertEqual(layout.area(of: .console), .left, "The area it was moved to is where it comes back")
+    }
+
+    func test_toggleArea_leavesAFloatingPanelFloating() {
+        layout.float(.console)
+
+        layout.toggleArea(.bottom)
+        XCTAssertTrue(layout.isFloating(.console))
+
+        layout.toggleArea(.bottom)
+        XCTAssertTrue(layout.isFloating(.console))
+        XCTAssertFalse(layout.tabs(in: .bottom).contains(.console))
+    }
+
+    func test_focusViewport_takesTheFloatingWindowsToo_andBringsThemBack() {
+        layout.float(.console)
+
+        layout.toggleFocusViewport()
+        XCTAssertTrue(layout.floatingPanels.isEmpty)
+
+        layout.toggleFocusViewport()
+        XCTAssertEqual(layout.floatingPanels, [.console])
+        XCTAssertFalse(layout.tabs(in: .bottom).contains(.console))
+    }
+
+    func test_reset_docksEverything_andForgetsTheWindowFrames() {
+        layout.float(.console)
+        layout.setFloatingFrame(CGRect(x: 10, y: 20, width: 300, height: 200), of: .console)
+
+        layout.reset()
+
+        XCTAssertTrue(layout.floatingPanels.isEmpty)
+        XCTAssertNil(layout.floatingFrame(of: .console))
+        XCTAssertEqual(layout.state, EditorDockLayout.defaultState())
+    }
+
+    func test_windowFrames_areKeptPerPanel_whileItFloats_andForTheNextTime() {
+        let frame = CGRect(x: 10, y: 20, width: 300, height: 200)
+        layout.setFloatingFrame(frame, of: .console)
+        XCTAssertNil(layout.floatingFrame(of: .console), "A docked panel has no window to remember")
+
+        layout.float(.console)
+        layout.setFloatingFrame(frame, of: .console)
+        XCTAssertEqual(layout.floatingFrame(of: .console), frame)
+
+        layout.dock(.console)
+        XCTAssertEqual(layout.floatingFrame(of: .console), frame, "Kept, so the panel floats there again")
+    }
+
+    func test_floatingPanelsAndTheirFrames_surviveARelaunch() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let frame = CGRect(x: 100, y: 200, width: 400, height: 300)
+
+        let first = EditorDockLayout(defaults: defaults)
+        first.float(.console)
+        first.setFloatingFrame(frame, of: .console)
+
+        let second = EditorDockLayout(defaults: defaults)
+        XCTAssertEqual(second.floatingPanels, [.console])
+        XCTAssertFalse(second.tabs(in: .bottom).contains(.console))
+        XCTAssertEqual(second.floatingFrame(of: .console), frame)
+
+        second.dock(.console)
+        XCTAssertEqual(second.area(of: .console), .bottom)
+    }
+
+    func test_aLayoutSavedBeforePanelsCouldFloat_stillLoads() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let json = """
+        {"version": 2, "lastAreas": {"console": "right"}, "state": {\
+        "left": {"tabs": ["hierarchy"], "selected": "hierarchy", "length": 250}, \
+        "right": {"tabs": ["inspector"], "selected": "inspector", "length": 320}, \
+        "bottom": {"tabs": ["assets", "console"], "selected": "assets", "length": 250}}}
+        """
+        defaults.set(Data(json.utf8), forKey: EditorDockLayout.defaultsKey)
+
+        let loaded = EditorDockLayout(defaults: defaults)
+
+        XCTAssertEqual(loaded.tabs(in: .bottom), [.assets, .console])
+        XCTAssertTrue(loaded.floatingPanels.isEmpty)
+        XCTAssertNil(loaded.floatingFrame(of: .console))
+        loaded.close(.console)
+        loaded.open(.console)
+        XCTAssertEqual(loaded.area(of: .console), .bottom, "Closed from the bottom area, it comes back there")
+    }
+
+    func test_isValid_rejectsAPanelInTwoPlaces_andAFloatingViewport() {
+        var both = EditorDockLayout.defaultState()
+        both.floating = [.console]
+        XCTAssertFalse(EditorDockLayout.isValid(both), "Docked and floating at once")
+
+        var viewport = EditorDockLayout.defaultState()
+        viewport.floating = [.viewport]
+        XCTAssertFalse(EditorDockLayout.isValid(viewport))
+
+        var twice = EditorDockLayout.defaultState()
+        twice.bottom.tabs.removeAll { $0 == .console }
+        twice.floating = [.console, .console]
+        XCTAssertFalse(EditorDockLayout.isValid(twice))
+
+        var once = EditorDockLayout.defaultState()
+        once.bottom.tabs.removeAll { $0 == .console }
+        once.floating = [.console]
+        XCTAssertTrue(EditorDockLayout.isValid(once))
     }
 }

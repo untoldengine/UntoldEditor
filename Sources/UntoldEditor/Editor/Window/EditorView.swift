@@ -131,6 +131,17 @@ public struct EditorView: View {
                     registry: dockRegistry,
                     viewportOnly: experienceMode == .explore
                 )
+                // The panels that float get windows of their own, fed from the
+                // same state; none while the viewport shows alone.
+                .background(
+                    FloatingPanelsBridge(
+                        panels: experienceMode == .explore ? [] : dockLayout.state.floating,
+                        layout: dockLayout,
+                        content: panelContent,
+                        accessories: panelAccessories
+                    )
+                    .frame(width: 0, height: 0)
+                )
                 editorStatusBar
             }
             // The toolbar row shares the window's title bar (full-size content view).
