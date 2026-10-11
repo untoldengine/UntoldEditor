@@ -285,6 +285,160 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
+    // MARK: - Renaming a folder (any folder the user created, not a fixed root)
+
+    func test_canRenameFolderIsTrueOnlyUnderResourcesNotResourcesItself() throws {
+        try withTempDirectory { projectRoot in
+            let gameData = projectRoot.appendingPathComponent("GameData", isDirectory: true)
+            let resources = projectRoot.appendingPathComponent("Resources", isDirectory: true)
+            let gameDataSubfolder = gameData.appendingPathComponent("Models/Tower", isDirectory: true)
+            let resourcesSubfolder = resources.appendingPathComponent("Characters/Hero", isDirectory: true)
+            try FileManager.default.createDirectory(at: gameDataSubfolder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: resourcesSubfolder, withIntermediateDirectories: true)
+            assetBasePath = gameData
+            EditorAssetBasePath.shared.basePath = gameData
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            XCTAssertTrue(view.canRenameFolder(at: resourcesSubfolder), "a folder nested under Resources/ is safe to rename")
+            XCTAssertFalse(view.canRenameFolder(at: resources), "Resources itself is a fixed root")
+            XCTAssertFalse(view.canRenameFolder(at: gameDataSubfolder), "GameData subfolders may be referenced by a scene's relative paths")
+            XCTAssertFalse(view.canRenameFolder(at: gameData), "GameData itself is a fixed root")
+            XCTAssertFalse(view.canRenameFolder(at: nil))
+        }
+    }
+
+    func test_renameFolderMovesItOnDiskAndFollowsItInNavigationState() throws {
+        try withTempDirectory { base in
+            let characters = base.appendingPathComponent("Characters", isDirectory: true)
+            let hero = characters.appendingPathComponent("Hero", isDirectory: true)
+            try FileManager.default.createDirectory(at: hero, withIntermediateDirectories: true)
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+            view.navigation.selectedDirURL = hero
+            view.navigation.folderPathStack = [hero]
+            view.navigation.expandedDirs = [hero]
+
+            view.renameFolder(at: hero, to: "Villain")
+
+            let renamed = characters.appendingPathComponent("Villain", isDirectory: true)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: hero.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: renamed.path))
+            XCTAssertEqual(view.navigation.selectedDirURL?.standardizedFileURL, renamed.standardizedFileURL)
+            XCTAssertEqual(view.navigation.folderPathStack.map(\.standardizedFileURL), [renamed.standardizedFileURL])
+            XCTAssertEqual(view.navigation.expandedDirs.map(\.standardizedFileURL), [renamed.standardizedFileURL])
+            XCTAssertNil(view.navigation.renamingDirectoryURL)
+        }
+    }
+
+    func test_renameFolderLeavesItAloneWhenTheNameIsAlreadyTaken() throws {
+        try withTempDirectory { base in
+            let hero = base.appendingPathComponent("Hero", isDirectory: true)
+            let villain = base.appendingPathComponent("Villain", isDirectory: true)
+            try FileManager.default.createDirectory(at: hero, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: villain, withIntermediateDirectories: true)
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            view.renameFolder(at: hero, to: "Villain")
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: hero.path), "the original folder should be untouched")
+        }
+    }
+
+    func test_renameFolderLeavesItAloneWhenTheNameIsBlankOrUnchanged() throws {
+        try withTempDirectory { base in
+            let hero = base.appendingPathComponent("Hero", isDirectory: true)
+            try FileManager.default.createDirectory(at: hero, withIntermediateDirectories: true)
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            view.renameFolder(at: hero, to: "   ")
+            view.renameFolder(at: hero, to: "Hero")
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: hero.path))
+        }
+    }
+
+    func test_moveFolderRelocatesItAndFollowsItInNavigationState() throws {
+        try withTempDirectory { base in
+            let hero = base.appendingPathComponent("Hero", isDirectory: true)
+            let anim = base.appendingPathComponent("Anim", isDirectory: true)
+            try FileManager.default.createDirectory(at: hero, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: anim, withIntermediateDirectories: true)
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+            view.navigation.selectedDirURL = hero
+            view.navigation.folderPathStack = [hero]
+            view.navigation.expandedDirs = [hero]
+
+            let destination = anim.appendingPathComponent("Hero", isDirectory: true)
+            view.moveFolder(at: hero, to: destination)
+
+            XCTAssertFalse(FileManager.default.fileExists(atPath: hero.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: destination.path))
+            XCTAssertEqual(view.navigation.selectedDirURL?.standardizedFileURL, destination.standardizedFileURL)
+            XCTAssertEqual(view.navigation.folderPathStack.map(\.standardizedFileURL), [destination.standardizedFileURL])
+            XCTAssertEqual(view.navigation.expandedDirs.map(\.standardizedFileURL), [destination.standardizedFileURL])
+        }
+    }
+
+    func test_moveFolderLeavesItAloneWhenTheDestinationAlreadyExists() throws {
+        try withTempDirectory { base in
+            let hero = base.appendingPathComponent("Hero", isDirectory: true)
+            let anim = base.appendingPathComponent("Anim", isDirectory: true)
+            let collision = anim.appendingPathComponent("Hero", isDirectory: true)
+            try FileManager.default.createDirectory(at: hero, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: collision, withIntermediateDirectories: true)
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            view.moveFolder(at: hero, to: collision)
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: hero.path), "the source folder should be untouched")
+        }
+    }
+
     func test_loadAssetsFromDisk() throws {
         try withTempDirectory { base in
             // Create category directories

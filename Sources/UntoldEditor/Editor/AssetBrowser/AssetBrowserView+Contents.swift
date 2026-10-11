@@ -93,11 +93,18 @@ extension AssetBrowserView {
 
     func assetRow(_ asset: Asset) -> some View {
         let isRemote = asset.path.pathExtension.lowercased() == "remotestream"
+        let isRenaming = asset.isFolder && navigation.renamingDirectoryURL?.standardizedFileURL == asset.path.standardizedFileURL
         return HStack {
             Image(systemName: asset.isFolder ? "folder.fill" : isRemote ? "globe" : "cube.fill")
                 .foregroundColor(isRemote ? .editorInfo : .editorTextTertiary)
-            Text(asset.name)
-                .font(.system(size: 14, weight: .regular, design: .monospaced))
+            if isRenaming {
+                CommitTextField(text: asset.name, multiline: false) { newName in
+                    renameFolder(at: asset.path, to: newName)
+                }
+            } else {
+                Text(asset.name)
+                    .font(.system(size: 14, weight: .regular, design: .monospaced))
+            }
             Spacer()
         }
         .padding(.vertical, 6)
@@ -155,6 +162,19 @@ extension AssetBrowserView {
                     // whether the asset can be placed (see AssetPlacement.swift).
                     .draggable(AssetDragPayload(asset: asset))
                     .contextMenu {
+                        if asset.isFolder, canRenameFolder(at: asset.path) {
+                            Button {
+                                navigation.renamingDirectoryURL = asset.path
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
+                            Button {
+                                requestMoveFolder(asset.path)
+                            } label: {
+                                Label("Move to…", systemImage: "folder")
+                            }
+                            Divider()
+                        }
                         let pathExtension = asset.path.pathExtension.lowercased()
                         if ["ply", "spz"].contains(pathExtension) {
                             Button {

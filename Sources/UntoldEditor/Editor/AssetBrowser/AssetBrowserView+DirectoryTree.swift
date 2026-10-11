@@ -230,6 +230,93 @@ extension AssetBrowserView {
         loadAssets()
     }
 
+    /// Whether `url` is safe to rename or move: only a folder under `Resources/`
+    /// (not `Resources` itself). `.untoldscene` files store asset references as
+    /// paths relative to `GameData` (e.g. "Models/Tower/Tower.untold"), so
+    /// renaming or moving anything inside `GameData` -- a category, a custom root
+    /// folder, or any subfolder -- risks silently breaking a scene that references
+    /// it. Nothing in the engine ever reads a path under `Resources/`, so either
+    /// operation is safe there.
+    func canRenameFolder(at url: URL?) -> Bool {
+        guard let url, let basePath = assetBasePath, isUnderResources(url, assetBasePath: basePath) else { return false }
+        return url.standardizedFileURL != resourcesRootURL?.standardizedFileURL
+    }
+
+    /// Moves `url` to `destination` on disk (a rename when `destination` shares
+    /// `url`'s parent, a genuine reorganization into a different folder
+    /// otherwise) and updates any navigation state that pointed at it or
+    /// somewhere nested under it (expanded nodes, the open folder trail, a
+    /// generic selection) so it keeps following the folder instead of silently
+    /// pointing at a path that no longer exists. A destination already taken by
+    /// something else, or identical to `url` itself, leaves `url` alone.
+    func moveFolder(at url: URL, to destination: URL) {
+        guard destination.standardizedFileURL != url.standardizedFileURL else { return }
+
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: destination.path) else {
+            showStatus("\"\(destination.lastPathComponent)\" already exists there", isError: true)
+            return
+        }
+
+        do {
+            try fm.moveItem(at: url, to: destination)
+        } catch {
+            showStatus("Move failed: \(error.localizedDescription)", isError: true)
+            return
+        }
+
+        func rebased(_ candidate: URL) -> URL {
+            let oldPath = url.standardizedFileURL.path
+            let candidatePath = candidate.standardizedFileURL.path
+            guard candidatePath == oldPath || candidatePath.hasPrefix(oldPath + "/") else { return candidate }
+            return URL(fileURLWithPath: destination.path + candidatePath.dropFirst(oldPath.count), isDirectory: true)
+        }
+
+        expandedDirs = Set(expandedDirs.map(rebased))
+        if let selected = selectedDirURL { selectedDirURL = rebased(selected) }
+        folderPathStack = folderPathStack.map(rebased)
+        loadAssets()
+    }
+
+    /// Renames `url` to `newName` in place. A blank name, an unchanged name, or a
+    /// name already taken by a sibling leaves `url` alone.
+    func renameFolder(at url: URL, to newName: String) {
+        defer { navigation.renamingDirectoryURL = nil }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != url.lastPathComponent else { return }
+        moveFolder(at: url, to: url.deletingLastPathComponent().appendingPathComponent(trimmed, isDirectory: true))
+    }
+
+    /// Entry point for the "Move to…" menu item: lets the user pick a destination
+    /// folder anywhere under Resources/ and moves `url` into it.
+    func requestMoveFolder(_ url: URL) {
+        guard let resourcesRoot = resourcesRootURL else { return }
+
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = resourcesRoot
+        panel.message = "Choose a folder under Resources to move \"\(url.lastPathComponent)\" into"
+        panel.prompt = "Move"
+
+        guard panel.runModal() == .OK, let destinationFolder = panel.urls.first else { return }
+
+        guard let basePath = assetBasePath, isUnderResources(destinationFolder, assetBasePath: basePath) else {
+            showStatus("Choose a folder inside Resources", isError: true)
+            return
+        }
+        let destinationPath = destinationFolder.standardizedFileURL.path
+        let sourcePath = url.standardizedFileURL.path
+        guard destinationPath != sourcePath, !destinationPath.hasPrefix(sourcePath + "/") else {
+            showStatus("Can't move a folder into itself", isError: true)
+            return
+        }
+
+        moveFolder(at: url, to: destinationFolder.appendingPathComponent(url.lastPathComponent, isDirectory: true))
+    }
+
     func directoryNode(url: URL?, name: String, category: String?, depth: Int) -> AnyView {
         let isGeneric = (category == nil)
         let subfolders: [URL] = {
@@ -241,6 +328,8 @@ extension AssetBrowserView {
         }()
         let hasChildren = !subfolders.isEmpty
         let isExpanded = url.map { expandedDirs.contains($0) } ?? false
+        let canRename = canRenameFolder(at: url)
+        let isRenaming = url.map { navigation.renamingDirectoryURL?.standardizedFileURL == $0.standardizedFileURL } ?? false
         let isSelected: Bool = {
             if isGeneric {
                 guard let url, let sel = selectedDirURL else { return false }
@@ -271,10 +360,16 @@ extension AssetBrowserView {
 
                     Image(systemName: isSelected ? "folder.fill" : "folder")
                         .foregroundColor(isSelected ? Color.editorAccent : .editorTextTertiary)
-                    Text(name)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.editorTextPrimary)
-                        .lineLimit(1)
+                    if isRenaming, let url {
+                        CommitTextField(text: name, multiline: false) { newName in
+                            renameFolder(at: url, to: newName)
+                        }
+                    } else {
+                        Text(name)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.editorTextPrimary)
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.vertical, 4)
@@ -310,6 +405,18 @@ extension AssetBrowserView {
                         requestNewDirectory(in: url)
                     } label: {
                         Label("New Directory", systemImage: "folder.badge.plus")
+                    }
+                    if canRename, let url {
+                        Button {
+                            navigation.renamingDirectoryURL = url
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        Button {
+                            requestMoveFolder(url)
+                        } label: {
+                            Label("Move to…", systemImage: "folder")
+                        }
                     }
                 }
 

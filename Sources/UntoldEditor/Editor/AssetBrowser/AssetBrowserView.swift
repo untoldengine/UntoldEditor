@@ -190,6 +190,13 @@ struct AssetBrowserView: View {
                             } label: {
                                 Label("Import Remote Stream", systemImage: "globe")
                             }
+                            if let current = currentDirectoryURL {
+                                Button {
+                                    createFolder(in: current)
+                                } label: {
+                                    Label("New Folder", systemImage: "folder.badge.plus")
+                                }
+                            }
                             if selectedSceneAuthoredAsset() != nil {
                                 Divider()
                                 Button {

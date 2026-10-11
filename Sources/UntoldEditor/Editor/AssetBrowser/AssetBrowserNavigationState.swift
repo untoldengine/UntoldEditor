@@ -32,4 +32,8 @@ final class AssetBrowserNavigationState: ObservableObject {
     /// Same again, for the Entities shelf: kinds of entity added by loaded code that are
     /// neither primitives nor lights.
     @Published var entitiesSelected: Bool = false
+    /// Non-nil while a sidebar folder row is showing its inline rename field (see
+    /// `directoryNode`'s "Rename" context menu item). Never a fixed root (a category,
+    /// or Resources itself) -- only a folder the user created can be renamed.
+    @Published var renamingDirectoryURL: URL?
 }
