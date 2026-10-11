@@ -19,7 +19,57 @@ import UntoldEngine
 /// to different importers (`importGaussianAsset` vs. `importSourceAsset`).
 let gaussianSourceAssetExtensions: Set<String> = ["ply", "spz"]
 
+/// Extensions the toolbar's generic Import button also recognizes beyond a raw source:
+/// an already-cooked runtime asset, routed straight into the GameData category its
+/// extension names (see `importAssetAutoRouted`) instead of staged in Resources -- there's
+/// nothing left to cook. Unambiguous by extension with current releases: an old project's
+/// animation still saved as a bare ".untold" (from before ".untoldanim" existed) lands in
+/// Models here, same as a model would; GameData/Animations' own Import still accepts it
+/// correctly.
+let cookedAssetCategoryByExtension: [String: AssetCategory] = [
+    runtimeAssetExtension: .models,
+    "untoldpack": .models,
+    "untoldanim": .animations,
+    "untoldgs": .gaussians,
+    untoldSceneFileExtension: .scenes,
+    "uscript": .scripts,
+]
+
 extension AssetBrowserView {
+    /// Queues the copy of one raw source (`.blend`/USD or `.ply`/`.spz`) into
+    /// `destinationFolder` (always somewhere under Resources). Shared by
+    /// `importSourcesIntoResources` (Finder-style, wherever in Resources the user is
+    /// browsing) and `importAssetAutoRouted` (always the Resources root).
+    func enqueueResourcesImport(sourceURL: URL, into destinationFolder: URL, batch: DispatchGroup, fileManager fm: FileManager) {
+        let sourceExtension = sourceURL.pathExtension.lowercased()
+        if gaussianSourceAssetExtensions.contains(sourceExtension) {
+            let destFolder = gaussianPackageFolder(for: sourceURL, in: destinationFolder)
+            enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                _ = try importGaussianAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                    try ctx.copy($0, to: $1, fileManager: fm)
+                }
+            }
+        } else if sourceAssetExtensions.contains(sourceExtension) {
+            let baseName = sourceURL.deletingPathExtension().lastPathComponent
+            let destFolder = destinationFolder.appendingPathComponent(baseName, isDirectory: true)
+            enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                    try ctx.copy($0, to: $1, fileManager: fm)
+                }
+            }
+        }
+    }
+
+    /// Shows the post-import "right-click to cook" hint after a single raw source lands
+    /// in Resources (see `BakePromptSheet`) -- skipped for a multi-file import (a choice
+    /// per file isn't worth a sheet) and for an already-cooked file (nothing to cook).
+    func maybeShowBakePrompt(for importedURLs: [URL]) {
+        guard !hideBakePromptAfterImport, importedURLs.count == 1, let sourceURL = importedURLs.first else { return }
+        let sourceExtension = sourceURL.pathExtension.lowercased()
+        guard gaussianSourceAssetExtensions.contains(sourceExtension) || sourceAssetExtensions.contains(sourceExtension) else { return }
+        pendingBakePrompt = BakePromptRequest(sourceURL: sourceURL)
+    }
+
     func importIntoCurrentDirectory() {
         // Resources/ is free-form -- there's no single category to restrict the file
         // picker to (which category a source becomes is decided at cook time, not
@@ -60,19 +110,84 @@ extension AssetBrowserView {
 
         let batch = DispatchGroup()
         for sourceURL in openPanel.urls {
+            enqueueResourcesImport(sourceURL: sourceURL, into: destinationFolder, batch: batch, fileManager: fm)
+        }
+
+        let count = openPanel.urls.count
+        showStatus("Importing \(count) item(s) (see Tasks)...")
+
+        batch.notify(queue: .main) {
+            loadAssets()
+            if runtimeExportQueue.isEmpty, pendingRuntimeExport == nil,
+               tilesExportQueue.isEmpty, pendingTilesExport == nil
+            {
+                showStatus("Imported \(count) item(s)")
+            }
+            // Only for a single-file import: a batch would need the same choice made
+            // once per file, which isn't worth a modal, so it's left to the right-click
+            // menu instead.
+            maybeShowBakePrompt(for: openPanel.urls)
+        }
+    }
+
+    /// The toolbar's always-available "Import…": picks a destination by the file's own
+    /// extension rather than wherever the user happens to be browsing. A raw source
+    /// (`.blend`, USD, `.ply`/`.spz`) stages into the Resources root, free-form, same as
+    /// `importSourcesIntoResources`; an already-cooked file
+    /// (`cookedAssetCategoryByExtension`) goes straight into its GameData category,
+    /// since there's nothing left to cook.
+    func importAssetAutoRouted() {
+        guard editorBaseAssetPath.basePath != nil else {
+            showBasePathAlert = true
+            return
+        }
+        guard let resourcesRoot = resourcesRootURL else {
+            importIntoCurrentDirectory()
+            return
+        }
+
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = sourceAssetExtensions
+            .union(gaussianSourceAssetExtensions)
+            .union(cookedAssetCategoryByExtension.keys)
+            .sorted()
+            .compactMap { UTType(filenameExtension: $0) }
+        openPanel.allowsMultipleSelection = true
+
+        let fm = FileManager.default
+        try? fm.createDirectory(at: resourcesRoot, withIntermediateDirectories: true)
+
+        guard openPanel.runModal() == .OK else { return }
+
+        let batch = DispatchGroup()
+        for sourceURL in openPanel.urls {
             let sourceExtension = sourceURL.pathExtension.lowercased()
-            if gaussianSourceAssetExtensions.contains(sourceExtension) {
-                let destFolder = gaussianPackageFolder(for: sourceURL, in: destinationFolder)
+
+            guard let category = cookedAssetCategoryByExtension[sourceExtension] else {
+                enqueueResourcesImport(sourceURL: sourceURL, into: resourcesRoot, batch: batch, fileManager: fm)
+                continue
+            }
+            guard let categoryRoot = categoryRootURL(category) else { continue }
+            try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
+
+            switch category {
+            case .gaussians:
+                let destFolder = gaussianPackageFolder(for: sourceURL, in: categoryRoot)
                 enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
                     _ = try importGaussianAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                         try ctx.copy($0, to: $1, fileManager: fm)
                     }
                 }
-            } else if sourceAssetExtensions.contains(sourceExtension) {
+            case .scenes, .scripts:
+                let destURL = categoryRoot.appendingPathComponent(sourceURL.lastPathComponent)
+                enqueueImport(destination: destURL, isFolder: false, batch: batch) { ctx in
+                    try ctx.copy(sourceURL, to: ctx.stagingURL, fileManager: fm)
+                }
+            default:
                 let baseName = sourceURL.deletingPathExtension().lastPathComponent
-                let destFolder = destinationFolder.appendingPathComponent(baseName, isDirectory: true)
+                let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
                 enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
-                    _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                    try importRuntimeAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                         try ctx.copy($0, to: $1, fileManager: fm)
                     }
                 }
@@ -89,6 +204,7 @@ extension AssetBrowserView {
             {
                 showStatus("Imported \(count) item(s)")
             }
+            maybeShowBakePrompt(for: openPanel.urls)
         }
     }
 

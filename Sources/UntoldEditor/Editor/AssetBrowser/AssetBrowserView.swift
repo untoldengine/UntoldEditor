@@ -53,6 +53,11 @@ struct AssetBrowserView: View {
         nonmutating set { navigation.rootExpanded = newValue }
     }
 
+    var gameDataExpanded: Bool {
+        get { navigation.gameDataExpanded }
+        nonmutating set { navigation.gameDataExpanded = newValue }
+    }
+
     @State var showUnsavedChangesAlert = false
     @State var unsavedChangesAlertMessage = ""
     @State var showDeleteConfirmation = false
@@ -71,6 +76,11 @@ struct AssetBrowserView: View {
     /// and a request always carries sources (`GaussianCookRequest.init?(sources:)`).
     @State var pendingGaussianCook: GaussianCookRequest?
     @State var gaussianCookSettings = GaussianCookSettings()
+    /// Post-import nudge offering to cook a freshly imported Resources source right away
+    /// (see `importSourcesIntoResources`). App-wide "don't show again" preference, not
+    /// per-project -- it's a one-time onboarding nudge.
+    @State var pendingBakePrompt: BakePromptRequest?
+    @AppStorage("hideBakePromptAfterImport") var hideBakePromptAfterImport: Bool = false
     /// Import copies still running (see `AssetImportCopy.swift`). Past the placeholder
     /// delay each one is drawn as a placeholder row in the folder that will receive it.
     @State var pendingImports: [PendingAssetImport] = []
@@ -115,43 +125,64 @@ struct AssetBrowserView: View {
                 HStack(spacing: 8) {
                     // Left: directory tree with a root node (right-click any
                     // folder — including the root — to create a subfolder).
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            rootDirectoryRow
+                    VStack(spacing: 0) {
+                        // Always-visible entry point for a first-time user, regardless
+                        // of what's currently selected in the tree below: a raw source
+                        // stages into Resources, an already-cooked file goes straight
+                        // into its GameData category (see `importAssetAutoRouted`).
+                        Button {
+                            importAssetAutoRouted()
+                        } label: {
+                            Label("Import…", systemImage: "square.and.arrow.down")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.editorAccent)
+                        .padding(8)
+                        .help("Import a .blend, USD, .ply, or .spz source into Resources. An already-cooked file (.untold, .untoldgs, .untoldanim, ...) goes straight into its GameData category.")
 
-                            if rootExpanded {
-                                primitivesCategoryRow
-                                lightsCategoryRow
-                                entitiesCategoryRow
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                rootDirectoryRow
 
-                                ForEach(AssetCategory.allCases, id: \.self) { category in
-                                    directoryNode(
-                                        url: categoryRootURL(category),
-                                        name: category.displayName,
-                                        category: category.rawValue,
-                                        depth: 1
-                                    )
-                                }
-                                if let resourcesRootURL {
-                                    directoryNode(
-                                        url: resourcesRootURL,
-                                        name: "Resources",
-                                        category: nil,
-                                        depth: 1
-                                    )
-                                }
-                                ForEach(customRootFolders, id: \.self) { url in
-                                    directoryNode(
-                                        url: url,
-                                        name: url.lastPathComponent,
-                                        category: nil,
-                                        depth: 1
-                                    )
+                                if rootExpanded {
+                                    primitivesCategoryRow
+                                    lightsCategoryRow
+                                    entitiesCategoryRow
+
+                                    if let resourcesRootURL {
+                                        directoryNode(
+                                            url: resourcesRootURL,
+                                            name: "Resources",
+                                            category: nil,
+                                            depth: 1
+                                        )
+                                    }
+
+                                    gameDataGroupRow
+                                    if gameDataExpanded {
+                                        ForEach(AssetCategory.allCases, id: \.self) { category in
+                                            directoryNode(
+                                                url: categoryRootURL(category),
+                                                name: category.displayName,
+                                                category: category.rawValue,
+                                                depth: 2
+                                            )
+                                        }
+                                        ForEach(customRootFolders, id: \.self) { url in
+                                            directoryNode(
+                                                url: url,
+                                                name: url.lastPathComponent,
+                                                category: nil,
+                                                depth: 2
+                                            )
+                                        }
+                                    }
                                 }
                             }
+                            .padding(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(width: 225)
                     .frame(maxHeight: .infinity)
@@ -290,6 +321,15 @@ struct AssetBrowserView: View {
                 onCancel: {
                     pendingGaussianCook = nil
                 }
+            )
+        }
+        .sheet(item: $pendingBakePrompt) { request in
+            BakePromptSheet(
+                sourceURL: request.sourceURL,
+                onDismiss: {
+                    pendingBakePrompt = nil
+                },
+                dontShowAgain: $hideBakePromptAfterImport
             )
         }
         .sheet(isPresented: $showRemoteStreamSheet) {

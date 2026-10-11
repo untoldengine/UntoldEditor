@@ -429,6 +429,45 @@ extension AssetBrowserView {
         )
     }
 
+    /// Group row for "GameData": a disclosure for the fixed categories and any
+    /// custom root folders, which all physically live inside GameData. Shown as
+    /// a sibling of the `Resources` node so a first-time user sees the two
+    /// top-level destinations (where sources go, where cooked output lives)
+    /// instead of a flat list of a dozen category names.
+    var gameDataGroupRow: some View {
+        HStack(spacing: 6) {
+            Button(action: { gameDataExpanded.toggle() }) {
+                Image(systemName: gameDataExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.editorTextSecondary)
+                    .frame(width: 10)
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+
+            Image(systemName: "shippingbox.fill")
+                .foregroundColor(.editorTextTertiary)
+            Text("GameData")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.editorTextPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .padding(.leading, 12)
+        .contentShape(Rectangle())
+        .onTapGesture { gameDataExpanded.toggle() }
+        .contextMenu {
+            Button {
+                requestNewDirectory(in: assetBasePath)
+            } label: {
+                Label("New Directory", systemImage: "folder.badge.plus")
+            }
+        }
+        .help("Cooked, ready-to-run assets. Import artist sources into Resources, then cook them here.")
+    }
+
     /// Root node of the directory tree (the project's asset folder). Right-click
     /// to create a directory at root level.
     var rootDirectoryRow: some View {

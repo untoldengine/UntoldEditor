@@ -24,6 +24,12 @@ final class AssetBrowserNavigationState: ObservableObject {
     /// directory the user created) is selected. Overrides the category selection.
     @Published var selectedDirURL: URL?
     @Published var rootExpanded: Bool = true
+    /// Whether the "GameData" sidebar group (the fixed categories + any custom
+    /// root folders, all of which physically live inside GameData) is expanded.
+    /// Separate from `rootExpanded`, which gates the whole tree under the
+    /// project name -- this only controls GameData's own children, so
+    /// `Resources` stays visible (and independently expandable) regardless.
+    @Published var gameDataExpanded: Bool = true
     /// True when the Lights shelf (a fixed pseudo-category, not backed by disk) is
     /// selected. Overrides the category and generic-directory selection.
     @Published var lightsSelected: Bool = false

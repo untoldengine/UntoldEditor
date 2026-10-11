@@ -45,6 +45,32 @@ extension AssetBrowserView {
         }
     }
 
+    /// Shown in place of an empty folder's contents: tells a first-time user
+    /// where to drop source files and how to turn them into runtime assets,
+    /// since an empty tree gives no clue on its own. Worded differently for
+    /// Resources (where sources land) vs. GameData (where cooked output lands).
+    @ViewBuilder
+    func emptyFolderHint(for folder: URL?) -> some View {
+        let isResources = folder.flatMap { f in assetBasePath.map { isUnderResources(f, assetBasePath: $0) } } ?? false
+        VStack(alignment: .leading, spacing: 6) {
+            Text("This folder is empty")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.editorTextSecondary)
+            if isResources {
+                Text("Drop in a .blend, USD, .ply, or .spz source, or use Import above. Right-click a source to cook it into a Model, Animation, or Tiled Stream Model — the result lands in GameData.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.editorTextTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("GameData holds cooked, ready-to-run assets. Import an artist source into Resources first, then cook it from there — or use Import here to bring in an already-cooked file.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.editorTextTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding()
+    }
+
     @ViewBuilder
     var rightPaneContents: some View {
         if navigation.lightsSelected {
@@ -64,9 +90,7 @@ extension AssetBrowserView {
                 let categoryRoot = AssetCategory(rawValue: selectedCategory).flatMap(categoryRootURL)
                 let placeholders = categoryRoot.map { placeholderImports(pendingImports, in: $0) } ?? []
                 if filtered.isEmpty, placeholders.isEmpty {
-                    Text("No assets available")
-                        .foregroundColor(.editorTextTertiary)
-                        .padding()
+                    emptyFolderHint(for: categoryRoot)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
                         assetRowList(filtered, spacing: 4) { asset in
@@ -80,9 +104,7 @@ extension AssetBrowserView {
                     }
                 }
             } else {
-                Text("No assets available")
-                    .foregroundColor(.editorTextTertiary)
-                    .padding()
+                emptyFolderHint(for: AssetCategory(rawValue: selectedCategory).flatMap(categoryRootURL))
             }
         } else {
             Text("Select a folder")
@@ -315,13 +337,19 @@ extension AssetBrowserView {
                 return nil
             }
 
+            let filteredItems = items.filter { matchesSearch($0) }
+            let placeholders = placeholderImports(pendingImports, in: folder)
             VStack(alignment: .leading, spacing: 8) {
-                assetRowList(items.filter { matchesSearch($0) }, spacing: 8) { asset in
-                    if selectedDirURL != nil {
-                        // Generic navigation (root-level / custom folders)
-                        selectedDirURL = asset.path
-                    } else if selectedCategory != AssetCategory.scripts.rawValue {
-                        folderPathStack.append(asset.path)
+                if filteredItems.isEmpty, placeholders.isEmpty {
+                    emptyFolderHint(for: folder)
+                } else {
+                    assetRowList(filteredItems, spacing: 8) { asset in
+                        if selectedDirURL != nil {
+                            // Generic navigation (root-level / custom folders)
+                            selectedDirURL = asset.path
+                        } else if selectedCategory != AssetCategory.scripts.rawValue {
+                            folderPathStack.append(asset.path)
+                        }
                     }
                 }
                 importPlaceholderRows(in: folder)
