@@ -201,13 +201,13 @@ extension AssetBrowserView {
             // A folder that shares its stem with a sibling runtime asset is that
             // asset's cook source (see `runtimeExportLocation`): it's not listed on
             // its own, only reachable via that asset's "Reveal Source Folder" menu.
+            // (A no-op when `folder` is itself under Resources/: nothing there has a
+            // runtime extension to match in the first place.)
             let sourceFolderByStem: [String: URL] = contents.reduce(into: [:]) { result, item in
                 guard allRuntimeAssetExtensions.contains(item.pathExtension.lowercased()) else { return }
                 let stem = item.deletingPathExtension().lastPathComponent
-                let candidateFolder = folder.appendingPathComponent(stem, isDirectory: true)
-                var isDir: ObjCBool = false
-                if FileManager.default.fileExists(atPath: candidateFolder.path, isDirectory: &isDir), isDir.boolValue {
-                    result[stem] = candidateFolder
+                if let found = sourceFolderCandidate(stem: stem, in: folder, assetBasePath: assetBasePath) {
+                    result[stem] = found
                 }
             }
 

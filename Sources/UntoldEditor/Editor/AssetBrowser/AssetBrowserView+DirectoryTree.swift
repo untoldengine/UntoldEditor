@@ -21,6 +21,14 @@ extension AssetBrowserView {
         assetBasePath?.appendingPathComponent(category.rawValue, isDirectory: true)
     }
 
+    /// The project's `Resources/` folder, browsable as a second root alongside
+    /// `GameData`'s categories -- where import now puts artist sources (see
+    /// `AssetBrowserView+Import.swift`). Nil on the legacy layout, which has no
+    /// `Resources/` folder.
+    var resourcesRootURL: URL? {
+        assetBasePath.flatMap { ProjectLayout.detect(gameDataDirectory: $0).resourcesDirectory }
+    }
+
     /// Root-level folders the user created that aren't one of the fixed categories.
     var customRootFolders: [URL] {
         guard let root = assetBasePath else { return [] }
@@ -42,15 +50,20 @@ extension AssetBrowserView {
         return categoryRootURL(category)
     }
 
-    /// Category owning `url` (matched by the top-level folder under the asset
-    /// root), used to pick import file types for generic folders.
+    /// Category owning `url` (matched by the top-level folder under the asset root,
+    /// or under `Resources/` -- a source imported by #169 keeps the same top-level
+    /// category name there, mirrored), used to pick import file types for generic
+    /// folders and to let a Resources-side source still show its "Cook to…" action.
     func inferCategory(for url: URL?) -> AssetCategory? {
-        guard let url, let root = assetBasePath?.standardizedFileURL else { return nil }
-        let rootComponents = root.pathComponents
-        let comps = url.standardizedFileURL.pathComponents
-        guard comps.count > rootComponents.count else { return nil }
-        let top = comps[rootComponents.count]
-        return AssetCategory(rawValue: top)
+        guard let url else { return nil }
+        func topLevelCategory(under root: URL?) -> AssetCategory? {
+            guard let root = root?.standardizedFileURL else { return nil }
+            let rootComponents = root.pathComponents
+            let comps = url.standardizedFileURL.pathComponents
+            guard comps.count > rootComponents.count, comps.starts(with: rootComponents) else { return nil }
+            return AssetCategory(rawValue: comps[rootComponents.count])
+        }
+        return topLevelCategory(under: assetBasePath) ?? topLevelCategory(under: resourcesRootURL)
     }
 
     func subdirectories(of url: URL) -> [URL] {

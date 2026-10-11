@@ -100,6 +100,41 @@ final class RuntimeExportLocationTests: XCTestCase {
         XCTAssertNil(mirroredGameDataPath(for: elsewhere, assetBasePath: assetBasePath))
     }
 
+    func test_sourceFolderCandidatePrefersTheMirroredResourcesFolder() throws {
+        let scratch = try ScratchDirectory()
+        let projectRoot = try scratch.directory("MyGame")
+        let assetBasePath = projectRoot.appendingPathComponent("GameData")
+        let categoryFolder = assetBasePath.appendingPathComponent("Models")
+        try scratch.directory("MyGame/Resources/Models/Tower")
+        try scratch.directory("MyGame/GameData/Models/Tower") // leftover payload folder, no source in it
+
+        let found = sourceFolderCandidate(stem: "Tower", in: categoryFolder, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(found?.path, projectRoot.appendingPathComponent("Resources/Models/Tower").path)
+    }
+
+    func test_sourceFolderCandidateFallsBackToTheLegacySameFolderLocation() throws {
+        let scratch = try ScratchDirectory()
+        let projectRoot = try scratch.directory("MyGame")
+        let assetBasePath = projectRoot.appendingPathComponent("GameData")
+        let categoryFolder = assetBasePath.appendingPathComponent("Models")
+        try scratch.directory("MyGame/GameData/Models/Tower")
+        // No Resources/ folder at all -- legacy layout.
+
+        let found = sourceFolderCandidate(stem: "Tower", in: categoryFolder, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(found?.path, categoryFolder.appendingPathComponent("Tower").path)
+    }
+
+    func test_sourceFolderCandidateReturnsNilWhenNeitherExists() throws {
+        let scratch = try ScratchDirectory()
+        let projectRoot = try scratch.directory("MyGame")
+        let assetBasePath = projectRoot.appendingPathComponent("GameData")
+        let categoryFolder = assetBasePath.appendingPathComponent("Models")
+
+        XCTAssertNil(sourceFolderCandidate(stem: "Tower", in: categoryFolder, assetBasePath: assetBasePath))
+    }
+
     func test_scriptOptionSupportIsReadFromTheScript() throws {
         let script = FileManager.default.temporaryDirectory
             .appendingPathComponent("RuntimeExportLocationTests-\(UUID().uuidString).py")

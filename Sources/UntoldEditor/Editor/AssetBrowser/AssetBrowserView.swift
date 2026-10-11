@@ -132,6 +132,14 @@ struct AssetBrowserView: View {
                                         depth: 1
                                     )
                                 }
+                                if let resourcesRootURL {
+                                    directoryNode(
+                                        url: resourcesRootURL,
+                                        name: "Resources",
+                                        category: nil,
+                                        depth: 1
+                                    )
+                                }
                                 ForEach(customRootFolders, id: \.self) { url in
                                     directoryNode(
                                         url: url,

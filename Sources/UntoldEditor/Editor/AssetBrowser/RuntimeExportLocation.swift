@@ -68,6 +68,29 @@ func runtimeExportLocation(for sourceURL: URL, assetBasePath: URL?) -> RuntimeEx
     return RuntimeExportLocation(outputFolder: sourceFolder.deletingLastPathComponent(), assetsFolder: sourceFolder)
 }
 
+/// The folder holding a cooked asset's actual source, given it would sit beside the
+/// asset as a same-named folder (`categoryFolder/<stem>/`). Prefers the mirrored
+/// `Resources/` folder when the project is on the root-level layout and it exists
+/// there (that's where import puts sources now, see `AssetBrowserView+Import.swift`);
+/// falls back to the legacy same-folder location, for a project not yet converted or
+/// a source otherwise left beside its cooked output. Nil if neither exists.
+func sourceFolderCandidate(stem: String, in categoryFolder: URL, assetBasePath: URL?, fileManager fm: FileManager = .default) -> URL? {
+    func existingDirectory(_ url: URL) -> URL? {
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else { return nil }
+        return url
+    }
+
+    let legacyCandidate = categoryFolder.appendingPathComponent(stem, isDirectory: true)
+    if let assetBasePath,
+       let mirroredCandidate = mirroredResourcesPath(for: legacyCandidate, assetBasePath: assetBasePath),
+       let found = existingDirectory(mirroredCandidate)
+    {
+        return found
+    }
+    return existingDirectory(legacyCandidate)
+}
+
 /// Whether a script accepts a command-line option, read from its source. The editor
 /// runs the engine scripts of whichever engine version it was built against, and an
 /// older one rejects options it does not know, which fails the whole cook.
