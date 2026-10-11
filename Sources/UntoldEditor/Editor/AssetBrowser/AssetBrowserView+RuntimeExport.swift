@@ -17,7 +17,7 @@ import UntoldEngine
 extension AssetBrowserView {
     func queueRuntimeExport(sourceURL: URL, category: AssetCategory) {
         let outputExtension = category == .animations ? "untoldanim" : runtimeAssetExtension
-        let location = runtimeExportLocation(for: sourceURL, assetBasePath: assetBasePath)
+        let location = runtimeExportLocation(for: sourceURL, category: category, assetBasePath: assetBasePath)
         let outputURL = location.outputFolder
             .appendingPathComponent(sourceURL.deletingPathExtension().lastPathComponent)
             .appendingPathExtension(outputExtension)

@@ -188,6 +188,103 @@ final class AssetBrowserViewTests: XCTestCase {
         XCTAssertFalse(rebuilt.navigation.rootExpanded)
     }
 
+    // MARK: - Breadcrumb (Resources/GameData share the same category names below their own root)
+
+    func test_breadcrumbSegmentsForGameDataPathSynthesizesTheGameDataLabel() throws {
+        try withTempDirectory { base in
+            let modelsFolder = base.appendingPathComponent("Models", isDirectory: true)
+            let towerFolder = modelsFolder.appendingPathComponent("Tower", isDirectory: true)
+            try FileManager.default.createDirectory(at: towerFolder, withIntermediateDirectories: true)
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            let segments = view.breadcrumbSegments(for: towerFolder)
+            XCTAssertEqual(segments.map(\.name), ["GameData", "Models", "Tower"])
+            XCTAssertEqual(segments.map(\.category), [nil, "Models", "Models"])
+        }
+    }
+
+    func test_breadcrumbSegmentsForResourcesPathUsesTheResourcesRootName() throws {
+        try withTempDirectory { projectRoot in
+            let gameData = projectRoot.appendingPathComponent("GameData", isDirectory: true)
+            let resourcesModelsTower = projectRoot.appendingPathComponent("Resources/Models/Tower", isDirectory: true)
+            try FileManager.default.createDirectory(at: gameData, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: resourcesModelsTower, withIntermediateDirectories: true)
+            assetBasePath = gameData
+            EditorAssetBasePath.shared.basePath = gameData
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            let segments = view.breadcrumbSegments(for: resourcesModelsTower)
+            XCTAssertEqual(segments.map(\.name), ["Resources", "Models", "Tower"])
+            XCTAssertTrue(segments.allSatisfy { $0.category == nil }, "Resources-side segments navigate generically, not by category")
+        }
+    }
+
+    func test_selectBreadcrumbNavigatesLikeTheSidebarWouldForAGameDataSegment() throws {
+        try withTempDirectory { base in
+            let modelsFolder = base.appendingPathComponent("Models", isDirectory: true)
+            let towerFolder = modelsFolder.appendingPathComponent("Tower", isDirectory: true)
+            try FileManager.default.createDirectory(at: towerFolder, withIntermediateDirectories: true)
+            assetBasePath = base
+            EditorAssetBasePath.shared.basePath = base
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            let segments = view.breadcrumbSegments(for: towerFolder)
+            view.selectBreadcrumb(segments[2]) // "Tower"
+
+            XCTAssertNil(view.navigation.selectedDirURL)
+            XCTAssertEqual(view.navigation.selectedCategory, "Models")
+            // selectDirectory's folderPathStack holds the chain below the category root,
+            // not the category root itself (that's implied by selectedCategory) -- so
+            // navigating straight to Tower (directly under Models) is just one entry.
+            XCTAssertEqual(view.navigation.folderPathStack.map(\.standardizedFileURL), [towerFolder.standardizedFileURL])
+        }
+    }
+
+    func test_selectBreadcrumbNavigatesGenericallyForAResourcesSegment() throws {
+        try withTempDirectory { projectRoot in
+            let gameData = projectRoot.appendingPathComponent("GameData", isDirectory: true)
+            let resourcesModelsTower = projectRoot.appendingPathComponent("Resources/Models/Tower", isDirectory: true)
+            try FileManager.default.createDirectory(at: gameData, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: resourcesModelsTower, withIntermediateDirectories: true)
+            assetBasePath = gameData
+            EditorAssetBasePath.shared.basePath = gameData
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            let segments = view.breadcrumbSegments(for: resourcesModelsTower)
+            view.selectBreadcrumb(segments[2]) // "Tower"
+
+            XCTAssertEqual(view.navigation.selectedDirURL?.standardizedFileURL, resourcesModelsTower.standardizedFileURL)
+            XCTAssertNil(view.navigation.selectedCategory)
+            XCTAssertTrue(view.navigation.folderPathStack.isEmpty)
+        }
+    }
+
     func test_loadAssetsFromDisk() throws {
         try withTempDirectory { base in
             // Create category directories

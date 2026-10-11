@@ -14,12 +14,82 @@ import UniformTypeIdentifiers
 import UntoldComponentKit
 import UntoldEngine
 
+/// Source extensions a Gaussian capture comes in -- kept apart from `sourceAssetExtensions`
+/// (which is specifically USD/.blend, see `AssetFileHelpers.swift`) since the two dispatch
+/// to different importers (`importGaussianAsset` vs. `importSourceAsset`).
+let gaussianSourceAssetExtensions: Set<String> = ["ply", "spz"]
+
 extension AssetBrowserView {
     func importIntoCurrentDirectory() {
+        // Resources/ is free-form -- there's no single category to restrict the file
+        // picker to (which category a source becomes is decided at cook time, not
+        // import time, see the context menu in AssetBrowserView+Contents.swift), so
+        // every recognized source type is offered at once instead of defaulting to one.
+        if let current = currentDirectoryURL, let basePath = assetBasePath, isUnderResources(current, assetBasePath: basePath) {
+            importSourcesIntoResources(at: current)
+            return
+        }
         let category = selectedCategory.flatMap { AssetCategory(rawValue: $0) }
             ?? inferCategory(for: currentDirectoryURL)
             ?? .models
         importAssetForCategory(category, into: currentDirectoryURL)
+    }
+
+    /// Import entry point used while browsing anywhere under `Resources/`: the open
+    /// panel allows every recognized source extension at once, and each selected file
+    /// is dispatched to the importer its own extension calls for -- a `.ply`/`.spz`
+    /// through `importGaussianAsset`, a `.blend`/USD through `importSourceAsset` --
+    /// landing in its own folder directly in `destinationFolder` (Finder-style,
+    /// wherever in `Resources/` the user is).
+    func importSourcesIntoResources(at destinationFolder: URL) {
+        guard editorBaseAssetPath.basePath != nil else {
+            showBasePathAlert = true
+            return
+        }
+
+        let openPanel = NSOpenPanel()
+        openPanel.allowedContentTypes = sourceAssetExtensions.union(gaussianSourceAssetExtensions).sorted().compactMap {
+            UTType(filenameExtension: $0)
+        }
+        openPanel.allowsMultipleSelection = true
+
+        let fm = FileManager.default
+        try? fm.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
+
+        guard openPanel.runModal() == .OK else { return }
+
+        let batch = DispatchGroup()
+        for sourceURL in openPanel.urls {
+            let sourceExtension = sourceURL.pathExtension.lowercased()
+            if gaussianSourceAssetExtensions.contains(sourceExtension) {
+                let destFolder = gaussianPackageFolder(for: sourceURL, in: destinationFolder)
+                enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                    _ = try importGaussianAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                        try ctx.copy($0, to: $1, fileManager: fm)
+                    }
+                }
+            } else if sourceAssetExtensions.contains(sourceExtension) {
+                let baseName = sourceURL.deletingPathExtension().lastPathComponent
+                let destFolder = destinationFolder.appendingPathComponent(baseName, isDirectory: true)
+                enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                    _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
+                        try ctx.copy($0, to: $1, fileManager: fm)
+                    }
+                }
+            }
+        }
+
+        let count = openPanel.urls.count
+        showStatus("Importing \(count) item(s) (see Tasks)...")
+
+        batch.notify(queue: .main) {
+            loadAssets()
+            if runtimeExportQueue.isEmpty, pendingRuntimeExport == nil,
+               tilesExportQueue.isEmpty, pendingTilesExport == nil
+            {
+                showStatus("Imported \(count) item(s)")
+            }
+        }
     }
 
     func importAssetForCategory(_ category: AssetCategory, into destinationOverride: URL? = nil) {
@@ -66,17 +136,8 @@ extension AssetBrowserView {
 
         let fm = FileManager.default
         // Import into the folder the user has open (Finder-style), falling back
-        // to the category root. The Resources root itself carries no category of its
-        // own (it's a bare folder, nothing pre-created under it -- see #1335), so
-        // importing from there needs the category appended explicitly, the same way
-        // the GameData-side fallback below does; otherwise the file lands flat in
-        // Resources/ with no Models/Animations/... segment at all.
-        let categoryRoot: URL
-        if let destinationOverride, destinationOverride.standardizedFileURL == resourcesRootURL?.standardizedFileURL {
-            categoryRoot = destinationOverride.appendingPathComponent(categoryString, isDirectory: true)
-        } else {
-            categoryRoot = destinationOverride ?? basePath.appendingPathComponent(categoryString, isDirectory: true)
-        }
+        // to the category root.
+        let categoryRoot = destinationOverride ?? basePath.appendingPathComponent(categoryString, isDirectory: true)
         // Ensure the destination folder exists (e.g., <Base>/Models or a subfolder)
         try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
 
@@ -107,16 +168,17 @@ extension AssetBrowserView {
                         try ctx.copy(sourceURL, to: ctx.stagingURL, fileManager: fm)
                     }
                 } else {
-                    // Gaussian files are imported as a folder package so progressive tiers stay grouped.
-                    let destFolder = gaussianPackageFolder(for: sourceURL, in: categoryRoot)
-                    // A raw .ply/.spz is a source, same as a .blend: it goes into Resources/,
-                    // mirrored, so it never ships in the built app (see cookGaussianSources,
-                    // which mirrors it back for the cook's output). An already-cooked .untoldgs
-                    // stays in GameData, same as a runtime .untold/.untoldpack would.
+                    // A raw .ply/.spz is a source, same as a .blend: it goes into
+                    // Resources/, free-form (no Gaussians/ segment, same as any other
+                    // source -- see cookGaussianSources for where the cook's output
+                    // lands). An already-cooked .untoldgs stays in GameData, same as a
+                    // runtime .untold/.untoldpack would.
                     let sourceExtension = sourceURL.pathExtension.lowercased()
+                    let baseName = gaussianPackageName(for: sourceURL)
                     let importFolder = ["ply", "spz"].contains(sourceExtension)
-                        ? resourcesImportDestination(for: destFolder, assetBasePath: basePath)
-                        : destFolder
+                        ? (resourcesImportFolder(forBaseName: baseName, browsing: destinationOverride, assetBasePath: basePath)
+                            ?? gaussianPackageFolder(for: sourceURL, in: categoryRoot))
+                        : gaussianPackageFolder(for: sourceURL, in: categoryRoot)
                     enqueueImport(destination: importFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importGaussianAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
@@ -153,13 +215,13 @@ extension AssetBrowserView {
                         }
                     }
                 } else if sourceAssetExtensions.contains(sourceExtension) {
-                    // Import = copy the source into the project, into Resources/ rather
-                    // than GameData/ (mirrored path, same category/name) so it never
-                    // ships in the built app. Cooking to .untold / .untoldpack happens
-                    // when the user asks for it, from the row's "Cook to .untold…"
-                    // context action (same pattern as Gaussians); runtimeExportLocation
-                    // mirrors the Resources path back to GameData for the output.
-                    let importFolder = resourcesImportDestination(for: destFolder, assetBasePath: basePath)
+                    // Import = copy the source into the project, into Resources/,
+                    // free-form (no Models/Animations/... segment -- which category it
+                    // becomes is decided at cook time, not import time, see the context
+                    // menu in AssetBrowserView+Contents.swift). Falls back to GameData
+                    // on the legacy layout, which has no Resources/ to redirect into.
+                    let importFolder = resourcesImportFolder(forBaseName: baseName, browsing: destinationOverride, assetBasePath: basePath)
+                        ?? destFolder
                     enqueueImport(destination: importFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
@@ -172,10 +234,11 @@ extension AssetBrowserView {
                 if sourceAssetExtensions.contains(sourceExtension) {
                     let baseName = sourceURL.deletingPathExtension().lastPathComponent
                     let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                    // Same as Models: keep the source in Resources/, mirrored. Tiling
+                    // Same as Models: keep the source in Resources/, free-form. Tiling
                     // happens when the user asks for it, from the row's "Cook to tiled
                     // stream model…" context action.
-                    let importFolder = resourcesImportDestination(for: destFolder, assetBasePath: basePath)
+                    let importFolder = resourcesImportFolder(forBaseName: baseName, browsing: destinationOverride, assetBasePath: basePath)
+                        ?? destFolder
                     enqueueImport(destination: importFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)

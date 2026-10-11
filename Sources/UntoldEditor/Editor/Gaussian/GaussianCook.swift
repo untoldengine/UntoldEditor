@@ -145,21 +145,23 @@ func gaussianPackageFolder(for sourceURL: URL, in categoryRoot: URL) -> URL {
     categoryRoot.appendingPathComponent(gaussianPackageName(for: sourceURL), isDirectory: true)
 }
 
-/// Where a Gaussian cook should write its `.untoldgs` tiers: a fresh package folder when
-/// `plyURL` sits directly in the Gaussians root (the first cook of a flatly-dropped file),
-/// the mirrored `GameData`-side package folder when the source is under `Resources/` (see
-/// `AssetBrowserView+Import.swift`), or nil to write beside the source -- the existing
-/// in-place re-cook case, for a source already sitting in its own `GameData` package
-/// folder (a legacy-layout project, or a source outside `Resources` entirely).
-func gaussianCookOutputDirectory(for plyURL: URL, gaussianRoot: URL?, assetBasePath: URL?) -> URL? {
+/// Where a Gaussian cook should write its `.untoldgs` tiers: a fresh package folder,
+/// named after the source, under `GameData/Gaussians/` -- unless `plyURL` is already
+/// sitting in its own `GameData` package folder (a legacy-layout project, or a re-cook),
+/// in which case nil writes the tiers beside it, same as before `Resources/` existed.
+/// `Resources/` has no fixed shape to derive a destination from (free-form, see
+/// `AssetBrowserView+Import.swift`), so this never looks at where under it the source
+/// actually sits -- only the source's own filename decides the package folder's name.
+func gaussianCookOutputDirectory(for plyURL: URL, gaussianRoot: URL?) -> URL? {
     guard let gaussianRoot else { return nil }
-    if plyURL.deletingLastPathComponent().standardizedFileURL == gaussianRoot.standardizedFileURL {
-        return gaussianPackageFolder(for: plyURL, in: gaussianRoot)
+    let sourceFolder = plyURL.deletingLastPathComponent()
+    let stem = gaussianPackageName(for: plyURL)
+    let alreadyInOwnGameDataPackageFolder = sourceFolder.lastPathComponent == stem
+        && sourceFolder.deletingLastPathComponent().standardizedFileURL == gaussianRoot.standardizedFileURL
+    if alreadyInOwnGameDataPackageFolder {
+        return nil
     }
-    if let assetBasePath {
-        return mirroredGameDataPath(for: plyURL.deletingLastPathComponent(), assetBasePath: assetBasePath)
-    }
-    return nil
+    return gaussianPackageFolder(for: plyURL, in: gaussianRoot)
 }
 
 func importGaussianAsset(

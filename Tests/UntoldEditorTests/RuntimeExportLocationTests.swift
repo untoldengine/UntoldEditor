@@ -15,7 +15,7 @@ final class RuntimeExportLocationTests: XCTestCase {
     func test_importedSourceCooksIntoTheFolderItWasImportedInto() {
         let source = URL(fileURLWithPath: "/Project/GameData/Models/Tower/Tower.blend")
 
-        let location = runtimeExportLocation(for: source, assetBasePath: nil)
+        let location = runtimeExportLocation(for: source, category: .models, assetBasePath: nil)
 
         XCTAssertEqual(location.outputFolder.path, "/Project/GameData/Models")
         XCTAssertEqual(location.assetsFolder?.path, "/Project/GameData/Models/Tower")
@@ -24,33 +24,36 @@ final class RuntimeExportLocationTests: XCTestCase {
     func test_sourceOutsideAFolderOfItsOwnCooksBesideItself() {
         let source = URL(fileURLWithPath: "/Project/GameData/Models/Props/Crate.usdz")
 
-        let location = runtimeExportLocation(for: source, assetBasePath: nil)
+        let location = runtimeExportLocation(for: source, category: .models, assetBasePath: nil)
 
         XCTAssertEqual(location.outputFolder.path, "/Project/GameData/Models/Props")
         XCTAssertNil(location.assetsFolder)
     }
 
-    func test_sourceUnderResourcesCooksIntoTheMirroredGameDataFolder() {
-        // Root-level layout: Resources/Models/Tower/Tower.blend mirrors to
-        // GameData/Models/Tower/Tower.blend, and the output location is computed
-        // from there -- the pack sits beside the per-asset folder in GameData/Models/.
+    func test_sourceUnderResourcesCooksIntoGameDataNamedAfterTheSourceAlone() {
+        // Resources/ is free-form -- the source's own location inside it (however the
+        // user organized it) never factors in. Only the chosen category + filename do.
         let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
-        let source = URL(fileURLWithPath: "/Project/Resources/Models/Tower/Tower.blend")
+        let source = URL(fileURLWithPath: "/Project/Resources/SomeFolder/Deep/Tower.blend")
 
-        let location = runtimeExportLocation(for: source, assetBasePath: assetBasePath)
+        let location = runtimeExportLocation(for: source, category: .models, assetBasePath: assetBasePath)
 
         XCTAssertEqual(location.outputFolder.path, "/Project/GameData/Models")
         XCTAssertEqual(location.assetsFolder?.path, "/Project/GameData/Models/Tower")
     }
 
-    func test_sourceUnderResourcesWithNoOwnFolderCooksIntoTheMirroredFolder() {
+    func test_sameResourcesSourceCooksIntoWhicheverCategoryWasChosen() {
+        // The exact point of deciding the category at cook time, not import time: the
+        // same source file can become a Model or an Animation depending on the action
+        // the user picks.
         let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
-        let source = URL(fileURLWithPath: "/Project/Resources/Models/Props/Crate.usdz")
+        let source = URL(fileURLWithPath: "/Project/Resources/Walk.blend")
 
-        let location = runtimeExportLocation(for: source, assetBasePath: assetBasePath)
+        let asModel = runtimeExportLocation(for: source, category: .models, assetBasePath: assetBasePath)
+        let asAnimation = runtimeExportLocation(for: source, category: .animations, assetBasePath: assetBasePath)
 
-        XCTAssertEqual(location.outputFolder.path, "/Project/GameData/Models/Props")
-        XCTAssertNil(location.assetsFolder)
+        XCTAssertEqual(asModel.outputFolder.path, "/Project/GameData/Models")
+        XCTAssertEqual(asAnimation.outputFolder.path, "/Project/GameData/Animations")
     }
 
     func test_sourceOutsideResourcesOnRootLevelLayoutFallsBackToCookingBesideItself() {
@@ -59,80 +62,122 @@ final class RuntimeExportLocationTests: XCTestCase {
         let assetBasePath = URL(fileURLWithPath: "/Project/Sources/Project/GameData")
         let source = URL(fileURLWithPath: "/Project/Sources/Project/GameData/Models/Tower/Tower.blend")
 
-        let location = runtimeExportLocation(for: source, assetBasePath: assetBasePath)
+        let location = runtimeExportLocation(for: source, category: .models, assetBasePath: assetBasePath)
 
         XCTAssertEqual(location.outputFolder.path, "/Project/Sources/Project/GameData/Models")
         XCTAssertEqual(location.assetsFolder?.path, "/Project/Sources/Project/GameData/Models/Tower")
     }
 
-    func test_mirroredResourcesPathMapsGameDataToResources() {
+    func test_isUnderResourcesMatchesAnythingBelowTheResourcesRoot() {
         let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
-        let gameDataURL = URL(fileURLWithPath: "/Project/GameData/Models/Tower")
 
-        XCTAssertEqual(
-            mirroredResourcesPath(for: gameDataURL, assetBasePath: assetBasePath)?.path,
-            "/Project/Resources/Models/Tower"
-        )
+        XCTAssertTrue(isUnderResources(URL(fileURLWithPath: "/Project/Resources/Walk.blend"), assetBasePath: assetBasePath))
+        XCTAssertTrue(isUnderResources(URL(fileURLWithPath: "/Project/Resources/Deep/Nested/Walk.blend"), assetBasePath: assetBasePath))
+        XCTAssertFalse(isUnderResources(URL(fileURLWithPath: "/Project/GameData/Models/Walk.blend"), assetBasePath: assetBasePath))
     }
 
-    func test_mirroredGameDataPathMapsResourcesToGameData() {
-        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
-        let resourcesURL = URL(fileURLWithPath: "/Project/Resources/Models/Tower/Tower.blend")
-
-        XCTAssertEqual(
-            mirroredGameDataPath(for: resourcesURL, assetBasePath: assetBasePath)?.path,
-            "/Project/GameData/Models/Tower/Tower.blend"
-        )
-    }
-
-    func test_mirroringReturnsNilOnLegacyLayout() {
+    func test_isUnderResourcesIsFalseOnTheLegacyLayout() {
         let assetBasePath = URL(fileURLWithPath: "/Project/Sources/Project/GameData")
-        let gameDataURL = URL(fileURLWithPath: "/Project/Sources/Project/GameData/Models/Tower")
-
-        XCTAssertNil(mirroredResourcesPath(for: gameDataURL, assetBasePath: assetBasePath))
+        XCTAssertFalse(isUnderResources(URL(fileURLWithPath: "/Project/Resources/Walk.blend"), assetBasePath: assetBasePath))
     }
 
-    func test_mirroringReturnsNilWhenURLIsOutsideEitherTree() {
+    func test_resourcesImportFolderUsesTheBrowsedFolderWhenAlreadyUnderResources() {
         let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
-        let elsewhere = URL(fileURLWithPath: "/Elsewhere/Tower.blend")
+        let browsing = URL(fileURLWithPath: "/Project/Resources/Characters")
 
-        XCTAssertNil(mirroredResourcesPath(for: elsewhere, assetBasePath: assetBasePath))
-        XCTAssertNil(mirroredGameDataPath(for: elsewhere, assetBasePath: assetBasePath))
+        let destination = resourcesImportFolder(forBaseName: "Hero", browsing: browsing, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(destination?.path, "/Project/Resources/Characters/Hero")
     }
 
-    func test_sourceFolderCandidatePrefersTheMirroredResourcesFolder() throws {
+    func test_resourcesImportFolderDefaultsToTheResourcesRootWhenBrowsingGameData() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let browsing = URL(fileURLWithPath: "/Project/GameData/Models")
+
+        let destination = resourcesImportFolder(forBaseName: "Hero", browsing: browsing, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(destination?.path, "/Project/Resources/Hero")
+    }
+
+    func test_resourcesImportFolderIsNilOnTheLegacyLayout() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/Sources/Project/GameData")
+        XCTAssertNil(resourcesImportFolder(forBaseName: "Hero", browsing: nil, assetBasePath: assetBasePath))
+    }
+
+    func test_tilesExportDestinationFolderNamesTheFolderAfterTheSourceUnderResources() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let source = URL(fileURLWithPath: "/Project/Resources/City/City.usdz")
+
+        XCTAssertEqual(
+            tilesExportDestinationFolder(for: source, assetBasePath: assetBasePath).path,
+            "/Project/GameData/StreamModels/City"
+        )
+    }
+
+    func test_tilesExportDestinationFolderIsBesideTheSourceOutsideResources() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/Sources/Project/GameData")
+        let source = URL(fileURLWithPath: "/Project/Sources/Project/GameData/StreamModels/City/City.usdz")
+
+        XCTAssertEqual(
+            tilesExportDestinationFolder(for: source, assetBasePath: assetBasePath).path,
+            "/Project/Sources/Project/GameData/StreamModels/City"
+        )
+    }
+
+    func test_sourceFolderCandidateResolvesAPackViaItsManifestSourceAssetField() throws {
         let scratch = try ScratchDirectory()
         let projectRoot = try scratch.directory("MyGame")
         let assetBasePath = projectRoot.appendingPathComponent("GameData")
-        let categoryFolder = assetBasePath.appendingPathComponent("Models")
-        try scratch.directory("MyGame/Resources/Models/Tower")
-        try scratch.directory("MyGame/GameData/Models/Tower") // leftover payload folder, no source in it
+        let packDir = try scratch.directory("MyGame/GameData/Models")
+        let sourceDir = try scratch.directory("MyGame/Resources/Characters/Hero")
+        // Mirrors how the exporter writes it: relative to the pack's own directory.
+        let packJSON = """
+        {"formatVersion": 1, "sourceAsset": "../../Resources/Characters/Hero/Hero.blend", "models": [
+          {"displayName": "Hero", "path": "Hero.untold", "transform": [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]}
+        ]}
+        """
+        let packURL = packDir.appendingPathComponent("Hero.untoldpack")
+        try Data(packJSON.utf8).write(to: packURL)
+        _ = sourceDir // directory just needs to exist; the manifest points at it
 
-        let found = sourceFolderCandidate(stem: "Tower", in: categoryFolder, assetBasePath: assetBasePath)
+        let found = sourceFolderCandidate(for: packURL, assetBasePath: assetBasePath)
 
-        XCTAssertEqual(found?.path, projectRoot.appendingPathComponent("Resources/Models/Tower").path)
+        XCTAssertEqual(found?.standardizedFileURL.path, sourceDir.standardizedFileURL.path)
+    }
+
+    func test_sourceFolderCandidateSearchesResourcesForAPlainUntoldWithNoManifest() throws {
+        let scratch = try ScratchDirectory()
+        let projectRoot = try scratch.directory("MyGame")
+        let assetBasePath = projectRoot.appendingPathComponent("GameData")
+        let assetURL = try scratch.directory("MyGame/GameData/Models").appendingPathComponent("Hero.untold")
+        let sourceDir = try scratch.directory("MyGame/Resources/Characters/Hero")
+
+        let found = sourceFolderCandidate(for: assetURL, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(found?.standardizedFileURL.path, sourceDir.standardizedFileURL.path)
     }
 
     func test_sourceFolderCandidateFallsBackToTheLegacySameFolderLocation() throws {
         let scratch = try ScratchDirectory()
         let projectRoot = try scratch.directory("MyGame")
         let assetBasePath = projectRoot.appendingPathComponent("GameData")
-        let categoryFolder = assetBasePath.appendingPathComponent("Models")
+        let modelsFolder = assetBasePath.appendingPathComponent("Models")
+        let assetURL = modelsFolder.appendingPathComponent("Tower.untold")
         try scratch.directory("MyGame/GameData/Models/Tower")
         // No Resources/ folder at all -- legacy layout.
 
-        let found = sourceFolderCandidate(stem: "Tower", in: categoryFolder, assetBasePath: assetBasePath)
+        let found = sourceFolderCandidate(for: assetURL, assetBasePath: assetBasePath)
 
-        XCTAssertEqual(found?.path, categoryFolder.appendingPathComponent("Tower").path)
+        XCTAssertEqual(found?.path, modelsFolder.appendingPathComponent("Tower").path)
     }
 
-    func test_sourceFolderCandidateReturnsNilWhenNeitherExists() throws {
+    func test_sourceFolderCandidateReturnsNilWhenNothingIsFound() throws {
         let scratch = try ScratchDirectory()
         let projectRoot = try scratch.directory("MyGame")
         let assetBasePath = projectRoot.appendingPathComponent("GameData")
-        let categoryFolder = assetBasePath.appendingPathComponent("Models")
+        let assetURL = assetBasePath.appendingPathComponent("Models/Tower.untold")
 
-        XCTAssertNil(sourceFolderCandidate(stem: "Tower", in: categoryFolder, assetBasePath: assetBasePath))
+        XCTAssertNil(sourceFolderCandidate(for: assetURL, assetBasePath: assetBasePath))
     }
 
     func test_scriptOptionSupportIsReadFromTheScript() throws {

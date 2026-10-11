@@ -16,6 +16,36 @@ import UntoldEngine
 
 extension AssetBrowserView {
     @ViewBuilder
+    var breadcrumbBar: some View {
+        if !navigation.lightsSelected, !navigation.primitivesSelected, !navigation.entitiesSelected,
+           let current = currentDirectoryURL
+        {
+            let segments = breadcrumbSegments(for: current)
+            HStack(spacing: 4) {
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    if index > 0 {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.editorTextTertiary)
+                    }
+                    Button {
+                        selectBreadcrumb(segment)
+                    } label: {
+                        Text(segment.name)
+                            .font(.system(size: 12, weight: index == segments.count - 1 ? .semibold : .regular))
+                            .foregroundColor(index == segments.count - 1 ? .editorTextPrimary : .editorTextSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            Divider()
+        }
+    }
+
+    @ViewBuilder
     var rightPaneContents: some View {
         if navigation.lightsSelected {
             lightsShelfView
@@ -125,21 +155,21 @@ extension AssetBrowserView {
                     // whether the asset can be placed (see AssetPlacement.swift).
                     .draggable(AssetDragPayload(asset: asset))
                     .contextMenu {
-                        if asset.category == AssetCategory.gaussians.rawValue,
-                           ["ply", "spz"].contains(asset.path.pathExtension.lowercased())
-                        {
+                        let pathExtension = asset.path.pathExtension.lowercased()
+                        if ["ply", "spz"].contains(pathExtension) {
                             Button {
                                 requestGaussianCook(of: [asset.path])
                             } label: {
                                 Label("Cook to .untoldgs…", systemImage: "sparkles")
                             }
-                        }
-                        if sourceAssetExtensions.contains(asset.path.pathExtension.lowercased()) {
+                        } else if sourceAssetExtensions.contains(pathExtension) {
                             // A source kept in the project after import: convert it again
-                            // (same folder as the original import) with fresh options.
-                            if asset.category == AssetCategory.models.rawValue || asset.category == AssetCategory.animations.rawValue,
-                               let category = AssetCategory(rawValue: asset.category)
-                            {
+                            // with fresh options. A source still sitting where the legacy
+                            // layout left it (beside its cooked output, inside GameData)
+                            // keeps the category that location already fixed; a source in
+                            // Resources/ has none yet, so every cook target is offered --
+                            // the user decides what it becomes.
+                            if let category = AssetCategory(rawValue: asset.category), category == .models || category == .animations {
                                 Button {
                                     queueRuntimeExport(sourceURL: asset.path, category: category)
                                 } label: {
@@ -147,26 +177,49 @@ extension AssetBrowserView {
                                 }
                             } else if asset.category == AssetCategory.streamModels.rawValue {
                                 Button {
-                                    let sourceFolder = asset.path.deletingLastPathComponent()
-                                    let destinationFolder = assetBasePath
-                                        .flatMap { mirroredGameDataPath(for: sourceFolder, assetBasePath: $0) }
-                                        ?? sourceFolder
                                     queueTilesExport(
                                         sourceURL: asset.path,
-                                        destinationFolder: destinationFolder
+                                        destinationFolder: tilesExportDestinationFolder(for: asset.path, assetBasePath: assetBasePath)
                                     )
                                 } label: {
                                     Label("Cook to tiled stream model…", systemImage: "sparkles")
+                                }
+                            } else {
+                                Button {
+                                    queueRuntimeExport(sourceURL: asset.path, category: .models)
+                                } label: {
+                                    Label("Cook to .untold (Model)…", systemImage: "sparkles")
+                                }
+                                Button {
+                                    queueRuntimeExport(sourceURL: asset.path, category: .animations)
+                                } label: {
+                                    Label("Cook to .untoldanim (Animation)…", systemImage: "sparkles")
+                                }
+                                Button {
+                                    queueTilesExport(
+                                        sourceURL: asset.path,
+                                        destinationFolder: tilesExportDestinationFolder(for: asset.path, assetBasePath: assetBasePath)
+                                    )
+                                } label: {
+                                    Label("Cook to Tiled Stream Model…", systemImage: "sparkles")
                                 }
                             }
                         }
                         if let sourceFolder = asset.sourceFolder {
                             Button {
-                                if selectedDirURL != nil {
-                                    selectedDirURL = sourceFolder
-                                } else if selectedCategory != AssetCategory.scripts.rawValue {
-                                    folderPathStack.append(sourceFolder)
-                                }
+                                // The source folder is usually in Resources/ now -- a
+                                // different root than wherever this asset itself is being
+                                // browsed -- so this navigates generically rather than
+                                // assuming it's reachable by staying in the same category's
+                                // folder chain (see breadcrumbSegments/selectBreadcrumb).
+                                navigation.lightsSelected = false
+                                navigation.primitivesSelected = false
+                                navigation.entitiesSelected = false
+                                selectedDirURL = sourceFolder
+                                selectedCategory = nil
+                                folderPathStack = []
+                                selectedAsset = nil
+                                selectedAssetName = nil
                             } label: {
                                 Label("Reveal Source Folder", systemImage: "folder")
                             }
@@ -206,7 +259,7 @@ extension AssetBrowserView {
             let sourceFolderByStem: [String: URL] = contents.reduce(into: [:]) { result, item in
                 guard allRuntimeAssetExtensions.contains(item.pathExtension.lowercased()) else { return }
                 let stem = item.deletingPathExtension().lastPathComponent
-                if let found = sourceFolderCandidate(stem: stem, in: folder, assetBasePath: assetBasePath) {
+                if let found = sourceFolderCandidate(for: item, assetBasePath: assetBasePath) {
                     result[stem] = found
                 }
             }

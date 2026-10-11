@@ -37,7 +37,7 @@ extension AssetBrowserView {
             : "Cooking \(plyURLs.count) Gaussian files (see Tasks)...")
         for plyURL in plyURLs {
             let name = plyURL.lastPathComponent
-            let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot, assetBasePath: assetBasePath)
+            let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot)
             cookGaussianPLYTracked(plyURL: plyURL, settings: settings, outputDirectory: outputDirectory) { result in
                 switch result {
                 case let .success(bake):

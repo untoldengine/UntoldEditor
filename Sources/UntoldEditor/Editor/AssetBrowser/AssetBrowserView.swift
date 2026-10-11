@@ -160,42 +160,49 @@ struct AssetBrowserView: View {
                     .help("Right-click a folder to create a new directory. Select a folder to choose where imports go.")
 
                     // Right: contents of the selected directory
-                    ScrollView(.vertical, showsIndicators: true) {
-                        rightPaneContents
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(8)
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Resources and GameData mirror the same category names (Models,
+                        // Animations, ...) below their own root, so the breadcrumb is the
+                        // only thing that says which tree a folder deep in either one
+                        // actually belongs to.
+                        breadcrumbBar
+                        ScrollView(.vertical, showsIndicators: true) {
+                            rightPaneContents
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                .padding(8)
+                        }
+                        // Double-click on the empty area (not a row: rows own their own
+                        // double-click, which places the asset) opens the same import dialog
+                        // as the context menu, for the folder currently shown.
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            importIntoCurrentDirectory()
+                        }
+                        .help("Double-click or right-click this area to import assets into the selected folder.")
+                        .contextMenu {
+                            Button {
+                                importIntoCurrentDirectory()
+                            } label: {
+                                Label("Import…", systemImage: "plus.circle")
+                            }
+                            Button {
+                                showRemoteStreamSheet = true
+                            } label: {
+                                Label("Import Remote Stream", systemImage: "globe")
+                            }
+                            if selectedSceneAuthoredAsset() != nil {
+                                Divider()
+                                Button {
+                                    loadSelectedSceneAuthoredPayload()
+                                } label: {
+                                    Label("Load Authored", systemImage: "camera.badge.ellipsis")
+                                }
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.editorSurface.opacity(0.7))
                     .cornerRadius(8)
-                    // Double-click on the empty area (not a row: rows own their own
-                    // double-click, which places the asset) opens the same import dialog
-                    // as the context menu, for the folder currently shown.
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        importIntoCurrentDirectory()
-                    }
-                    .help("Double-click or right-click this area to import assets into the selected folder.")
-                    .contextMenu {
-                        Button {
-                            importIntoCurrentDirectory()
-                        } label: {
-                            Label("Import…", systemImage: "plus.circle")
-                        }
-                        Button {
-                            showRemoteStreamSheet = true
-                        } label: {
-                            Label("Import Remote Stream", systemImage: "globe")
-                        }
-                        if selectedSceneAuthoredAsset() != nil {
-                            Divider()
-                            Button {
-                                loadSelectedSceneAuthoredPayload()
-                            } label: {
-                                Label("Load Authored", systemImage: "camera.badge.ellipsis")
-                            }
-                        }
-                    }
                 }
                 .frame(maxHeight: .infinity)
             }

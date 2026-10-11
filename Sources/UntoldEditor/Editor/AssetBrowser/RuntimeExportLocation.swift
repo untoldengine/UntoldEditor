@@ -21,86 +21,127 @@ struct RuntimeExportLocation: Equatable {
     let assetsFolder: URL?
 }
 
-/// The path a URL under `base` would have if `base` were `otherBase` instead --
-/// `relativeTo: Resources/Models/Tower/Tower.blend` under `base: Resources/`
-/// mirrored `otherBase: GameData/` becomes `GameData/Models/Tower/Tower.blend`.
-/// Nil if `url` isn't under `base` at all.
-private func mirrored(_ url: URL, from base: URL, to otherBase: URL) -> URL? {
-    let basePath = base.standardizedFileURL.path
-    let urlPath = url.standardizedFileURL.path
-    guard urlPath == basePath || urlPath.hasPrefix(basePath + "/") else { return nil }
-    let relative = String(urlPath.dropFirst(basePath.count)).drop { $0 == "/" }
-    return relative.isEmpty ? otherBase : otherBase.appendingPathComponent(String(relative))
-}
-
-/// Maps a `GameData` URL to its mirrored path under `Resources`, or nil on the legacy
-/// layout (no `Resources` to mirror into) or if `url` isn't under `GameData` at all.
-func mirroredResourcesPath(for url: URL, assetBasePath: URL) -> URL? {
-    let layout = ProjectLayout.detect(gameDataDirectory: assetBasePath)
-    guard let resourcesDirectory = layout.resourcesDirectory else { return nil }
-    return mirrored(url, from: layout.gameDataDirectory, to: resourcesDirectory)
-}
-
-/// Maps a `Resources` URL to its mirrored path under `GameData`, or nil on the legacy
-/// layout or if `url` isn't under `Resources` at all.
-func mirroredGameDataPath(for url: URL, assetBasePath: URL) -> URL? {
-    let layout = ProjectLayout.detect(gameDataDirectory: assetBasePath)
-    guard let resourcesDirectory = layout.resourcesDirectory else { return nil }
-    return mirrored(url, from: resourcesDirectory, to: layout.gameDataDirectory)
-}
-
-/// Where a source import should actually land: `url` unchanged if it's already under
-/// `Resources` (the user is browsing there and importing directly into it) or outside
-/// both trees (legacy layout), otherwise its mirrored path under `Resources` (the user
-/// is browsing `GameData`, e.g. a category root, and importing there as before --
-/// `AssetBrowserView+Import.swift` redirects it into `Resources` instead).
-func resourcesImportDestination(for url: URL, assetBasePath: URL) -> URL {
-    if mirroredGameDataPath(for: url, assetBasePath: assetBasePath) != nil {
-        return url
+/// Whether `url` sits anywhere under the project's `Resources/` folder.
+func isUnderResources(_ url: URL, assetBasePath: URL) -> Bool {
+    guard let resourcesDirectory = ProjectLayout.detect(gameDataDirectory: assetBasePath).resourcesDirectory else {
+        return false
     }
-    return mirroredResourcesPath(for: url, assetBasePath: assetBasePath) ?? url
+    let resourcesPath = resourcesDirectory.standardizedFileURL.path
+    let urlPath = url.standardizedFileURL.path
+    return urlPath == resourcesPath || urlPath.hasPrefix(resourcesPath + "/")
 }
 
-/// A source imported by the editor sits in a folder named after it
-/// (`Resources/Models/Tower/Tower.blend`, see `importSourceAsset`). Its result goes in
-/// the mirrored folder under `GameData` (`GameData/Models/Tower.untoldpack`), and
-/// everything the result references stays in the mirrored per-asset folder
-/// (`GameData/Models/Tower/`). A source outside `Resources` -- a legacy-layout project,
-/// or one dropped in from outside the project entirely -- is cooked beside itself, same
-/// as before this split existed.
-func runtimeExportLocation(for sourceURL: URL, assetBasePath: URL?) -> RuntimeExportLocation {
-    let mirroredSource = assetBasePath.flatMap { mirroredGameDataPath(for: sourceURL, assetBasePath: $0) }
-    let effectiveSource = mirroredSource ?? sourceURL
+/// Where a source import should land: wherever the user is already browsing, if that's
+/// inside `Resources/` (Finder-style, preserving whatever subfolder they organized it
+/// into); otherwise directly in `Resources/<baseName>/` -- no category segment, since
+/// `Resources/` is organized freely, not mirrored to `GameData`'s categories (a source
+/// can become a Model, an Animation, or a Tiled Stream Model; the choice is made at
+/// cook time, see `runtimeExportLocation`, not at import time). Nil on the legacy
+/// layout, which has no `Resources/` folder -- the caller falls back to `GameData`.
+func resourcesImportFolder(forBaseName baseName: String, browsing destinationOverride: URL?, assetBasePath: URL) -> URL? {
+    guard let resourcesDirectory = ProjectLayout.detect(gameDataDirectory: assetBasePath).resourcesDirectory else {
+        return nil
+    }
+    if let destinationOverride, isUnderResources(destinationOverride, assetBasePath: assetBasePath) {
+        return destinationOverride.appendingPathComponent(baseName, isDirectory: true)
+    }
+    return resourcesDirectory.appendingPathComponent(baseName, isDirectory: true)
+}
 
-    let sourceFolder = effectiveSource.deletingLastPathComponent()
-    let stem = effectiveSource.deletingPathExtension().lastPathComponent
+/// Where a cook of `sourceURL` writes its result, for the category the user chose to
+/// cook it as (picked at cook time, not at import time -- see the context menu in
+/// `AssetBrowserView+Contents.swift`). A source anywhere under `Resources/` always
+/// cooks into `GameData/<category>/`, named after the source, independent of how the
+/// user organized `Resources/` -- there is no folder to mirror. A source outside
+/// `Resources/` (the legacy layout, or one left beside its cooked output from before
+/// this split existed) is cooked beside itself, same as always.
+func runtimeExportLocation(for sourceURL: URL, category: AssetCategory, assetBasePath: URL?) -> RuntimeExportLocation {
+    let stem = sourceURL.deletingPathExtension().lastPathComponent
+
+    if let assetBasePath, isUnderResources(sourceURL, assetBasePath: assetBasePath) {
+        let categoryRoot = assetBasePath.appendingPathComponent(category.rawValue, isDirectory: true)
+        return RuntimeExportLocation(outputFolder: categoryRoot, assetsFolder: categoryRoot.appendingPathComponent(stem, isDirectory: true))
+    }
+
+    let sourceFolder = sourceURL.deletingLastPathComponent()
     guard sourceFolder.lastPathComponent == stem else {
         return RuntimeExportLocation(outputFolder: sourceFolder, assetsFolder: nil)
     }
     return RuntimeExportLocation(outputFolder: sourceFolder.deletingLastPathComponent(), assetsFolder: sourceFolder)
 }
 
-/// The folder holding a cooked asset's actual source, given it would sit beside the
-/// asset as a same-named folder (`categoryFolder/<stem>/`). Prefers the mirrored
-/// `Resources/` folder when the project is on the root-level layout and it exists
-/// there (that's where import puts sources now, see `AssetBrowserView+Import.swift`);
-/// falls back to the legacy same-folder location, for a project not yet converted or
-/// a source otherwise left beside its cooked output. Nil if neither exists.
-func sourceFolderCandidate(stem: String, in categoryFolder: URL, assetBasePath: URL?, fileManager fm: FileManager = .default) -> URL? {
+/// Where cooking `sourceURL` as a tiled stream model writes its manifest and tiles:
+/// `GameData/StreamModels/<stem>/`, the same rule `runtimeExportLocation` uses for
+/// Models/Animations. `queueTilesExport` appends `tile_exports/` to whatever folder
+/// this returns.
+func tilesExportDestinationFolder(for sourceURL: URL, assetBasePath: URL?) -> URL {
+    let stem = sourceURL.deletingPathExtension().lastPathComponent
+    if let assetBasePath, isUnderResources(sourceURL, assetBasePath: assetBasePath) {
+        return assetBasePath.appendingPathComponent(AssetCategory.streamModels.rawValue, isDirectory: true)
+            .appendingPathComponent(stem, isDirectory: true)
+    }
+    return sourceURL.deletingLastPathComponent()
+}
+
+/// The folder holding a cooked asset's actual source. For a `.untoldpack`, reads the
+/// manifest's own `sourceAsset` field -- authoritative, works regardless of how
+/// `Resources/` is organized. A plain `.untold`/`.untoldanim` carries no such field (no
+/// manifest exists for a single-model export), so this falls back to a bounded search
+/// under `Resources/` for a folder named after the asset's stem, then the legacy
+/// same-folder-in-GameData location. Nil if nothing is found.
+func sourceFolderCandidate(for assetURL: URL, assetBasePath: URL?, fileManager fm: FileManager = .default) -> URL? {
+    let stem = assetURL.deletingPathExtension().lastPathComponent
+
+    if assetURL.pathExtension.lowercased() == "untoldpack",
+       let pack = loadUntoldPack(url: assetURL),
+       let resolved = pack.resolvedSourceAssetURL(packURL: assetURL)
+    {
+        let folder = resolved.deletingLastPathComponent()
+        var isDir: ObjCBool = false
+        if fm.fileExists(atPath: folder.path, isDirectory: &isDir), isDir.boolValue {
+            return folder
+        }
+    }
+
     func existingDirectory(_ url: URL) -> URL? {
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else { return nil }
         return url
     }
 
-    let legacyCandidate = categoryFolder.appendingPathComponent(stem, isDirectory: true)
     if let assetBasePath,
-       let mirroredCandidate = mirroredResourcesPath(for: legacyCandidate, assetBasePath: assetBasePath),
-       let found = existingDirectory(mirroredCandidate)
+       let resourcesDirectory = ProjectLayout.detect(gameDataDirectory: assetBasePath).resourcesDirectory,
+       let found = findDirectory(named: stem, under: resourcesDirectory, maxDepth: 4, fileManager: fm)
     {
         return found
     }
-    return existingDirectory(legacyCandidate)
+
+    return existingDirectory(assetURL.deletingLastPathComponent().appendingPathComponent(stem, isDirectory: true))
+}
+
+/// A bounded breadth-first search for a directory named `name` under `root`, since
+/// `Resources/` has no fixed shape to compute a path from directly. Shallow on purpose
+/// (`maxDepth` default matches the nesting a category-free, per-asset-folder
+/// convention realistically produces) -- a cheap best-effort, not an exhaustive scan.
+func findDirectory(named name: String, under root: URL, maxDepth: Int, fileManager fm: FileManager = .default) -> URL? {
+    var frontier = [(url: root, depth: 0)]
+    while !frontier.isEmpty {
+        let (url, depth) = frontier.removeFirst()
+        guard let contents = try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
+            continue
+        }
+        for item in contents {
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: item.path, isDirectory: &isDir), isDir.boolValue else { continue }
+            if item.lastPathComponent == name {
+                return item
+            }
+            if depth < maxDepth {
+                frontier.append((item, depth + 1))
+            }
+        }
+    }
+    return nil
 }
 
 /// Whether a script accepts a command-line option, read from its source. The editor

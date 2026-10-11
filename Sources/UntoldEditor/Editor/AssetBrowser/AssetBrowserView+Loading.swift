@@ -53,13 +53,10 @@ extension AssetBrowserView {
                 // A folder that shares its stem with a sibling runtime asset is that
                 // asset's cook source (see `runtimeExportLocation`): it's not listed on
                 // its own, only reachable via that asset's "Reveal Source Folder" menu.
-                // The source itself lives under the mirrored Resources/ folder now (see
-                // sourceFolderCandidate); the legacy same-folder location is still
-                // checked as a fallback, for a project not yet converted.
                 let sourceFolderByStem: [String: URL] = contents.reduce(into: [:]) { result, item in
                     guard allRuntimeAssetExtensions.contains(item.pathExtension.lowercased()) else { return }
                     let stem = item.deletingPathExtension().lastPathComponent
-                    if let found = sourceFolderCandidate(stem: stem, in: categoryPath, assetBasePath: basePath) {
+                    if let found = sourceFolderCandidate(for: item, assetBasePath: basePath) {
                         result[stem] = found
                     }
                 }

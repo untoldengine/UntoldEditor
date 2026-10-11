@@ -50,20 +50,91 @@ extension AssetBrowserView {
         return categoryRootURL(category)
     }
 
-    /// Category owning `url` (matched by the top-level folder under the asset root,
-    /// or under `Resources/` -- a source imported by #169 keeps the same top-level
-    /// category name there, mirrored), used to pick import file types for generic
-    /// folders and to let a Resources-side source still show its "Cook to…" action.
+    /// Category owning `url` (matched by the top-level folder under `GameData`), used
+    /// to pick import file types for generic folders. `Resources/` has no categories of
+    /// its own -- a source there is category-agnostic until the user cooks it as
+    /// something specific (see the context menu in `AssetBrowserView+Contents.swift`),
+    /// so this only ever matches a `GameData`-side path.
     func inferCategory(for url: URL?) -> AssetCategory? {
-        guard let url else { return nil }
-        func topLevelCategory(under root: URL?) -> AssetCategory? {
-            guard let root = root?.standardizedFileURL else { return nil }
-            let rootComponents = root.pathComponents
+        guard let url, let root = assetBasePath?.standardizedFileURL else { return nil }
+        let rootComponents = root.pathComponents
+        let comps = url.standardizedFileURL.pathComponents
+        guard comps.count > rootComponents.count, comps.starts(with: rootComponents) else { return nil }
+        return AssetCategory(rawValue: comps[rootComponents.count])
+    }
+
+    /// One step of the breadcrumb shown above the folder contents: a display name, the
+    /// URL tapping it navigates to, and (for a GameData-side segment) the category that
+    /// navigation needs -- nil for a Resources/custom-root segment, which navigates via
+    /// the generic `selectedDirURL` path instead (see `selectBreadcrumb`).
+    struct BreadcrumbSegment: Identifiable {
+        let name: String
+        let url: URL
+        let category: String?
+        var id: String { url.standardizedFileURL.path }
+    }
+
+    /// Segments for the folder currently shown on the right, from its root down to
+    /// itself -- e.g. GameData > Models > Tower, or Resources > Models > Tower.
+    /// `Resources` and `GameData` share the same category names below their own root
+    /// (Models, Animations, ...), so this is the only thing that says which tree a
+    /// folder deep in either one actually belongs to. GameData has no node of its own
+    /// in the sidebar (each category sits directly under the project name), so its
+    /// segment is synthesized here; every other root (Resources, a custom folder)
+    /// already has one.
+    func breadcrumbSegments(for url: URL) -> [BreadcrumbSegment] {
+        if let base = assetBasePath?.standardizedFileURL {
+            let baseComponents = base.pathComponents
             let comps = url.standardizedFileURL.pathComponents
-            guard comps.count > rootComponents.count, comps.starts(with: rootComponents) else { return nil }
-            return AssetCategory(rawValue: comps[rootComponents.count])
+            if comps.starts(with: baseComponents), comps.count > baseComponents.count,
+               let category = AssetCategory(rawValue: comps[baseComponents.count])
+            {
+                var segments = [BreadcrumbSegment(name: "GameData", url: base, category: nil)]
+                var cursor = base
+                for component in comps.dropFirst(baseComponents.count) {
+                    cursor = cursor.appendingPathComponent(component, isDirectory: true)
+                    segments.append(BreadcrumbSegment(name: component, url: cursor, category: category.rawValue))
+                }
+                return segments
+            }
         }
-        return topLevelCategory(under: assetBasePath) ?? topLevelCategory(under: resourcesRootURL)
+
+        let namedRoots: [URL] = [resourcesRootURL].compactMap { $0 } + customRootFolders
+        if let root = namedRoots.first(where: { candidate in
+            let rootPath = candidate.standardizedFileURL.path
+            let urlPath = url.standardizedFileURL.path
+            return urlPath == rootPath || urlPath.hasPrefix(rootPath + "/")
+        }) {
+            let rootComponents = root.standardizedFileURL.pathComponents
+            let comps = url.standardizedFileURL.pathComponents
+            var segments = [BreadcrumbSegment(name: root.lastPathComponent, url: root, category: nil)]
+            var cursor = root
+            for component in comps.dropFirst(rootComponents.count) {
+                cursor = cursor.appendingPathComponent(component, isDirectory: true)
+                segments.append(BreadcrumbSegment(name: component, url: cursor, category: nil))
+            }
+            return segments
+        }
+
+        return [BreadcrumbSegment(name: url.lastPathComponent, url: url, category: nil)]
+    }
+
+    /// Navigates to a breadcrumb segment the same way clicking its sidebar node would:
+    /// `selectDirectory` for a GameData-side category segment (builds the folder chain
+    /// down to it), or the generic `selectedDirURL` path for Resources/a custom root.
+    func selectBreadcrumb(_ segment: BreadcrumbSegment) {
+        navigation.lightsSelected = false
+        navigation.primitivesSelected = false
+        navigation.entitiesSelected = false
+        selectedAsset = nil
+        selectedAssetName = nil
+        if let category = segment.category {
+            selectDirectory(url: segment.url, category: category)
+        } else {
+            selectedDirURL = segment.url
+            selectedCategory = nil
+            folderPathStack = []
+        }
     }
 
     func subdirectories(of url: URL) -> [URL] {
