@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import UntoldEngine
 
 /// Where a cook writes its result (the `.untold`, `.untoldpack` or `.untoldanim`) and
 /// the files that result references (textures, per-model folders).
@@ -20,14 +21,47 @@ struct RuntimeExportLocation: Equatable {
     let assetsFolder: URL?
 }
 
+/// The path a URL under `base` would have if `base` were `otherBase` instead --
+/// `relativeTo: Resources/Models/Tower/Tower.blend` under `base: Resources/`
+/// mirrored `otherBase: GameData/` becomes `GameData/Models/Tower/Tower.blend`.
+/// Nil if `url` isn't under `base` at all.
+private func mirrored(_ url: URL, from base: URL, to otherBase: URL) -> URL? {
+    let basePath = base.standardizedFileURL.path
+    let urlPath = url.standardizedFileURL.path
+    guard urlPath == basePath || urlPath.hasPrefix(basePath + "/") else { return nil }
+    let relative = String(urlPath.dropFirst(basePath.count)).drop { $0 == "/" }
+    return relative.isEmpty ? otherBase : otherBase.appendingPathComponent(String(relative))
+}
+
+/// Maps a `GameData` URL to its mirrored path under `Resources`, or nil on the legacy
+/// layout (no `Resources` to mirror into) or if `url` isn't under `GameData` at all.
+func mirroredResourcesPath(for url: URL, assetBasePath: URL) -> URL? {
+    let layout = ProjectLayout.detect(gameDataDirectory: assetBasePath)
+    guard let resourcesDirectory = layout.resourcesDirectory else { return nil }
+    return mirrored(url, from: layout.gameDataDirectory, to: resourcesDirectory)
+}
+
+/// Maps a `Resources` URL to its mirrored path under `GameData`, or nil on the legacy
+/// layout or if `url` isn't under `Resources` at all.
+func mirroredGameDataPath(for url: URL, assetBasePath: URL) -> URL? {
+    let layout = ProjectLayout.detect(gameDataDirectory: assetBasePath)
+    guard let resourcesDirectory = layout.resourcesDirectory else { return nil }
+    return mirrored(url, from: resourcesDirectory, to: layout.gameDataDirectory)
+}
+
 /// A source imported by the editor sits in a folder named after it
-/// (`Models/Tower/Tower.blend`, see `importSourceAsset`). Its result goes in the folder
-/// the user imported into (`Models/Tower.untoldpack`), and everything the result
-/// references stays in the source's folder with the source. Any other source is
-/// cooked beside itself.
-func runtimeExportLocation(for sourceURL: URL) -> RuntimeExportLocation {
-    let sourceFolder = sourceURL.deletingLastPathComponent()
-    let stem = sourceURL.deletingPathExtension().lastPathComponent
+/// (`Resources/Models/Tower/Tower.blend`, see `importSourceAsset`). Its result goes in
+/// the mirrored folder under `GameData` (`GameData/Models/Tower.untoldpack`), and
+/// everything the result references stays in the mirrored per-asset folder
+/// (`GameData/Models/Tower/`). A source outside `Resources` -- a legacy-layout project,
+/// or one dropped in from outside the project entirely -- is cooked beside itself, same
+/// as before this split existed.
+func runtimeExportLocation(for sourceURL: URL, assetBasePath: URL?) -> RuntimeExportLocation {
+    let mirroredSource = assetBasePath.flatMap { mirroredGameDataPath(for: sourceURL, assetBasePath: $0) }
+    let effectiveSource = mirroredSource ?? sourceURL
+
+    let sourceFolder = effectiveSource.deletingLastPathComponent()
+    let stem = effectiveSource.deletingPathExtension().lastPathComponent
     guard sourceFolder.lastPathComponent == stem else {
         return RuntimeExportLocation(outputFolder: sourceFolder, assetsFolder: nil)
     }

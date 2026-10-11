@@ -136,10 +136,14 @@ extension AssetBrowserView {
                         }
                     }
                 } else if sourceAssetExtensions.contains(sourceExtension) {
-                    // Import = copy the source into the project. Cooking to .untold /
-                    // .untoldpack happens when the user asks for it, from the row's
-                    // "Cook to .untold…" context action (same pattern as Gaussians).
-                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                    // Import = copy the source into the project, into Resources/ rather
+                    // than GameData/ (mirrored path, same category/name) so it never
+                    // ships in the built app. Cooking to .untold / .untoldpack happens
+                    // when the user asks for it, from the row's "Cook to .untold…"
+                    // context action (same pattern as Gaussians); runtimeExportLocation
+                    // mirrors the Resources path back to GameData for the output.
+                    let importFolder = mirroredResourcesPath(for: destFolder, assetBasePath: basePath) ?? destFolder
+                    enqueueImport(destination: importFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
                         }
@@ -151,10 +155,11 @@ extension AssetBrowserView {
                 if sourceAssetExtensions.contains(sourceExtension) {
                     let baseName = sourceURL.deletingPathExtension().lastPathComponent
                     let destFolder = categoryRoot.appendingPathComponent(baseName, isDirectory: true)
-                    // Same as Models: keep the source in the project. Tiling happens
-                    // when the user asks for it, from the row's "Cook to tiled
+                    // Same as Models: keep the source in Resources/, mirrored. Tiling
+                    // happens when the user asks for it, from the row's "Cook to tiled
                     // stream model…" context action.
-                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                    let importFolder = mirroredResourcesPath(for: destFolder, assetBasePath: basePath) ?? destFolder
+                    enqueueImport(destination: importFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
                         }

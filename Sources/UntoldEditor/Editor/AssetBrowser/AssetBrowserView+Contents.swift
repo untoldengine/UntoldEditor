@@ -147,9 +147,13 @@ extension AssetBrowserView {
                                 }
                             } else if asset.category == AssetCategory.streamModels.rawValue {
                                 Button {
+                                    let sourceFolder = asset.path.deletingLastPathComponent()
+                                    let destinationFolder = assetBasePath
+                                        .flatMap { mirroredGameDataPath(for: sourceFolder, assetBasePath: $0) }
+                                        ?? sourceFolder
                                     queueTilesExport(
                                         sourceURL: asset.path,
-                                        destinationFolder: asset.path.deletingLastPathComponent()
+                                        destinationFolder: destinationFolder
                                     )
                                 } label: {
                                     Label("Cook to tiled stream model…", systemImage: "sparkles")

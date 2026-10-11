@@ -15,7 +15,7 @@ final class RuntimeExportLocationTests: XCTestCase {
     func test_importedSourceCooksIntoTheFolderItWasImportedInto() {
         let source = URL(fileURLWithPath: "/Project/GameData/Models/Tower/Tower.blend")
 
-        let location = runtimeExportLocation(for: source)
+        let location = runtimeExportLocation(for: source, assetBasePath: nil)
 
         XCTAssertEqual(location.outputFolder.path, "/Project/GameData/Models")
         XCTAssertEqual(location.assetsFolder?.path, "/Project/GameData/Models/Tower")
@@ -24,10 +24,80 @@ final class RuntimeExportLocationTests: XCTestCase {
     func test_sourceOutsideAFolderOfItsOwnCooksBesideItself() {
         let source = URL(fileURLWithPath: "/Project/GameData/Models/Props/Crate.usdz")
 
-        let location = runtimeExportLocation(for: source)
+        let location = runtimeExportLocation(for: source, assetBasePath: nil)
 
         XCTAssertEqual(location.outputFolder.path, "/Project/GameData/Models/Props")
         XCTAssertNil(location.assetsFolder)
+    }
+
+    func test_sourceUnderResourcesCooksIntoTheMirroredGameDataFolder() {
+        // Root-level layout: Resources/Models/Tower/Tower.blend mirrors to
+        // GameData/Models/Tower/Tower.blend, and the output location is computed
+        // from there -- the pack sits beside the per-asset folder in GameData/Models/.
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let source = URL(fileURLWithPath: "/Project/Resources/Models/Tower/Tower.blend")
+
+        let location = runtimeExportLocation(for: source, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(location.outputFolder.path, "/Project/GameData/Models")
+        XCTAssertEqual(location.assetsFolder?.path, "/Project/GameData/Models/Tower")
+    }
+
+    func test_sourceUnderResourcesWithNoOwnFolderCooksIntoTheMirroredFolder() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let source = URL(fileURLWithPath: "/Project/Resources/Models/Props/Crate.usdz")
+
+        let location = runtimeExportLocation(for: source, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(location.outputFolder.path, "/Project/GameData/Models/Props")
+        XCTAssertNil(location.assetsFolder)
+    }
+
+    func test_sourceOutsideResourcesOnRootLevelLayoutFallsBackToCookingBesideItself() {
+        // A legacy-layout project, or a source dropped in from outside the project
+        // entirely, has nothing to mirror -- cook beside the source like before.
+        let assetBasePath = URL(fileURLWithPath: "/Project/Sources/Project/GameData")
+        let source = URL(fileURLWithPath: "/Project/Sources/Project/GameData/Models/Tower/Tower.blend")
+
+        let location = runtimeExportLocation(for: source, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(location.outputFolder.path, "/Project/Sources/Project/GameData/Models")
+        XCTAssertEqual(location.assetsFolder?.path, "/Project/Sources/Project/GameData/Models/Tower")
+    }
+
+    func test_mirroredResourcesPathMapsGameDataToResources() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let gameDataURL = URL(fileURLWithPath: "/Project/GameData/Models/Tower")
+
+        XCTAssertEqual(
+            mirroredResourcesPath(for: gameDataURL, assetBasePath: assetBasePath)?.path,
+            "/Project/Resources/Models/Tower"
+        )
+    }
+
+    func test_mirroredGameDataPathMapsResourcesToGameData() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let resourcesURL = URL(fileURLWithPath: "/Project/Resources/Models/Tower/Tower.blend")
+
+        XCTAssertEqual(
+            mirroredGameDataPath(for: resourcesURL, assetBasePath: assetBasePath)?.path,
+            "/Project/GameData/Models/Tower/Tower.blend"
+        )
+    }
+
+    func test_mirroringReturnsNilOnLegacyLayout() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/Sources/Project/GameData")
+        let gameDataURL = URL(fileURLWithPath: "/Project/Sources/Project/GameData/Models/Tower")
+
+        XCTAssertNil(mirroredResourcesPath(for: gameDataURL, assetBasePath: assetBasePath))
+    }
+
+    func test_mirroringReturnsNilWhenURLIsOutsideEitherTree() {
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let elsewhere = URL(fileURLWithPath: "/Elsewhere/Tower.blend")
+
+        XCTAssertNil(mirroredResourcesPath(for: elsewhere, assetBasePath: assetBasePath))
+        XCTAssertNil(mirroredGameDataPath(for: elsewhere, assetBasePath: assetBasePath))
     }
 
     func test_scriptOptionSupportIsReadFromTheScript() throws {
