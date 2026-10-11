@@ -10,6 +10,7 @@
 //
 import Combine
 import Foundation
+import UntoldEngine
 
 /// The platforms a project can be built for, as the toolbar's target menu lists
 /// them: the three the engine's build system generates targets for.
@@ -87,9 +88,9 @@ final class EditorBuildTargetSettings: ObservableObject {
             }
     }
 
-    /// The project root for an asset base path (`<root>/Sources/<Project>/GameData`).
+    /// The project root for an asset base path, under either layout.
     static func projectRoot(of basePath: URL?) -> URL? {
-        basePath?.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        basePath.map { ProjectLayout.detect(gameDataDirectory: $0).projectRoot }
     }
 
     private var key: String {

@@ -49,10 +49,8 @@ extension EditorView {
             return false
         }
 
-        let gameDataPath = projectURL
-            .appendingPathComponent("Sources")
-            .appendingPathComponent(projectName)
-            .appendingPathComponent("GameData")
+        let layout = ProjectLayout.detect(projectRoot: projectURL, projectName: projectName)
+        let gameDataPath = layout.gameDataDirectory
 
         if !fm.fileExists(atPath: gameDataPath.path) {
             do {
@@ -66,7 +64,11 @@ extension EditorView {
             }
         }
 
-        let assetFolders = ["Models", "StreamModels", "Animations", "Scenes", "Scripts", "Gaussians", "Materials", "HDR", "Shaders", "LUT"]
+        // Materials and HDR aren't in ProjectLayout.gameDataCategories (Materials resolves
+        // under its own subName-keyed path, HDR files actually land in Textures/ once
+        // bundled -- see UsingAssetPaths.md) but the editor still wants both folders to
+        // exist up front for assets dropped straight in from Finder.
+        let assetFolders = ProjectLayout.gameDataCategories + ["Materials", "HDR"]
         for folder in assetFolders {
             let folderURL = gameDataPath.appendingPathComponent(folder, isDirectory: true)
             if !fm.fileExists(atPath: folderURL.path) {

@@ -254,10 +254,7 @@ struct CreateProjectView: View {
                     // Set assetBasePath to the newly created GameData folder
                     // This allows the editor to immediately save scenes to the correct location
                     let projectDir = result.xcodeProjectPath.deletingLastPathComponent()
-                    let gameDataPath = projectDir
-                        .appendingPathComponent("Sources")
-                        .appendingPathComponent(settings.projectName)
-                        .appendingPathComponent("GameData")
+                    let gameDataPath = ProjectLayout.detect(projectRoot: projectDir, projectName: settings.projectName).gameDataDirectory
 
                     assetBasePath = gameDataPath
                     EditorAssetBasePath.shared.basePath = gameDataPath

@@ -223,6 +223,20 @@ final class EditorControllerTests: XCTestCase {
         XCTAssertEqual(EditorAssetBasePath.shared.projectName, "MyGame", "Should extract project name correctly")
     }
 
+    func test_editorAssetBasePath_projectName_extractsCorrectlyUnderRootLevelLayout() {
+        // Arrange: Create path structure: ProjectRoot/GameData (root-level layout)
+        let projectRoot = tempBaseURL.appendingPathComponent("MyGame", isDirectory: true)
+        let gameData = projectRoot.appendingPathComponent("GameData", isDirectory: true)
+
+        try? FileManager.default.createDirectory(at: gameData, withIntermediateDirectories: true)
+
+        // Act
+        EditorAssetBasePath.shared.basePath = gameData
+
+        // Assert
+        XCTAssertEqual(EditorAssetBasePath.shared.projectName, "MyGame", "Should extract project name correctly under the root-level layout")
+    }
+
     func test_editorAssetBasePath_projectName_returnsNilWhenNoBasePath() {
         // Arrange
         EditorAssetBasePath.shared.basePath = nil

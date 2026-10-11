@@ -25,6 +25,12 @@ final class ComponentProjectTests: XCTestCase {
         XCTAssertEqual(ComponentSourceLocator.projectRoot(forAssetBasePath: basePath).lastPathComponent, "SplatTwin")
     }
 
+    func test_projectRootIsGameDatasParentUnderRootLevelLayout() throws {
+        let scratch = try ScratchDirectory()
+        let basePath = try scratch.directory("SplatTwin/GameData")
+        XCTAssertEqual(ComponentSourceLocator.projectRoot(forAssetBasePath: basePath).lastPathComponent, "SplatTwin")
+    }
+
     func test_defaultLayout_compilesTheProjectsPluginsFolder() throws {
         let scratch = try ScratchDirectory()
         let basePath = try makeProject(in: scratch)
