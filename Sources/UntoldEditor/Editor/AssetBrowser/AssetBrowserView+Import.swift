@@ -109,7 +109,15 @@ extension AssetBrowserView {
                 } else {
                     // Gaussian files are imported as a folder package so progressive tiers stay grouped.
                     let destFolder = gaussianPackageFolder(for: sourceURL, in: categoryRoot)
-                    enqueueImport(destination: destFolder, isFolder: true, batch: batch) { ctx in
+                    // A raw .ply/.spz is a source, same as a .blend: it goes into Resources/,
+                    // mirrored, so it never ships in the built app (see cookGaussianSources,
+                    // which mirrors it back for the cook's output). An already-cooked .untoldgs
+                    // stays in GameData, same as a runtime .untold/.untoldpack would.
+                    let sourceExtension = sourceURL.pathExtension.lowercased()
+                    let importFolder = ["ply", "spz"].contains(sourceExtension)
+                        ? resourcesImportDestination(for: destFolder, assetBasePath: basePath)
+                        : destFolder
+                    enqueueImport(destination: importFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importGaussianAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
                         }

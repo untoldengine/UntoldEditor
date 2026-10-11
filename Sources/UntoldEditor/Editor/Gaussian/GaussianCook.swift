@@ -145,6 +145,23 @@ func gaussianPackageFolder(for sourceURL: URL, in categoryRoot: URL) -> URL {
     categoryRoot.appendingPathComponent(gaussianPackageName(for: sourceURL), isDirectory: true)
 }
 
+/// Where a Gaussian cook should write its `.untoldgs` tiers: a fresh package folder when
+/// `plyURL` sits directly in the Gaussians root (the first cook of a flatly-dropped file),
+/// the mirrored `GameData`-side package folder when the source is under `Resources/` (see
+/// `AssetBrowserView+Import.swift`), or nil to write beside the source -- the existing
+/// in-place re-cook case, for a source already sitting in its own `GameData` package
+/// folder (a legacy-layout project, or a source outside `Resources` entirely).
+func gaussianCookOutputDirectory(for plyURL: URL, gaussianRoot: URL?, assetBasePath: URL?) -> URL? {
+    guard let gaussianRoot else { return nil }
+    if plyURL.deletingLastPathComponent().standardizedFileURL == gaussianRoot.standardizedFileURL {
+        return gaussianPackageFolder(for: plyURL, in: gaussianRoot)
+    }
+    if let assetBasePath {
+        return mirroredGameDataPath(for: plyURL.deletingLastPathComponent(), assetBasePath: assetBasePath)
+    }
+    return nil
+}
+
 func importGaussianAsset(
     sourceURL: URL,
     destinationFolder: URL,

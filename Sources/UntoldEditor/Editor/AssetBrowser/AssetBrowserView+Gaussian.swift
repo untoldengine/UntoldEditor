@@ -37,33 +37,35 @@ extension AssetBrowserView {
             : "Cooking \(plyURLs.count) Gaussian files (see Tasks)...")
         for plyURL in plyURLs {
             let name = plyURL.lastPathComponent
-            let outputDirectory = gaussianRoot.flatMap { root -> URL? in
-                plyURL.deletingLastPathComponent().standardizedFileURL == root.standardizedFileURL
-                    ? gaussianPackageFolder(for: plyURL, in: root)
-                    : nil
-            }
+            let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot, assetBasePath: assetBasePath)
             cookGaussianPLYTracked(plyURL: plyURL, settings: settings, outputDirectory: outputDirectory) { result in
                 switch result {
                 case let .success(bake):
                     loadAssets()
-                    // The tiers land beside the source, so cooking from inside the source's own
-                    // package folder (the common case for an imported .ply/.spz) leaves the
-                    // browser sitting right where it was. Pop back out to that folder's parent
-                    // so the user lands where the package folder itself is visible, same as a
-                    // runtime export surfaces its result in the model's parent folder.
-                    let sourceFolder = plyURL.deletingLastPathComponent()
-                    if let gaussianRoot, sourceFolder.standardizedFileURL != gaussianRoot.standardizedFileURL {
-                        navigateToCookedAsset(
-                            folder: sourceFolder.deletingLastPathComponent(),
-                            assetName: sourceFolder.lastPathComponent,
-                            category: .gaussians
-                        )
-                    } else if let outputDirectory {
+                    if let outputDirectory {
+                        // Either a fresh package folder for a flatly-dropped file, or the
+                        // mirrored GameData location for a Resources-side source -- either
+                        // way, that's where the cooked result actually landed.
                         navigateToCookedAsset(
                             folder: outputDirectory.deletingLastPathComponent(),
                             assetName: outputDirectory.lastPathComponent,
                             category: .gaussians
                         )
+                    } else {
+                        // Re-cooked in place: the tiers landed beside the source, so cooking
+                        // from inside its own package folder (a legacy-layout project, or a
+                        // source outside Resources) leaves the browser sitting right where it
+                        // was. Pop back out to that folder's parent so the user lands where
+                        // the package folder itself is visible, same as a runtime export
+                        // surfaces its result in the model's parent folder.
+                        let sourceFolder = plyURL.deletingLastPathComponent()
+                        if let gaussianRoot, sourceFolder.standardizedFileURL != gaussianRoot.standardizedFileURL {
+                            navigateToCookedAsset(
+                                folder: sourceFolder.deletingLastPathComponent(),
+                                assetName: sourceFolder.lastPathComponent,
+                                category: .gaussians
+                            )
+                        }
                     }
                     let report = bake.cookReport
                     let names = bake.tiers.map(\.url.lastPathComponent).joined(separator: ", ")

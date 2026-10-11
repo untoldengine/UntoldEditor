@@ -248,6 +248,37 @@ final class GaussianCookSheetTests: XCTestCase {
         XCTAssertEqual(primaryGaussianAsset(in: tableFolder)?.standardizedFileURL, table.standardizedFileURL)
     }
 
+    func test_gaussianCookOutputDirectoryIsAFreshPackageFolderForAFlatlyDroppedFile() throws {
+        let gaussianRoot = URL(fileURLWithPath: "/Project/GameData/Gaussians", isDirectory: true)
+        let plyURL = gaussianRoot.appendingPathComponent("room.ply")
+
+        let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot, assetBasePath: nil)
+
+        XCTAssertEqual(outputDirectory?.path, "/Project/GameData/Gaussians/room")
+    }
+
+    func test_gaussianCookOutputDirectoryMirrorsAResourcesSideSourceIntoGameData() throws {
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let gaussianRoot = assetBasePath.appendingPathComponent("Gaussians")
+        let plyURL = URL(fileURLWithPath: "/Project/Resources/Gaussians/room/room.ply")
+
+        let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot, assetBasePath: assetBasePath)
+
+        XCTAssertEqual(outputDirectory?.path, "/Project/GameData/Gaussians/room")
+    }
+
+    func test_gaussianCookOutputDirectoryIsNilForAnInPlaceRecook() throws {
+        // Legacy layout, or a source outside Resources entirely: the source already
+        // sits in its own GameData package folder, so the cook writes beside it.
+        let assetBasePath = URL(fileURLWithPath: "/Project/GameData")
+        let gaussianRoot = assetBasePath.appendingPathComponent("Gaussians")
+        let plyURL = gaussianRoot.appendingPathComponent("room/room.ply")
+
+        let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot, assetBasePath: assetBasePath)
+
+        XCTAssertNil(outputDirectory)
+    }
+
     func test_importGaussianAssetCopiesDetectedProgressiveTierSet() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)
