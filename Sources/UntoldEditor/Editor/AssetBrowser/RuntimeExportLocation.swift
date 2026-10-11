@@ -49,6 +49,18 @@ func mirroredGameDataPath(for url: URL, assetBasePath: URL) -> URL? {
     return mirrored(url, from: resourcesDirectory, to: layout.gameDataDirectory)
 }
 
+/// Where a source import should actually land: `url` unchanged if it's already under
+/// `Resources` (the user is browsing there and importing directly into it) or outside
+/// both trees (legacy layout), otherwise its mirrored path under `Resources` (the user
+/// is browsing `GameData`, e.g. a category root, and importing there as before --
+/// `AssetBrowserView+Import.swift` redirects it into `Resources` instead).
+func resourcesImportDestination(for url: URL, assetBasePath: URL) -> URL {
+    if mirroredGameDataPath(for: url, assetBasePath: assetBasePath) != nil {
+        return url
+    }
+    return mirroredResourcesPath(for: url, assetBasePath: assetBasePath) ?? url
+}
+
 /// A source imported by the editor sits in a folder named after it
 /// (`Resources/Models/Tower/Tower.blend`, see `importSourceAsset`). Its result goes in
 /// the mirrored folder under `GameData` (`GameData/Models/Tower.untoldpack`), and

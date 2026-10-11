@@ -66,8 +66,17 @@ extension AssetBrowserView {
 
         let fm = FileManager.default
         // Import into the folder the user has open (Finder-style), falling back
-        // to the category root.
-        let categoryRoot = destinationOverride ?? basePath.appendingPathComponent(categoryString, isDirectory: true)
+        // to the category root. The Resources root itself carries no category of its
+        // own (it's a bare folder, nothing pre-created under it -- see #1335), so
+        // importing from there needs the category appended explicitly, the same way
+        // the GameData-side fallback below does; otherwise the file lands flat in
+        // Resources/ with no Models/Animations/... segment at all.
+        let categoryRoot: URL
+        if let destinationOverride, destinationOverride.standardizedFileURL == resourcesRootURL?.standardizedFileURL {
+            categoryRoot = destinationOverride.appendingPathComponent(categoryString, isDirectory: true)
+        } else {
+            categoryRoot = destinationOverride ?? basePath.appendingPathComponent(categoryString, isDirectory: true)
+        }
         // Ensure the destination folder exists (e.g., <Base>/Models or a subfolder)
         try? fm.createDirectory(at: categoryRoot, withIntermediateDirectories: true)
 
@@ -142,7 +151,7 @@ extension AssetBrowserView {
                     // when the user asks for it, from the row's "Cook to .untold…"
                     // context action (same pattern as Gaussians); runtimeExportLocation
                     // mirrors the Resources path back to GameData for the output.
-                    let importFolder = mirroredResourcesPath(for: destFolder, assetBasePath: basePath) ?? destFolder
+                    let importFolder = resourcesImportDestination(for: destFolder, assetBasePath: basePath)
                     enqueueImport(destination: importFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
@@ -158,7 +167,7 @@ extension AssetBrowserView {
                     // Same as Models: keep the source in Resources/, mirrored. Tiling
                     // happens when the user asks for it, from the row's "Cook to tiled
                     // stream model…" context action.
-                    let importFolder = mirroredResourcesPath(for: destFolder, assetBasePath: basePath) ?? destFolder
+                    let importFolder = resourcesImportDestination(for: destFolder, assetBasePath: basePath)
                     enqueueImport(destination: importFolder, isFolder: true, batch: batch) { ctx in
                         _ = try importSourceAsset(sourceURL: sourceURL, destinationFolder: ctx.stagingURL, fileManager: fm) {
                             try ctx.copy($0, to: $1, fileManager: fm)
