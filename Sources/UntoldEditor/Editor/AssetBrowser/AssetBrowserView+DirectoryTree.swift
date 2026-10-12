@@ -71,7 +71,9 @@ extension AssetBrowserView {
         let name: String
         let url: URL
         let category: String?
-        var id: String { url.standardizedFileURL.path }
+        var id: String {
+            url.standardizedFileURL.path
+        }
     }
 
     /// Segments for the folder currently shown on the right, from its root down to
