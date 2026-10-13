@@ -1,4 +1,13 @@
 # Changelog
+## v0.23.0 - 2026-10-13
+### 🐞 Fixes
+- [Patch] Hide cook-source folders in asset browser (#154) (ad012c1…)
+- [Patch] Skip intro gallery and disable Explore asset panel, drop AWS URLs (#155) (2de8117…)
+### 🚀 Features
+- [Feature] Preview the scene on an Apple Vision Pro, drawn by the Mac (#153) (a6d4064…)
+- [Feature] Show live task count badge on Tasks tab (#159) (#163) (6414d3d…)
+- [Feature] Editor UI redesign, floating panels: a tab floats into its own window and docks back (#161) (34437f9…)
+- [Feature] Make Environment and Effects proper dockable panels (#166) (#174) (2792c2c…)
 ## v0.22.0 - 2026-10-05
 ### 🐞 Fixes
 - [Patch] Show every line of an export's output in the Console (#143) (a204708…)
