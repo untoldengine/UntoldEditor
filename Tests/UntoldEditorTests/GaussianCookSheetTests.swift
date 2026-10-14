@@ -248,6 +248,37 @@ final class GaussianCookSheetTests: XCTestCase {
         XCTAssertEqual(primaryGaussianAsset(in: tableFolder)?.standardizedFileURL, table.standardizedFileURL)
     }
 
+    func test_gaussianCookOutputDirectoryIsAFreshPackageFolderForAFlatlyDroppedFile() {
+        let gaussianRoot = URL(fileURLWithPath: "/Project/GameData/Gaussians", isDirectory: true)
+        let plyURL = gaussianRoot.appendingPathComponent("room.ply")
+
+        let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot)
+
+        XCTAssertEqual(outputDirectory?.path, "/Project/GameData/Gaussians/room")
+    }
+
+    func test_gaussianCookOutputDirectoryIsAFreshPackageFolderForAResourcesSideSource() {
+        // Resources/ is free-form: wherever under it the .ply sits, the output always
+        // gets a fresh package folder under GameData/Gaussians, named after the source.
+        let gaussianRoot = URL(fileURLWithPath: "/Project/GameData/Gaussians", isDirectory: true)
+        let plyURL = URL(fileURLWithPath: "/Project/Resources/Captures/Deep/room.ply")
+
+        let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot)
+
+        XCTAssertEqual(outputDirectory?.path, "/Project/GameData/Gaussians/room")
+    }
+
+    func test_gaussianCookOutputDirectoryIsNilForAnInPlaceRecook() {
+        // Legacy layout, or a source outside Resources entirely: the source already
+        // sits in its own GameData package folder, so the cook writes beside it.
+        let gaussianRoot = URL(fileURLWithPath: "/Project/GameData/Gaussians", isDirectory: true)
+        let plyURL = gaussianRoot.appendingPathComponent("room/room.ply")
+
+        let outputDirectory = gaussianCookOutputDirectory(for: plyURL, gaussianRoot: gaussianRoot)
+
+        XCTAssertNil(outputDirectory)
+    }
+
     func test_importGaussianAssetCopiesDetectedProgressiveTierSet() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("GaussianCookSheetTests-\(UUID().uuidString)", isDirectory: true)

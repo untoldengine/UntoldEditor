@@ -56,10 +56,8 @@ extension AssetBrowserView {
                 let sourceFolderByStem: [String: URL] = contents.reduce(into: [:]) { result, item in
                     guard allRuntimeAssetExtensions.contains(item.pathExtension.lowercased()) else { return }
                     let stem = item.deletingPathExtension().lastPathComponent
-                    let candidateFolder = categoryPath.appendingPathComponent(stem, isDirectory: true)
-                    var isDir: ObjCBool = false
-                    if FileManager.default.fileExists(atPath: candidateFolder.path, isDirectory: &isDir), isDir.boolValue {
-                        result[stem] = candidateFolder
+                    if let found = sourceFolderCandidate(for: item, assetBasePath: basePath) {
+                        result[stem] = found
                     }
                 }
 

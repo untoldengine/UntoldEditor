@@ -131,9 +131,10 @@ struct ComponentProjectLayout: Equatable {
 }
 
 enum ComponentSourceLocator {
-    /// The editor's asset folder is `<Root>/Sources/<Project>/GameData`.
+    /// The editor's asset folder, under either layout (`<Root>/Sources/<Project>/GameData`
+    /// or the root-level `<Root>/GameData`).
     static func projectRoot(forAssetBasePath basePath: URL) -> URL {
-        basePath.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        ProjectLayout.detect(gameDataDirectory: basePath).projectRoot
     }
 
     static func layout(
@@ -141,8 +142,9 @@ enum ComponentSourceLocator {
         sdk: ComponentSDK?,
         fileManager: FileManager = .default
     ) -> ComponentProjectLayout {
-        let root = projectRoot(forAssetBasePath: basePath)
-        let projectName = root.lastPathComponent
+        let detected = ProjectLayout.detect(gameDataDirectory: basePath)
+        let root = detected.projectRoot
+        let projectName = detected.projectName
         var problems: [String] = []
 
         var manifest: EditorProjectManifest?

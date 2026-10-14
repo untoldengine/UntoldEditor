@@ -68,6 +68,11 @@ final class EditorBuildTargetSettingsTests: XCTestCase {
         XCTAssertNil(EditorBuildTargetSettings.projectRoot(of: nil))
     }
 
+    func test_projectRootIsGameDatasParentUnderRootLevelLayout() {
+        let base = URL(fileURLWithPath: "/Users/me/Games/MyGame/GameData")
+        XCTAssertEqual(EditorBuildTargetSettings.projectRoot(of: base)?.path, "/Users/me/Games/MyGame")
+    }
+
     func test_statusLabelNamesTheBackend() {
         XCTAssertEqual(EditorBuildTarget.macOS.statusLabel, "macOS · Metal")
         XCTAssertEqual(EditorBuildTarget.allCases.map(\.title), ["macOS", "iOS", "visionOS"])

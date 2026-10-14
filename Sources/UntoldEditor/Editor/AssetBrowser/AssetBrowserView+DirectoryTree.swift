@@ -21,6 +21,14 @@ extension AssetBrowserView {
         assetBasePath?.appendingPathComponent(category.rawValue, isDirectory: true)
     }
 
+    /// The project's `Resources/` folder, browsable as a second root alongside
+    /// `GameData`'s categories -- where import now puts artist sources (see
+    /// `AssetBrowserView+Import.swift`). Nil on the legacy layout, which has no
+    /// `Resources/` folder.
+    var resourcesRootURL: URL? {
+        assetBasePath.flatMap { ProjectLayout.detect(gameDataDirectory: $0).resourcesDirectory }
+    }
+
     /// Root-level folders the user created that aren't one of the fixed categories.
     var customRootFolders: [URL] {
         guard let root = assetBasePath else { return [] }
@@ -42,15 +50,93 @@ extension AssetBrowserView {
         return categoryRootURL(category)
     }
 
-    /// Category owning `url` (matched by the top-level folder under the asset
-    /// root), used to pick import file types for generic folders.
+    /// Category owning `url` (matched by the top-level folder under `GameData`), used
+    /// to pick import file types for generic folders. `Resources/` has no categories of
+    /// its own -- a source there is category-agnostic until the user cooks it as
+    /// something specific (see the context menu in `AssetBrowserView+Contents.swift`),
+    /// so this only ever matches a `GameData`-side path.
     func inferCategory(for url: URL?) -> AssetCategory? {
         guard let url, let root = assetBasePath?.standardizedFileURL else { return nil }
         let rootComponents = root.pathComponents
         let comps = url.standardizedFileURL.pathComponents
-        guard comps.count > rootComponents.count else { return nil }
-        let top = comps[rootComponents.count]
-        return AssetCategory(rawValue: top)
+        guard comps.count > rootComponents.count, comps.starts(with: rootComponents) else { return nil }
+        return AssetCategory(rawValue: comps[rootComponents.count])
+    }
+
+    /// One step of the breadcrumb shown above the folder contents: a display name, the
+    /// URL tapping it navigates to, and (for a GameData-side segment) the category that
+    /// navigation needs -- nil for a Resources/custom-root segment, which navigates via
+    /// the generic `selectedDirURL` path instead (see `selectBreadcrumb`).
+    struct BreadcrumbSegment: Identifiable {
+        let name: String
+        let url: URL
+        let category: String?
+        var id: String {
+            url.standardizedFileURL.path
+        }
+    }
+
+    /// Segments for the folder currently shown on the right, from its root down to
+    /// itself -- e.g. GameData > Models > Tower, or Resources > Models > Tower.
+    /// `Resources` and `GameData` share the same category names below their own root
+    /// (Models, Animations, ...), so this is the only thing that says which tree a
+    /// folder deep in either one actually belongs to. GameData has no node of its own
+    /// in the sidebar (each category sits directly under the project name), so its
+    /// segment is synthesized here; every other root (Resources, a custom folder)
+    /// already has one.
+    func breadcrumbSegments(for url: URL) -> [BreadcrumbSegment] {
+        if let base = assetBasePath?.standardizedFileURL {
+            let baseComponents = base.pathComponents
+            let comps = url.standardizedFileURL.pathComponents
+            if comps.starts(with: baseComponents), comps.count > baseComponents.count,
+               let category = AssetCategory(rawValue: comps[baseComponents.count])
+            {
+                var segments = [BreadcrumbSegment(name: "GameData", url: base, category: nil)]
+                var cursor = base
+                for component in comps.dropFirst(baseComponents.count) {
+                    cursor = cursor.appendingPathComponent(component, isDirectory: true)
+                    segments.append(BreadcrumbSegment(name: component, url: cursor, category: category.rawValue))
+                }
+                return segments
+            }
+        }
+
+        let namedRoots: [URL] = [resourcesRootURL].compactMap { $0 } + customRootFolders
+        if let root = namedRoots.first(where: { candidate in
+            let rootPath = candidate.standardizedFileURL.path
+            let urlPath = url.standardizedFileURL.path
+            return urlPath == rootPath || urlPath.hasPrefix(rootPath + "/")
+        }) {
+            let rootComponents = root.standardizedFileURL.pathComponents
+            let comps = url.standardizedFileURL.pathComponents
+            var segments = [BreadcrumbSegment(name: root.lastPathComponent, url: root, category: nil)]
+            var cursor = root
+            for component in comps.dropFirst(rootComponents.count) {
+                cursor = cursor.appendingPathComponent(component, isDirectory: true)
+                segments.append(BreadcrumbSegment(name: component, url: cursor, category: nil))
+            }
+            return segments
+        }
+
+        return [BreadcrumbSegment(name: url.lastPathComponent, url: url, category: nil)]
+    }
+
+    /// Navigates to a breadcrumb segment the same way clicking its sidebar node would:
+    /// `selectDirectory` for a GameData-side category segment (builds the folder chain
+    /// down to it), or the generic `selectedDirURL` path for Resources/a custom root.
+    func selectBreadcrumb(_ segment: BreadcrumbSegment) {
+        navigation.lightsSelected = false
+        navigation.primitivesSelected = false
+        navigation.entitiesSelected = false
+        selectedAsset = nil
+        selectedAssetName = nil
+        if let category = segment.category {
+            selectDirectory(url: segment.url, category: category)
+        } else {
+            selectedDirURL = segment.url
+            selectedCategory = nil
+            folderPathStack = []
+        }
     }
 
     func subdirectories(of url: URL) -> [URL] {
@@ -146,6 +232,93 @@ extension AssetBrowserView {
         loadAssets()
     }
 
+    /// Whether `url` is safe to rename or move: only a folder under `Resources/`
+    /// (not `Resources` itself). `.untoldscene` files store asset references as
+    /// paths relative to `GameData` (e.g. "Models/Tower/Tower.untold"), so
+    /// renaming or moving anything inside `GameData` -- a category, a custom root
+    /// folder, or any subfolder -- risks silently breaking a scene that references
+    /// it. Nothing in the engine ever reads a path under `Resources/`, so either
+    /// operation is safe there.
+    func canRenameFolder(at url: URL?) -> Bool {
+        guard let url, let basePath = assetBasePath, isUnderResources(url, assetBasePath: basePath) else { return false }
+        return url.standardizedFileURL != resourcesRootURL?.standardizedFileURL
+    }
+
+    /// Moves `url` to `destination` on disk (a rename when `destination` shares
+    /// `url`'s parent, a genuine reorganization into a different folder
+    /// otherwise) and updates any navigation state that pointed at it or
+    /// somewhere nested under it (expanded nodes, the open folder trail, a
+    /// generic selection) so it keeps following the folder instead of silently
+    /// pointing at a path that no longer exists. A destination already taken by
+    /// something else, or identical to `url` itself, leaves `url` alone.
+    func moveFolder(at url: URL, to destination: URL) {
+        guard destination.standardizedFileURL != url.standardizedFileURL else { return }
+
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: destination.path) else {
+            showStatus("\"\(destination.lastPathComponent)\" already exists there", isError: true)
+            return
+        }
+
+        do {
+            try fm.moveItem(at: url, to: destination)
+        } catch {
+            showStatus("Move failed: \(error.localizedDescription)", isError: true)
+            return
+        }
+
+        func rebased(_ candidate: URL) -> URL {
+            let oldPath = url.standardizedFileURL.path
+            let candidatePath = candidate.standardizedFileURL.path
+            guard candidatePath == oldPath || candidatePath.hasPrefix(oldPath + "/") else { return candidate }
+            return URL(fileURLWithPath: destination.path + candidatePath.dropFirst(oldPath.count), isDirectory: true)
+        }
+
+        expandedDirs = Set(expandedDirs.map(rebased))
+        if let selected = selectedDirURL { selectedDirURL = rebased(selected) }
+        folderPathStack = folderPathStack.map(rebased)
+        loadAssets()
+    }
+
+    /// Renames `url` to `newName` in place. A blank name, an unchanged name, or a
+    /// name already taken by a sibling leaves `url` alone.
+    func renameFolder(at url: URL, to newName: String) {
+        defer { navigation.renamingDirectoryURL = nil }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != url.lastPathComponent else { return }
+        moveFolder(at: url, to: url.deletingLastPathComponent().appendingPathComponent(trimmed, isDirectory: true))
+    }
+
+    /// Entry point for the "Move to…" menu item: lets the user pick a destination
+    /// folder anywhere under Resources/ and moves `url` into it.
+    func requestMoveFolder(_ url: URL) {
+        guard let resourcesRoot = resourcesRootURL else { return }
+
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = resourcesRoot
+        panel.message = "Choose a folder under Resources to move \"\(url.lastPathComponent)\" into"
+        panel.prompt = "Move"
+
+        guard panel.runModal() == .OK, let destinationFolder = panel.urls.first else { return }
+
+        guard let basePath = assetBasePath, isUnderResources(destinationFolder, assetBasePath: basePath) else {
+            showStatus("Choose a folder inside Resources", isError: true)
+            return
+        }
+        let destinationPath = destinationFolder.standardizedFileURL.path
+        let sourcePath = url.standardizedFileURL.path
+        guard destinationPath != sourcePath, !destinationPath.hasPrefix(sourcePath + "/") else {
+            showStatus("Can't move a folder into itself", isError: true)
+            return
+        }
+
+        moveFolder(at: url, to: destinationFolder.appendingPathComponent(url.lastPathComponent, isDirectory: true))
+    }
+
     func directoryNode(url: URL?, name: String, category: String?, depth: Int) -> AnyView {
         let isGeneric = (category == nil)
         let subfolders: [URL] = {
@@ -157,6 +330,8 @@ extension AssetBrowserView {
         }()
         let hasChildren = !subfolders.isEmpty
         let isExpanded = url.map { expandedDirs.contains($0) } ?? false
+        let canRename = canRenameFolder(at: url)
+        let isRenaming = url.map { navigation.renamingDirectoryURL?.standardizedFileURL == $0.standardizedFileURL } ?? false
         let isSelected: Bool = {
             if isGeneric {
                 guard let url, let sel = selectedDirURL else { return false }
@@ -187,10 +362,16 @@ extension AssetBrowserView {
 
                     Image(systemName: isSelected ? "folder.fill" : "folder")
                         .foregroundColor(isSelected ? Color.editorAccent : .editorTextTertiary)
-                    Text(name)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.editorTextPrimary)
-                        .lineLimit(1)
+                    if isRenaming, let url {
+                        CommitTextField(text: name, multiline: false) { newName in
+                            renameFolder(at: url, to: newName)
+                        }
+                    } else {
+                        Text(name)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.editorTextPrimary)
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.vertical, 4)
@@ -227,6 +408,18 @@ extension AssetBrowserView {
                     } label: {
                         Label("New Directory", systemImage: "folder.badge.plus")
                     }
+                    if canRename, let url {
+                        Button {
+                            navigation.renamingDirectoryURL = url
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        Button {
+                            requestMoveFolder(url)
+                        } label: {
+                            Label("Move to…", systemImage: "folder")
+                        }
+                    }
                 }
 
                 if isExpanded {
@@ -236,6 +429,45 @@ extension AssetBrowserView {
                 }
             }
         )
+    }
+
+    /// Group row for "GameData": a disclosure for the fixed categories and any
+    /// custom root folders, which all physically live inside GameData. Shown as
+    /// a sibling of the `Resources` node so a first-time user sees the two
+    /// top-level destinations (where sources go, where cooked output lives)
+    /// instead of a flat list of a dozen category names.
+    var gameDataGroupRow: some View {
+        HStack(spacing: 6) {
+            Button(action: { gameDataExpanded.toggle() }) {
+                Image(systemName: gameDataExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.editorTextSecondary)
+                    .frame(width: 10)
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+
+            Image(systemName: "shippingbox.fill")
+                .foregroundColor(.editorTextTertiary)
+            Text("GameData")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.editorTextPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .padding(.leading, 12)
+        .contentShape(Rectangle())
+        .onTapGesture { gameDataExpanded.toggle() }
+        .contextMenu {
+            Button {
+                requestNewDirectory(in: assetBasePath)
+            } label: {
+                Label("New Directory", systemImage: "folder.badge.plus")
+            }
+        }
+        .help("Cooked, ready-to-run assets. Import artist sources into Resources, then cook them here.")
     }
 
     /// Root node of the directory tree (the project's asset folder). Right-click

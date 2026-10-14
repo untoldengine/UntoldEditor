@@ -24,6 +24,12 @@ final class AssetBrowserNavigationState: ObservableObject {
     /// directory the user created) is selected. Overrides the category selection.
     @Published var selectedDirURL: URL?
     @Published var rootExpanded: Bool = true
+    /// Whether the "GameData" sidebar group (the fixed categories + any custom
+    /// root folders, all of which physically live inside GameData) is expanded.
+    /// Separate from `rootExpanded`, which gates the whole tree under the
+    /// project name -- this only controls GameData's own children, so
+    /// `Resources` stays visible (and independently expandable) regardless.
+    @Published var gameDataExpanded: Bool = true
     /// True when the Lights shelf (a fixed pseudo-category, not backed by disk) is
     /// selected. Overrides the category and generic-directory selection.
     @Published var lightsSelected: Bool = false
@@ -32,4 +38,8 @@ final class AssetBrowserNavigationState: ObservableObject {
     /// Same again, for the Entities shelf: kinds of entity added by loaded code that are
     /// neither primitives nor lights.
     @Published var entitiesSelected: Bool = false
+    /// Non-nil while a sidebar folder row is showing its inline rename field (see
+    /// `directoryNode`'s "Rename" context menu item). Never a fixed root (a category,
+    /// or Resources itself) -- only a folder the user created can be renamed.
+    @Published var renamingDirectoryURL: URL?
 }

@@ -49,15 +49,11 @@ public class EditorAssetBasePath: ObservableObject {
         }
     }
 
-    /// Extract project name from the GameData path
-    /// e.g., /path/to/MyGame/Sources/MyGame/GameData -> "MyGame"
+    /// Extract project name from the GameData path, under either layout
+    /// (`<Root>/Sources/<Project>/GameData` or the root-level `<Root>/GameData`).
     public var projectName: String? {
         guard let basePath else { return nil }
-
-        // GameData is at: ProjectRoot/Sources/ProjectName/GameData
-        // So we go up 3 levels to get ProjectRoot
-        let projectRoot = basePath.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        return projectRoot.lastPathComponent
+        return ProjectLayout.detect(gameDataDirectory: basePath).projectName
     }
 
     init() {
