@@ -17,6 +17,7 @@ import UntoldEngine
 struct AntiAliasingEditorView: View {
     @ObservedObject var fxaaSettings = FXAAParams.shared
     @ObservedObject var smaaSettings = SMAAParams.shared
+    private let taaSettings = TAAParams.shared
     @State private var selectedMode = EditorAntiAliasingOption.currentEngineMode()
     @State private var showAdvanced = false
 
@@ -117,6 +118,36 @@ struct AntiAliasingEditorView: View {
                 }
             case .msaa:
                 EmptyView()
+            case .taa, .msaaTaa:
+                DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        UndoableEffectSlider(
+                            label: "History Weight",
+                            undoName: "Change TAA History Weight",
+                            range: 0.5 ... 0.98,
+                            help: "How much of the previous frames the resolve keeps. Higher smooths more and settles slower; lower follows motion sooner.",
+                            get: { taaSettings.historyWeight },
+                            set: { taaSettings.historyWeight = $0 }
+                        )
+                        UndoableEffectSlider(
+                            label: "Clip Gamma",
+                            undoName: "Change TAA Clip Gamma",
+                            range: 0.5 ... 3.0,
+                            help: "How far the history may stray from the frame's neighbourhood before it is clipped. Lower rejects ghosts sooner; higher keeps more of the history on thin detail.",
+                            get: { taaSettings.clipGamma },
+                            set: { taaSettings.clipGamma = $0 }
+                        )
+                        UndoableEffectSlider(
+                            label: "Jitter Scale",
+                            undoName: "Change TAA Jitter Scale",
+                            range: 0.0 ... 1.0,
+                            help: "The sub-pixel offset of the projection each frame, as a share of the full sequence. 0 turns the jitter off and leaves the resolve's blend alone.",
+                            get: { taaSettings.jitterScale },
+                            set: { taaSettings.jitterScale = $0 }
+                        )
+                    }
+                    .padding(.top, 4)
+                }
             }
         }
         .padding(.vertical, 4)
