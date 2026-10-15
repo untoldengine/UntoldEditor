@@ -16,13 +16,14 @@ struct MaterialSliderRow: View {
     @Binding var value: Float
     var range: ClosedRange<Float> = 0 ... 1
     var isEnabled = true
+    var labelWidth: CGFloat = 64
 
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
                 .font(EditorType.hint)
                 .foregroundColor(.editorTextSecondary)
-                .frame(width: 64, alignment: .leading)
+                .frame(width: labelWidth, alignment: .leading)
             EditorSlider(value: $value, range: range, isEnabled: isEnabled)
             Text(String(format: "%.2f", value))
                 .font(EditorType.mono)

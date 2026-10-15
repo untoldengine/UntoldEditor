@@ -13,9 +13,9 @@ import SwiftUI
 import UntoldEngine
 
 /// The rest of the material, under the Material block's disclosure: the
-/// texture slots, the UV scale, parallax (height scale, midlevel, POM, remap),
-/// the alpha mask, the emissive colour, and the write-back to an `.untold`
-/// asset while inspecting one.
+/// texture slots, the UV scale, the alpha mask, the emissive colour, the
+/// write-back to an `.untold` asset while inspecting one, and the Height
+/// detail (Parallax Occlusion Mapping) group at the end.
 struct MaterialAdvancedView: View {
     let entityId: EntityID
     let meshIndex: Int
@@ -26,6 +26,8 @@ struct MaterialAdvancedView: View {
     let edit: (() -> Void) -> Void
     @Binding var hasPendingUntoldWrite: Bool
     @Binding var untoldUpdateStatus: String?
+
+    @State private var showsHeightDetail = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -48,51 +50,6 @@ struct MaterialAdvancedView: View {
             ))
             .disabled(inspectionOnly)
             .opacity(inspectionOnly ? 0.7 : 1.0)
-
-            Text("Parallax")
-                .font(EditorType.hint)
-                .foregroundColor(.editorTextTertiary)
-
-            // Height Scale: total Parallax Occlusion Mapping ray-march depth, in
-            // UV-normalized units. Only has a visible effect once a Height texture
-            // is assigned above.
-            numberRow("Height Scale", value: Binding(
-                get: { getMaterialHeightScale(entityId: entityId, meshIndex: meshIndex) },
-                set: { newValue in edit { updateMaterialHeightScale(entityId: entityId, heightScale: newValue, meshIndex: meshIndex) } }
-            ))
-            // Midlevel matches Blender's Displacement node "Midlevel" (default 0.5 = no shift).
-            numberRow("Midlevel", value: Binding(
-                get: { getMaterialHeightMidlevel(entityId: entityId, meshIndex: meshIndex) },
-                set: { newValue in edit { updateMaterialHeightMidlevel(entityId: entityId, heightMidlevel: newValue, meshIndex: meshIndex) } }
-            ))
-            // Height Remap Min/Max contrast-stretch the raw height sample before
-            // Midlevel is applied; many displacement maps only use a narrow slice of
-            // [0,1]. Identity is (0.0, 1.0).
-            numberRow("Remap Min", value: Binding(
-                get: { getMaterialHeightRemapMin(entityId: entityId, meshIndex: meshIndex) },
-                set: { newValue in edit { updateMaterialHeightRemapMin(entityId: entityId, heightRemapMin: newValue, meshIndex: meshIndex) } }
-            ))
-            numberRow("Remap Max", value: Binding(
-                get: { getMaterialHeightRemapMax(entityId: entityId, meshIndex: meshIndex) },
-                set: { newValue in edit { updateMaterialHeightRemapMax(entityId: entityId, heightRemapMax: newValue, meshIndex: meshIndex) } }
-            ))
-            // POM on/off lets testers compare normal mapping alone against normal
-            // mapping with parallax without discarding the height texture.
-            HStack {
-                Text("POM")
-                    .font(EditorType.hint)
-                    .foregroundColor(.editorTextSecondary)
-                    .frame(width: 64, alignment: .leading)
-                Toggle("", isOn: Binding(
-                    get: { getMaterialHeightEnabled(entityId: entityId, meshIndex: meshIndex) },
-                    set: { newValue in edit { updateMaterialHeightEnabled(entityId: entityId, heightEnabled: newValue, meshIndex: meshIndex) } }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(.editorAccent)
-                .controlSize(.small)
-                Spacer()
-            }
 
             HStack {
                 Text("Alpha mask")
@@ -145,10 +102,87 @@ struct MaterialAdvancedView: View {
             }
             .disabled(inspectionOnly)
             .opacity(inspectionOnly ? 0.7 : 1.0)
+
+            heightDetailSection
         }
     }
 
-    private func numberRow(_ label: String, value: Binding<Float>) -> some View {
+    /// The Height-map-driven surface depth (Parallax Occlusion Mapping) group:
+    /// set apart in its own collapsible, bordered block since it's an advanced,
+    /// opt-in effect most materials never touch, rather than another loose row
+    /// in the general list above.
+    private var heightDetailSection: some View {
+        let hasHeightTexture = getMaterialTextureURL(entityId: entityId, type: .height, meshIndex: meshIndex) != nil
+
+        return DisclosureGroup(isExpanded: $showsHeightDetail) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Enable depth")
+                        .font(EditorType.hint)
+                        .foregroundColor(.editorTextSecondary)
+                        .frame(width: 80, alignment: .leading)
+                    Toggle("", isOn: Binding(
+                        get: { getMaterialHeightEnabled(entityId: entityId, meshIndex: meshIndex) },
+                        set: { newValue in edit { updateMaterialHeightEnabled(entityId: entityId, heightEnabled: newValue, meshIndex: meshIndex) } }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(.editorAccent)
+                    .controlSize(.small)
+                    Spacer()
+                }
+                .help("Makes the surface look like it has real depth, carved in by the Height map. Off by default — the Height map still affects shading for bump detail either way.")
+
+                MaterialSliderRow(label: "Depth", value: Binding(
+                    get: { getMaterialHeightScale(entityId: entityId, meshIndex: meshIndex) },
+                    set: { newValue in edit { updateMaterialHeightScale(entityId: entityId, heightScale: newValue, meshIndex: meshIndex) } }
+                ), range: 0 ... 0.2, labelWidth: 80)
+                    .help("How far the surface appears to push inward. Start small — 0.02 to 0.05 is typical; higher values dig deeper but can distort at grazing angles.")
+
+                MaterialSliderRow(label: "Flat level", value: Binding(
+                    get: { getMaterialHeightMidlevel(entityId: entityId, meshIndex: meshIndex) },
+                    set: { newValue in edit { updateMaterialHeightMidlevel(entityId: entityId, heightMidlevel: newValue, meshIndex: meshIndex) } }
+                ), labelWidth: 80)
+                    .help("The grey level of the Height map that sits flush with the surface — everything lighter pushes out, everything darker pushes in. Default 0.5 matches Blender's Displacement node.")
+
+                MaterialSliderRow(label: "Black point", value: Binding(
+                    get: { getMaterialHeightRemapMin(entityId: entityId, meshIndex: meshIndex) },
+                    set: { newValue in edit { updateMaterialHeightRemapMin(entityId: entityId, heightRemapMin: newValue, meshIndex: meshIndex) } }
+                ), labelWidth: 80)
+                    .help("Like the black point in a Levels tool: raise it if the Height map only uses a narrow, washed-out range of greys and the depth effect looks too flat.")
+
+                MaterialSliderRow(label: "White point", value: Binding(
+                    get: { getMaterialHeightRemapMax(entityId: entityId, meshIndex: meshIndex) },
+                    set: { newValue in edit { updateMaterialHeightRemapMax(entityId: entityId, heightRemapMax: newValue, meshIndex: meshIndex) } }
+                ), labelWidth: 80)
+                    .help("Like the white point in a Levels tool: lower it if the Height map only uses a narrow, washed-out range of greys and the depth effect looks too flat.")
+            }
+            .padding(.top, 2)
+        } label: {
+            HStack(spacing: 6) {
+                Text("Height detail")
+                    .font(EditorType.hint)
+                    .foregroundColor(.editorTextTertiary)
+                if !hasHeightTexture {
+                    Text("(needs a Height map)")
+                        .font(EditorType.hint)
+                        .foregroundColor(.editorTextTertiary.opacity(0.6))
+                }
+            }
+        }
+        .disclosureGroupStyle(EditorDisclosureStyle())
+        .padding(10)
+        .background(Color.editorSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.editorDivider, lineWidth: 1)
+        )
+        .cornerRadius(6)
+        .disabled(!hasHeightTexture)
+        .opacity(hasHeightTexture ? 1.0 : 0.6)
+    }
+
+    private func numberRow(_ label: String, value: Binding<Float>, help: String? = nil) -> some View {
         HStack {
             Text(label)
                 .font(EditorType.hint)
@@ -158,6 +192,7 @@ struct MaterialAdvancedView: View {
                 .frame(width: 70)
             Spacer()
         }
+        .help(help ?? "")
     }
 
     private var isUntoldBackedMesh: Bool {
