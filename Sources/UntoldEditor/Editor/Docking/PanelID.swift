@@ -41,7 +41,7 @@ enum PanelID: String, Codable, CaseIterable, Identifiable {
         case .explore: return "Explore"
         case .console: return "Console"
         case .tasks: return "Tasks"
-        case .plugins: return "Plugins"
+        case .plugins: return "Code Components"
         }
     }
 

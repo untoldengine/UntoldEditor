@@ -115,19 +115,19 @@ struct ComponentsPanelView: View {
 
     private func emptyProject(_ layout: ComponentProjectLayout) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("This project has no plugins folder yet.")
+            Text("This project has no code components folder yet.")
                 .font(.system(size: 12))
                 .foregroundColor(.editorTextPrimary)
-            Text("Plugins are Swift classes in \(layout.pluginsDirectory.lastPathComponent): components, kinds of entity and menu items. The editor compiles them, shows their @UntoldAttribute properties in the Inspector, and reloads them when you save.")
+            Text("Code Components are Swift classes in \(layout.pluginsDirectory.lastPathComponent): components, kinds of entity and menu items. The editor compiles them, shows their @UntoldAttribute properties in the Inspector, and reloads them when you save.")
                 .font(.system(size: 11))
                 .foregroundColor(.editorTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            panelButton("Create plugins folder", icon: "plus.circle") {
+            panelButton("Create code components folder", icon: "plus.circle") {
                 do {
                     creationError = nil
                     try controller.createPluginsFolder()
                 } catch {
-                    creationError = "The plugins folder could not be created: \(error.localizedDescription)"
+                    creationError = "The code components folder could not be created: \(error.localizedDescription)"
                 }
             }
         }
