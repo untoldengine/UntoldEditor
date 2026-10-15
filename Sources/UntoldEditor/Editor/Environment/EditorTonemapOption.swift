@@ -17,6 +17,9 @@ import UntoldEngine
 enum EditorTonemapOption: String, CaseIterable, Hashable, Identifiable {
     case agx = "AgX"
     case aces = "ACES"
+    /// No curve: the scene's linear colour as it is, for a mixed-immersion space where the
+    /// passthrough sets the display's response.
+    case none = "None"
 
     var id: String {
         rawValue
@@ -28,6 +31,8 @@ enum EditorTonemapOption: String, CaseIterable, Hashable, Identifiable {
             return .agx
         case .aces:
             return .aces
+        case .none:
+            return .none
         }
     }
 
@@ -37,6 +42,8 @@ enum EditorTonemapOption: String, CaseIterable, Hashable, Identifiable {
             return .agx
         case .aces:
             return .aces
+        case .none:
+            return .none
         }
     }
 }
