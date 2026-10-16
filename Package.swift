@@ -21,6 +21,8 @@ let package = Package(
             dependencies: [
                 .product(name: "UntoldEngine", package: "UntoldEngine"),
                 .product(name: "UntoldComponentKit", package: "UntoldEngine"),
+                // The LOD chains a cook builds for its pack.
+                .product(name: "UntoldEngineMeshCook", package: "UntoldEngine"),
             ],
             path: "Sources/UntoldEditor",
             exclude: [
