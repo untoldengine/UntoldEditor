@@ -135,28 +135,37 @@ extension EditorView {
         // user was looking, and the scene coming back must not move it.
         let editorCamera = CameraPlacement.capture(of: findSceneCamera())
 
-        destroyAllEntities()
         removeGizmo()
         EditorComponentsState.shared.clear()
         EditorGaussianAssetState.shared.clear()
         EditorUndoManager.shared.clear()
         sceneAuthoredGameCamera = nil
 
-        deserializeScene(sceneData: snapshot, onGaussianEntityRestored: restoreEditorGaussianState) {
-            NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
-            editor_entities = getAllGameEntities()
-            selectionManager.selectedEntity = nil
-            activeEntity = .invalid
-            gizmoActive = false
-            selectionManager.objectWillChange.send()
-            sceneGraphModel.refreshHierarchy()
+        // destroyAllEntities() only marks the old entities for deferred destruction;
+        // the actual cleanup runs asynchronously once the render thread's GPU
+        // completion handler finalizes it (see finalizePendingDestroys()). Rebuilding
+        // the scene before that finalize pass has run let the renderer keep traversing
+        // half-torn-down old entities concurrently with the freshly deserialized ones,
+        // surfacing as a flood of "entity does not exist" errors. Running
+        // deserializeScene from destroyAllEntities's completion, instead of right
+        // after it, guarantees the old scene is fully gone first.
+        destroyAllEntities {
+            deserializeScene(sceneData: snapshot, onGaussianEntityRestored: restoreEditorGaussianState) {
+                NotificationCenter.default.post(name: .editorPostFXStateDidChange, object: nil)
+                editor_entities = getAllGameEntities()
+                selectionManager.selectedEntity = nil
+                activeEntity = .invalid
+                gizmoActive = false
+                selectionManager.objectWillChange.send()
+                sceneGraphModel.refreshHierarchy()
 
-            CameraSystem.shared.activeCamera = findSceneCamera()
-            editorCamera?.apply(to: findSceneCamera())
-            updateActiveCameraForPlayMode()
+                CameraSystem.shared.activeCamera = findSceneCamera()
+                editorCamera?.apply(to: findSceneCamera())
+                updateActiveCameraForPlayMode()
 
-            isRestoringPlayMode = false
-            ComponentLibraryController.shared.playModeRestoreDidFinish()
+                isRestoringPlayMode = false
+                ComponentLibraryController.shared.playModeRestoreDidFinish()
+            }
         }
     }
 
