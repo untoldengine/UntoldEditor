@@ -1,4 +1,11 @@
 # Changelog
+## v0.24.0 - 2026-10-19
+### 🐞 Fixes
+- [Patch] Clean up Parallax inspector fields (#180) (4ae3cef…)
+### 🚀 Features
+- [Feature] The anti-aliasing picker offers the temporal modes, and the tone-map menu no curve (#182) (32954ab…)
+### 🧰 Maintenance
+- [Refactor] Rename Plugins panel and log labels to Code Components (#179) (60c084c…)
 ## v0.23.0 - 2026-10-13
 ### 🐞 Fixes
 - [Patch] Hide cook-source folders in asset browser (#154) (ad012c1…)
