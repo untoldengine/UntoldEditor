@@ -1,9 +1,12 @@
 # Changelog
 ## v0.24.0 - 2026-10-19
 ### 🐞 Fixes
+- [Bugfix] Wait for entity destruction to finalize before rebuilding scene on Play-Stop restore (#181) (365528b…)
 - [Patch] Clean up Parallax inspector fields (#180) (4ae3cef…)
 ### 🚀 Features
 - [Feature] The anti-aliasing picker offers the temporal modes, and the tone-map menu no curve (#182) (32954ab…)
+### 📦 Project Layout
+- [Project Layout] Resources/GameData workflow in the Asset Browser (#175) (40cb9de…)
 ### 🧰 Maintenance
 - [Refactor] Rename Plugins panel and log labels to Code Components (#179) (60c084c…)
 ## v0.23.0 - 2026-10-13
