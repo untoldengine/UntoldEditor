@@ -183,29 +183,6 @@ struct EnvironmentView: View {
 
             Divider()
 
-            // MARK: - Color LUT Toggle (Compact)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle(isOn: Binding(
-                    get: { ColorLUTParams.shared.enabled },
-                    set: { newValue in
-                        ColorLUTParams.shared.enabled = newValue
-                        EditorSceneDirtyState.shared.markDirty()
-                    }
-                )) {
-                    Label("Apply Color LUT", systemImage: ColorLUTParams.shared.enabled ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 12))
-                }
-                .toggleStyle(SwitchToggleStyle())
-                .scaleEffect(0.85)
-
-                Text("Compares the baked Blender color-grading LUT against the default tonemap. Only takes effect if the loaded asset has a baked LUT.")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-            }
-
-            Divider()
-
             // MARK: - Ambient Intensity Slider (Compact)
 
             VStack(alignment: .leading, spacing: 4) {
