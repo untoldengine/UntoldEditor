@@ -1134,6 +1134,46 @@ final class AssetBrowserViewTests: XCTestCase {
         }
     }
 
+    // MARK: - deleteAsset (issue #187: the cooked-output folder lingered beside the pack)
+
+    func test_deleteAssetRemovesBothTheSourceFolderAndTheCookedAssetsFolder() throws {
+        try withTempDirectory { projectRoot in
+            let gameData = projectRoot.appendingPathComponent("GameData", isDirectory: true)
+            let modelsFolder = gameData.appendingPathComponent("Models", isDirectory: true)
+            let cookedFolder = modelsFolder.appendingPathComponent("Hero", isDirectory: true)
+            let sourceFolder = projectRoot.appendingPathComponent("Resources/Characters/Hero", isDirectory: true)
+            try FileManager.default.createDirectory(at: cookedFolder, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: sourceFolder, withIntermediateDirectories: true)
+
+            let packURL = modelsFolder.appendingPathComponent("Hero.untoldpack")
+            let packJSON = """
+            {"formatVersion": 1, "sourceAsset": "../../Resources/Characters/Hero/Hero.blend", "models": [
+              {"displayName": "Hero", "path": "Hero.untold", "transform": [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]}
+            ]}
+            """
+            try Data(packJSON.utf8).write(to: packURL)
+            try Data("texture".utf8).write(to: cookedFolder.appendingPathComponent("albedo.utex"))
+
+            assetBasePath = gameData
+            EditorAssetBasePath.shared.basePath = gameData
+
+            var assetsState: [String: [Asset]] = [:]
+            var selected: Asset? = nil
+            let view = makeView(
+                assets: .init(get: { assetsState }, set: { assetsState = $0 }),
+                selectedAsset: .init(get: { selected }, set: { selected = $0 })
+            )
+
+            let asset = Asset(name: "Hero.untoldpack", category: AssetCategory.models.rawValue, path: packURL, sourceFolder: sourceFolderCandidate(for: packURL, assetBasePath: gameData))
+
+            view.deleteAsset(asset)
+
+            XCTAssertFalse(FileManager.default.fileExists(atPath: packURL.path))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: sourceFolder.path), "The Resources/ source folder should be removed")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: cookedFolder.path), "The GameData cooked-assets folder should be removed")
+        }
+    }
+
     // MARK: - importSourceAsset (import = copy the source, then convert the copy)
 
     func test_importSourceAsset_copiesSourceAndSiblingTexturesIntoProject() throws {
