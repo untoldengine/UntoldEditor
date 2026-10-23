@@ -86,12 +86,27 @@ extension AssetBrowserView {
             // Cooked runtime assets (e.g. `Tower.untoldpack`) can have a sibling
             // source/working folder with the same stem (`Tower/`) that was cooked
             // from. Remove it too so the folder doesn't linger on disk, requiring
-            // a second manual delete.
+            // a second manual delete. On a Resources/GameData split project this
+            // folder sits under Resources/, a sibling of GameData rather than
+            // something under it, so the safety check is against the project root,
+            // not `basePath` itself.
+            let projectRoot = ProjectLayout.detect(gameDataDirectory: basePath).projectRoot
             if let sourceFolder = asset.sourceFolder,
-               sourceFolder.resolvingSymlinksInPath().path.hasPrefix(basePath.resolvingSymlinksInPath().path)
+               sourceFolder.resolvingSymlinksInPath().path.hasPrefix(projectRoot.resolvingSymlinksInPath().path)
             {
                 try? FileManager.default.removeItem(at: sourceFolder)
                 print("✅ Deleted source folder: \(sourceFolder.lastPathComponent)")
+            }
+
+            // On a Resources/GameData split project, `asset.sourceFolder` above is the
+            // original import under Resources/ -- a different folder from the cooked
+            // output's own sibling folder beside the asset in GameData/ (textures/model
+            // folders written by copyUntoldPackResources). Remove that one too.
+            if let cookedFolder = cookedAssetsFolder(for: asset.path),
+               cookedFolder.resolvingSymlinksInPath().path.hasPrefix(basePath.resolvingSymlinksInPath().path)
+            {
+                try? FileManager.default.removeItem(at: cookedFolder)
+                print("✅ Deleted cooked assets folder: \(cookedFolder.lastPathComponent)")
             }
 
             if selectedAsset?.id == asset.id {

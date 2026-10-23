@@ -180,6 +180,34 @@ final class RuntimeExportLocationTests: XCTestCase {
         XCTAssertNil(sourceFolderCandidate(for: assetURL, assetBasePath: assetBasePath))
     }
 
+    func test_cookedAssetsFolderFindsTheSiblingFolderBesideAPack() throws {
+        let scratch = try ScratchDirectory()
+        let modelsFolder = try scratch.directory("MyGame/GameData/Models")
+        let packURL = modelsFolder.appendingPathComponent("Hero.untoldpack")
+        try scratch.directory("MyGame/GameData/Models/Hero")
+
+        let found = cookedAssetsFolder(for: packURL)
+
+        XCTAssertEqual(found?.path, modelsFolder.appendingPathComponent("Hero").path)
+    }
+
+    func test_cookedAssetsFolderReturnsNilWhenNoSiblingFolderExists() throws {
+        let scratch = try ScratchDirectory()
+        let modelsFolder = try scratch.directory("MyGame/GameData/Models")
+        let packURL = modelsFolder.appendingPathComponent("Hero.untoldpack")
+
+        XCTAssertNil(cookedAssetsFolder(for: packURL))
+    }
+
+    func test_cookedAssetsFolderIgnoresNonRuntimeAssets() throws {
+        let scratch = try ScratchDirectory()
+        let texturesFolder = try scratch.directory("MyGame/GameData/Models")
+        let textureURL = texturesFolder.appendingPathComponent("albedo.png")
+        try scratch.directory("MyGame/GameData/Models/albedo")
+
+        XCTAssertNil(cookedAssetsFolder(for: textureURL))
+    }
+
     func test_scriptOptionSupportIsReadFromTheScript() throws {
         let script = FileManager.default.temporaryDirectory
             .appendingPathComponent("RuntimeExportLocationTests-\(UUID().uuidString).py")

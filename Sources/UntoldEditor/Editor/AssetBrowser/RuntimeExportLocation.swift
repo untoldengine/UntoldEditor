@@ -119,6 +119,22 @@ func sourceFolderCandidate(for assetURL: URL, assetBasePath: URL?, fileManager f
     return existingDirectory(assetURL.deletingLastPathComponent().appendingPathComponent(stem, isDirectory: true))
 }
 
+/// The cooked-output sibling folder a runtime asset was exported alongside -- what
+/// `runtimeExportLocation` calls `assetsFolder` (e.g. `Tower.untoldpack` <- `Tower/`,
+/// holding the per-model folders/textures `copyUntoldPackResources` wrote there). This
+/// sits next to the asset itself in `GameData/`, so it is distinct from
+/// `sourceFolderCandidate`'s result once a project has split out `Resources/` -- that
+/// one resolves to the original import, not this cooked copy. Both need removing when
+/// the asset is deleted, or one lingers on disk. Nil if no such folder exists.
+func cookedAssetsFolder(for assetURL: URL, fileManager fm: FileManager = .default) -> URL? {
+    guard allRuntimeAssetExtensions.contains(assetURL.pathExtension.lowercased()) else { return nil }
+    let stem = assetURL.deletingPathExtension().lastPathComponent
+    let folder = assetURL.deletingLastPathComponent().appendingPathComponent(stem, isDirectory: true)
+    var isDir: ObjCBool = false
+    guard fm.fileExists(atPath: folder.path, isDirectory: &isDir), isDir.boolValue else { return nil }
+    return folder
+}
+
 /// A bounded breadth-first search for a directory named `name` under `root`, since
 /// `Resources/` has no fixed shape to compute a path from directly. Shallow on purpose
 /// (`maxDepth` default matches the nesting a category-free, per-asset-folder
