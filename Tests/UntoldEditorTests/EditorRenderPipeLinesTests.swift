@@ -471,7 +471,13 @@ final class EditorRenderPipeLinesTests: XCTestCase {
     }
 
     func test_EditorDefaultPipeLines_canInitializeAllPipelines() {
-        // This test verifies that all pipelines in EditorDefaultPipeLines can be initialized
+        // This test verifies that all pipelines in EditorDefaultPipeLines can be initialized.
+        // .lightTile is nil on devices without tile-shading support (the simulator, GPUs
+        // before Apple family 4, or CI's paravirtualized GPU) — that's expected engine
+        // behavior, not a failure, so it's excluded the same way UntoldEngine's own
+        // TileLightStageTests skip via `tileShadingAvailable`.
+        let tileShadingAvailable = renderInfo.device?.supportsFamily(.apple4) == true
+            && renderInfo.device?.name.localizedCaseInsensitiveContains("paravirtual") == false
 
         // Act
         let pipelines = EditorDefaultPipeLines()
@@ -479,6 +485,9 @@ final class EditorRenderPipeLinesTests: XCTestCase {
         var failedPipelines: [String] = []
 
         for (type, initBlock) in pipelines {
+            if type == .lightTile, !tileShadingAvailable {
+                continue
+            }
             if let pipeline = initBlock() {
                 if !pipeline.success {
                     allSuccessful = false
