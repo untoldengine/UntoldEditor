@@ -1,4 +1,7 @@
 # Changelog
+## v0.24.1 - 2026-10-26
+### 🐞 Fixes
+- [Patch] Remove dead Apply Color LUT toggle from Environment panel (#188) (55c5619…)
 ## v0.24.0 - 2026-10-19
 ### 🐞 Fixes
 - [Bugfix] Wait for entity destruction to finalize before rebuilding scene on Play-Stop restore (#181) (365528b…)
