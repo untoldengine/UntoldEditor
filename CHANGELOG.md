@@ -1,6 +1,8 @@
 # Changelog
 ## v0.24.1 - 2026-10-26
 ### 🐞 Fixes
+- [Bugfix] Don't require lightTile pipeline success on devices without tile shading (#191) (c9183b2…)
+- [Bugfix] Remove a .untoldpack's cooked assets folder and fix its Resources source-folder cleanup (#187) (#189) (8ff9ea0…)
 - [Patch] Remove dead Apply Color LUT toggle from Environment panel (#188) (55c5619…)
 ## v0.24.0 - 2026-10-19
 ### 🐞 Fixes
