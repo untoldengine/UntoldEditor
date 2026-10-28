@@ -70,6 +70,8 @@ public struct EditorView: View {
     @State var quickPreviewSourceOrientation = "blender-native"
     @State var quickPreviewCompressGeometry = false
     @State var quickPreviewCompressTextures = false
+    /// After a preview cook that wrote a .untoldpack, build the LOD chains of its models.
+    @State var quickPreviewBuildLODChains = true
     @State var quickPreviewAstcencBinPath = ""
     @State var experienceMode: EditorExperienceMode = .edit
     @State var showDemoGallery = false

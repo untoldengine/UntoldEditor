@@ -104,6 +104,8 @@ struct AssetBrowserView: View {
     @State var exportIncludeHidden = false
     @State var exportCompressTextures = false
     @State var astcencBinPath: String = ""
+    /// After a cook that wrote a .untoldpack, build the LOD chains of its models.
+    @State var exportBuildLODChains = true
     @State var exportQuadTree = false
     @State var exportAutoTileSize = false
     @State var exportGenerateHLOD = false

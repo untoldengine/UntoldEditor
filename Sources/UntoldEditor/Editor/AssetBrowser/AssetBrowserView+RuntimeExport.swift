@@ -93,6 +93,11 @@ extension AssetBrowserView {
                         .help("Also cook objects hidden in Blender's viewport or disabled in renders. Objects in collections excluded from the view layer are never cooked.")
                 }
 
+                if request.category == .models {
+                    Toggle("Build LOD chains", isOn: $exportBuildLODChains)
+                        .help("After the cook, write simplified copies of every model of the .untoldpack that is big enough for them and record them in its manifest, as `untoldengine export` does, so that a large scene draws its far placements with fewer triangles. A single .untold model is left as it is.")
+                }
+
                 Toggle("Compress geometry (LZ4)", isOn: $exportCompressGeometry)
                     .help("Compresses vertex and index data with LZ4. Requires the Python lz4 package.")
                 if exportCompressGeometry {
@@ -188,6 +193,7 @@ extension AssetBrowserView {
         let compressGeometry = exportCompressGeometry
         let includeHidden = exportIncludeHidden && request.category == .models
         let compressTextures = exportCompressTextures
+        let buildLODChains = exportBuildLODChains && request.category == .models
         // An engine older than the --assets-dir option cooks into the source's folder, as before.
         let exporterPython = exporterPythonScript(besideExportScript: exporterScript)
         let assetsFolder = request.assetsFolder.flatMap {
@@ -299,6 +305,17 @@ extension AssetBrowserView {
                             Logger.log(message: "⚠️ ASTC skipped — texbake.py not found or no Textures folder present")
                         }
                     }
+                }
+
+                if exportSucceeded, buildLODChains, let packURL = exportedPackManifest(besideOutput: outputURL) {
+                    task.setDetail("Building LOD chains…")
+                    DispatchQueue.main.async { showStatus("Building LOD chains...") }
+                    let chainOutput = buildExportedLODChains(forPackAt: packURL) { done, total in
+                        task.setProgress(current: done, total: total)
+                    }
+                    task.setProgress(nil)
+                    taskOutput += chainOutput
+                    DispatchQueue.main.async { logToolOutput(chainOutput) }
                 }
 
                 if wasCancelled {
