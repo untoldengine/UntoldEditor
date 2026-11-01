@@ -258,6 +258,9 @@ extension EditorView {
                 }
                 .disabled(!quickPreviewConvertOrientation)
 
+                Toggle("Build LOD chains", isOn: $quickPreviewBuildLODChains)
+                    .help("After the cook, write simplified copies of every model of the .untoldpack that is big enough for them and record them in its manifest, so that a large scene previews with fewer triangles at a distance. A single .untold model is left as it is.")
+
                 Toggle("Compress geometry (LZ4)", isOn: $quickPreviewCompressGeometry)
                     .help("Compresses vertex and index data with LZ4. Requires the Python lz4 package.")
                 if quickPreviewCompressGeometry {
@@ -350,6 +353,7 @@ extension EditorView {
         let sourceOrientation = quickPreviewSourceOrientation
         let compressGeometry = quickPreviewCompressGeometry
         let compressTextures = quickPreviewCompressTextures
+        let buildLODChains = quickPreviewBuildLODChains
         let astcencBin = quickPreviewAstcencBinPath.trimmingCharacters(in: .whitespacesAndNewlines)
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -427,6 +431,16 @@ extension EditorView {
                             Logger.log(message: "⚠️ ASTC skipped — texbake.py not found or no Textures folder present")
                         }
                     }
+                }
+
+                if exportSucceeded, buildLODChains, let packURL = exportedPackManifest(besideOutput: request.outputURL) {
+                    task.setDetail("Building LOD chains…")
+                    let chainOutput = buildExportedLODChains(forPackAt: packURL) { done, total in
+                        task.setProgress(current: done, total: total)
+                    }
+                    task.setProgress(nil)
+                    taskOutput += chainOutput
+                    DispatchQueue.main.async { logToolOutput(chainOutput) }
                 }
 
                 if wasCancelled {
