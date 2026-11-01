@@ -1,4 +1,7 @@
 # Changelog
+## v0.25.0 - 2026-11-01
+### 🚀 Features
+- [Feature] Build the LOD chains of a cooked pack from the Cook sheet (#193) (1ef0ec4…)
 ## v0.24.1 - 2026-10-26
 ### 🐞 Fixes
 - [Bugfix] Don't require lightTile pipeline success on devices without tile shading (#191) (c9183b2…)
