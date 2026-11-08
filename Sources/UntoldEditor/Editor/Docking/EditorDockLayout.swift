@@ -306,7 +306,7 @@ final class EditorDockLayout: ObservableObject {
     static func defaultState() -> DockLayoutState {
         DockLayoutState(
             left: DockAreaState(tabs: [.hierarchy], length: DockArea.left.defaultLength),
-            right: DockAreaState(tabs: [.inspector, .environment, .effects], length: DockArea.right.defaultLength),
+            right: DockAreaState(tabs: [.inspector, .environment, .effects, .streaming], length: DockArea.right.defaultLength),
             bottom: DockAreaState(
                 tabs: PanelID.available.filter { $0.defaultArea == .bottom },
                 selected: .assets,

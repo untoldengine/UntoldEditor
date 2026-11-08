@@ -20,6 +20,7 @@ enum PanelID: String, Codable, CaseIterable, Identifiable {
     case inspector
     case environment
     case effects
+    case streaming
     case assets
     case explore
     case console
@@ -37,6 +38,7 @@ enum PanelID: String, Codable, CaseIterable, Identifiable {
         case .inspector: return "Inspector"
         case .environment: return "Environment"
         case .effects: return "Effects"
+        case .streaming: return "Streaming"
         case .assets: return "Assets"
         case .explore: return "Explore"
         case .console: return "Console"
@@ -52,6 +54,7 @@ enum PanelID: String, Codable, CaseIterable, Identifiable {
         case .inspector: return "slider.horizontal.3"
         case .environment: return "sun.max"
         case .effects: return "cube"
+        case .streaming: return "photo.stack"
         case .assets: return "shippingbox"
         case .explore: return "square.grid.2x2"
         case .console: return "terminal"
@@ -80,7 +83,7 @@ enum PanelID: String, Codable, CaseIterable, Identifiable {
     var defaultArea: DockArea? {
         switch self {
         case .hierarchy: return .left
-        case .inspector, .environment, .effects: return .right
+        case .inspector, .environment, .effects, .streaming: return .right
         case .viewport: return nil
         default: return .bottom
         }

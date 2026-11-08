@@ -153,6 +153,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         addPanelItem(.inspector, to: viewMenu, title: "Show Inspector", key: "3")
         addPanelItem(.environment, to: viewMenu, title: "Show Environment", key: "")
         addPanelItem(.effects, to: viewMenu, title: "Show Effects", key: "")
+        addPanelItem(.streaming, to: viewMenu, title: "Show Texture Streaming", key: "")
         addItem(to: viewMenu, title: "Focus Viewport", action: #selector(menuToggleFocusViewport), key: "f")
         viewMenu.addItem(.separator())
         // The dock panels one by one, so a panel closed from its tab comes back from here.
