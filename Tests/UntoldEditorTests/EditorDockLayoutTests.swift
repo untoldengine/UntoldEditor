@@ -32,7 +32,7 @@ final class EditorDockLayoutTests: XCTestCase {
 
     func test_default_isTheMockup() {
         XCTAssertEqual(layout.state.left, DockAreaState(tabs: [.hierarchy], length: 250))
-        XCTAssertEqual(layout.state.right, DockAreaState(tabs: [.inspector, .environment, .effects], length: 320))
+        XCTAssertEqual(layout.state.right, DockAreaState(tabs: [.inspector, .environment, .effects, .streaming], length: 320))
         XCTAssertEqual(layout.state.bottom.tabs, bottomPanels)
         XCTAssertEqual(layout.state.bottom.selected, .assets)
         XCTAssertEqual(layout.state.bottom.length, 250)
@@ -126,7 +126,7 @@ final class EditorDockLayoutTests: XCTestCase {
     func test_moveToAnotherArea_joinsItAsTheLastTabInFront() {
         layout.move(.console, to: .right)
 
-        XCTAssertEqual(layout.tabs(in: .right), [.inspector, .environment, .effects, .console])
+        XCTAssertEqual(layout.tabs(in: .right), [.inspector, .environment, .effects, .streaming, .console])
         XCTAssertEqual(layout.state.right.selected, .console)
         XCTAssertFalse(layout.tabs(in: .bottom).contains(.console))
     }
@@ -143,7 +143,7 @@ final class EditorDockLayoutTests: XCTestCase {
         layout.move(.hierarchy, to: .right)
 
         XCTAssertFalse(layout.isVisible(.left))
-        XCTAssertEqual(layout.tabs(in: .right), [.inspector, .environment, .effects, .hierarchy])
+        XCTAssertEqual(layout.tabs(in: .right), [.inspector, .environment, .effects, .streaming, .hierarchy])
     }
 
     // MARK: - Resizing
