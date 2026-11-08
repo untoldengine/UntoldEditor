@@ -63,6 +63,12 @@ extension EditorView {
                     .editorPanel()
                     .padding(5)
             )
+        case .streaming:
+            return AnyView(
+                TextureStreamingEditorView()
+                    .editorPanel()
+                    .padding(5)
+            )
         case .assets:
             return AnyView(AssetBrowserView(
                 assets: $assets,
@@ -121,7 +127,7 @@ extension EditorView {
                     taskCenter.clearFinished()
                 }
             })
-        case .viewport, .inspector, .environment, .effects:
+        case .viewport, .inspector, .environment, .effects, .streaming:
             return nil
         }
     }
