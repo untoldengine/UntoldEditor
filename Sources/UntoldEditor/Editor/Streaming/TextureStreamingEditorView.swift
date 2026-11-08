@@ -22,7 +22,9 @@ struct TextureStreamingEditorView: View {
         case balanced = "Balanced"
         case tiled = "Tiled"
 
-        var id: String { rawValue }
+        var id: String {
+            rawValue
+        }
 
         var engineProfile: TextureStreamingSystem.Profile {
             switch self {
