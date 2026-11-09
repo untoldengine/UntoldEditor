@@ -1,4 +1,7 @@
 # Changelog
+## v0.25.1 - 2026-11-09
+### 🐞 Fixes
+- [Patch] Add Texture Streaming panel (profile picker + settings) (#197) (b2d7298…)
 ## v0.25.0 - 2026-11-01
 ### 🚀 Features
 - [Feature] Build the LOD chains of a cooked pack from the Cook sheet (#193) (1ef0ec4…)
