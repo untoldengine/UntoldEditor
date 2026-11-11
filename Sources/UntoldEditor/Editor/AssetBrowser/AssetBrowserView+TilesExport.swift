@@ -133,7 +133,13 @@ extension AssetBrowserView {
                     .padding(.leading, 20)
                 }
 
-                Toggle("Quad-tree partitioning", isOn: $exportQuadTree)
+                Picker("Partitioning", selection: $exportPartitioningMode) {
+                    Text("Uniform grid").tag("uniform")
+                    Text("Quad-tree").tag("quadtree")
+                    Text("KD-tree").tag("kdtree")
+                }
+                .help("Uniform grid splits the scene into fixed-size cells. Quad-tree and KD-tree both split each floor by object density instead; KD-tree balances tiles better when objects cluster in one region of the floor.")
+
                 Toggle("Dry run", isOn: $exportDryRun)
             }
 
@@ -181,7 +187,7 @@ extension AssetBrowserView {
         let compressGeometry = exportCompressGeometry
         let compressTextures = exportCompressTextures
         let astcencBin = astcencBinPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        let quadTree = exportQuadTree
+        let partitioningMode = exportPartitioningMode
         let autoTileSize = exportAutoTileSize
         let generateHLOD = exportGenerateHLOD
         let generateLOD = exportGenerateLOD
@@ -233,8 +239,13 @@ extension AssetBrowserView {
                 if compressGeometry {
                     arguments.append("--compress-geometry")
                 }
-                if quadTree {
+                switch partitioningMode {
+                case "quadtree":
                     arguments.append("--quadtree")
+                case "kdtree":
+                    arguments.append("--kdtree")
+                default:
+                    break
                 }
                 if dryRun {
                     arguments.append("--dry-run")
