@@ -106,7 +106,9 @@ struct AssetBrowserView: View {
     @State var astcencBinPath: String = ""
     /// After a cook that wrote a .untoldpack, build the LOD chains of its models.
     @State var exportBuildLODChains = true
-    @State var exportQuadTree = false
+    /// "uniform", "quadtree", or "kdtree" — mirrors export-untold-tiles'
+    /// mutually-exclusive --quadtree/--kdtree flags (neither passed = uniform grid).
+    @State var exportPartitioningMode: String = "uniform"
     @State var exportAutoTileSize = false
     @State var exportGenerateHLOD = false
     @State var exportGenerateLOD = false
