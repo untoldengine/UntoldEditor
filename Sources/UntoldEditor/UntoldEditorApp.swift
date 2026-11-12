@@ -66,7 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Step 1. Create and configure the window
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1920, height: 1080),
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
