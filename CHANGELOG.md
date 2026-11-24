@@ -1,4 +1,8 @@
 # Changelog
+## v0.26.0 - 2026-11-24
+### 🐞 Fixes
+- [Patch] Add uniform/quad-tree/kd-tree partition mode selection to Tiles Export (#200) (613e2d6…)
+- [Patch] Add minimize button to main editor window (#203) (bbc53de…)
 ## v0.25.1 - 2026-11-09
 ### 🐞 Fixes
 - [Patch] Add Texture Streaming panel (profile picker + settings) (#197) (b2d7298…)
